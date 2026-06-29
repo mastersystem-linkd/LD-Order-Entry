@@ -1,14 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TrackingIndex } from "@/components/tracking/tracking-index";
 
 export default function TrackingPage() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Operations</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        The 7-stage operations workflow arrives in OE-P3.
-      </CardContent>
-    </Card>
-  );
+  return <TrackingIndex />;
 }

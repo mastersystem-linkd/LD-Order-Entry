@@ -112,11 +112,14 @@ export const orderLineItems = pgTable(
   ],
 );
 
-// workflow_stages (seed the 7) ----------------------------------------------
+// workflow_stages (seed the 7 + their SLA — the Time Tracking config) --------
 export const workflowStages = pgTable("workflow_stages", {
   stageKey: varchar("stage_key", { length: 40 }).primaryKey(),
   label: varchar("label", { length: 60 }).notNull(),
   sortOrder: integer("sort_order").notNull(),
+  // Days from the order's date to this stage's planned deadline (Settings →
+  // Time tracking). planned_at = order_date 00:00 + planned_offset_days.
+  plannedOffsetDays: integer("planned_offset_days").notNull().default(1),
 });
 
 // line_stage_progress --------------------------------------------------------
@@ -148,7 +151,35 @@ export const lineStageProgress = pgTable(
   ],
 );
 
-// lookup_values (autocomplete sources) --------------------------------------
+// design_database (log of every fabric+design used) -------------------------
+// Powers design autocomplete + a browsable history. Denormalized order_no
+// survives order deletion (FK is ON DELETE SET NULL).
+export const designDatabase = pgTable(
+  "design_database",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    orderId: uuid("order_id").references(() => customerOrders.id, {
+      onDelete: "set null",
+    }),
+    orderNo: varchar("order_no", { length: 50 }).notNull(),
+    fabricName: varchar("fabric_name", { length: 100 }).notNull(),
+    designNo: varchar("design_no", { length: 100 }).notNull(),
+  },
+  (t) => [
+    unique("uq_design_database_order_fabric_design").on(
+      t.orderNo,
+      t.fabricName,
+      t.designNo,
+    ),
+    index("idx_design_database_fabric").on(t.fabricName),
+    index("idx_design_database_design").on(t.designNo),
+  ],
+);
+
+// lookup_values (the Dropdown Master — autocomplete sources) -----------------
 export const lookupValues = pgTable(
   "lookup_values",
   {
@@ -167,3 +198,4 @@ export type OrderLineItem = typeof orderLineItems.$inferSelect;
 export type WorkflowStage = typeof workflowStages.$inferSelect;
 export type LineStageProgress = typeof lineStageProgress.$inferSelect;
 export type LookupValue = typeof lookupValues.$inferSelect;
+export type DesignDatabaseRow = typeof designDatabase.$inferSelect;

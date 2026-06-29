@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "New order", href: "/orders/new", roles: ["ADMIN", "SALES"] },
   { label: "Orders", href: "/orders", roles: ["ADMIN", "SALES", "OPS", "VIEWER"] },
   { label: "Operations", href: "/tracking", roles: ["ADMIN", "OPS", "VIEWER"] },
+  { label: "Settings", href: "/settings", roles: ["ADMIN"] },
 ];
 
 export function visibleNav(role: Role): NavItem[] {
@@ -45,6 +46,11 @@ export function canAccessPath(role: Role, pathname: string): boolean {
   // Operations tracking → OPS (update) + VIEWER (read). SALES has no tracking.
   if (pathname === "/tracking" || pathname.startsWith("/tracking/")) {
     return role === "OPS" || role === "VIEWER";
+  }
+
+  // Settings & master data → ADMIN only (handled by the early return above).
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) {
+    return false;
   }
 
   // Home and any other authenticated page.

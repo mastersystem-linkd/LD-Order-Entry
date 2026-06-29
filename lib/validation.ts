@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { STAGE_KEYS } from "@/lib/workflow";
+import { LOOKUP_CATEGORIES } from "@/db/schema";
+
 // Payload for POST /api/orders and PUT /api/orders/:id.
 // Mirrors the order entry form: one header + repeatable fabric blocks, each with
 // a rate and repeatable design rows. order_no/quality/design_no stay text.
@@ -45,6 +48,86 @@ export const orderPayloadSchema = z.object({
 });
 
 export type OrderPayload = z.infer<typeof orderPayloadSchema>;
+
+// PATCH /api/tracking/stage — tick/untick one stage on one line item (OE-P3).
+export const stageToggleSchema = z.object({
+  line_item_id: z.string().uuid("line_item_id must be a UUID"),
+  stage_key: z.enum(STAGE_KEYS),
+  checked: z.boolean(),
+  planned: z.string().datetime({ offset: true }).optional().nullable(),
+  actual: z.string().datetime({ offset: true }).optional().nullable(),
+});
+
+export type StageTogglePayload = z.infer<typeof stageToggleSchema>;
+
+// ---- OE-P5 Settings / master data ----
+
+export const lookupCreateSchema = z.object({
+  category: z.enum(LOOKUP_CATEGORIES),
+  value: z.string().trim().min(1, "Value is required").max(200),
+});
+
+export const lookupUpdateSchema = z
+  .object({
+    value: z.string().trim().min(1).max(200).optional(),
+    is_active: z.boolean().optional(),
+  })
+  .refine((d) => d.value !== undefined || d.is_active !== undefined, {
+    message: "Nothing to update",
+  });
+
+export const lookupBulkSchema = z.object({
+  category: z.enum(LOOKUP_CATEGORIES),
+  values: z.array(z.string()).min(1, "Paste at least one value"),
+});
+
+export const lookupBulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, "Select at least one value"),
+  hard: z.boolean().optional(),
+});
+
+export const stageUpdateSchema = z.object({
+  planned_offset_days: z.coerce
+    .number()
+    .int("Must be a whole number")
+    .min(0, "Cannot be negative")
+    .max(365, "Too large"),
+});
+
+// ---- User access management (admin) ----
+const USER_ROLES = ["ADMIN", "SALES", "OPS", "VIEWER"] as const;
+
+export const userCreateSchema = z.object({
+  email: z.string().trim().email("A valid email is required").max(255),
+  name: z.string().trim().max(200).optional().nullable(),
+  role: z.enum(USER_ROLES),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(200),
+});
+
+export const userUpdateSchema = z
+  .object({
+    email: z.string().trim().email("A valid email is required").max(255).optional(),
+    name: z.string().trim().max(200).optional().nullable(),
+    role: z.enum(USER_ROLES).optional(),
+    is_active: z.boolean().optional(),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(200)
+      .optional(),
+  })
+  .refine(
+    (d) =>
+      d.email !== undefined ||
+      d.name !== undefined ||
+      d.role !== undefined ||
+      d.is_active !== undefined ||
+      d.password !== undefined,
+    { message: "Nothing to update" },
+  );
 
 // First human-readable message from a ZodError, for { error } responses.
 export function firstZodError(error: z.ZodError): string {

@@ -2,9 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  LayoutGridIcon,
+  PlusIcon,
+  SettingsIcon,
+  WorkflowIcon,
+  type LucideIcon,
+} from "lucide-react";
 
 import { visibleNav, type Role } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
+
+// Visual-only icon mapping per nav href (UI spec §5).
+const NAV_ICONS: Record<string, LucideIcon> = {
+  "/orders/new": PlusIcon,
+  "/orders": LayoutGridIcon,
+  "/tracking": WorkflowIcon,
+  "/settings": SettingsIcon,
+};
 
 export function Sidebar({ role }: { role: Role }) {
   const pathname = usePathname();
@@ -17,37 +32,49 @@ export function Sidebar({ role }: { role: Role }) {
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
-    <aside className="sticky top-0 flex h-svh w-[260px] shrink-0 flex-col bg-sidebar text-sidebar-foreground">
-      <div className="flex h-16 items-center gap-2 px-5 text-base font-semibold text-white">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[linear-gradient(135deg,#4F46E5,#6366F1)] text-xs">
+    <aside className="glass sticky top-0 hidden h-svh w-[256px] shrink-0 flex-col gap-6 border-r border-line-strong p-3.5 pt-5 md:flex">
+      <div className="flex items-center gap-3 px-1.5 py-1">
+        <span className="grid size-[42px] place-items-center rounded-[13px] bg-[linear-gradient(140deg,var(--a1),var(--a2))] font-display text-base font-semibold text-white shadow-[0_8px_22px_var(--glow),inset_0_1px_0_rgba(255,255,255,.4)] motion-safe:animate-[floaty_5s_ease-in-out_infinite]">
           LD
         </span>
-        Order Entry
+        <b className="font-display text-base font-semibold tracking-[-0.02em] text-ink">
+          Order Entry
+        </b>
       </div>
 
-      <nav className="flex flex-col gap-1 px-3 py-2">
+      <nav className="flex flex-col gap-1.5">
         {items.map((item) => {
           const active = item.href === activeHref;
+          const Icon = NAV_ICONS[item.href];
           return (
             <Link
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-[12px] border border-transparent px-3 py-[11px] text-sm font-medium transition-[background,color,transform,box-shadow] duration-200",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-white",
+                  ? "bg-[linear-gradient(120deg,var(--a1),var(--a2))] text-white shadow-[0_8px_22px_var(--glow)]"
+                  : "text-ink-soft hover:translate-x-[3px] hover:bg-surface-2 hover:text-ink",
               )}
             >
+              {Icon ? <Icon className="size-[18px]" /> : null}
               {item.label}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto px-5 py-4 text-xs text-sidebar-foreground/50">
-        Signed in as {role.toLowerCase()}
+      <div className="mt-auto flex items-center gap-2.5 rounded-[13px] border border-line-strong bg-surface-2 p-2.5">
+        <span className="grid size-[30px] place-items-center rounded-full bg-[linear-gradient(140deg,var(--a2),var(--a1))] text-[12px] font-semibold text-white">
+          {role.charAt(0)}
+        </span>
+        <small className="text-[12px] leading-tight text-ink-muted">
+          <b className="block text-[12.5px] font-medium text-ink">
+            {role.charAt(0) + role.slice(1).toLowerCase()}
+          </b>
+          Signed in as {role.toLowerCase()}
+        </small>
       </div>
     </aside>
   );

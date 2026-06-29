@@ -24,8 +24,10 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Welcome, {name}</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="font-display text-[30px] font-medium tracking-[-0.02em] text-ink">
+          Welcome, {name}
+        </h2>
+        <p className="text-sm text-ink-soft">
           You&apos;re signed in as {role}. Pick where to go next.
         </p>
       </div>
@@ -33,7 +35,7 @@ export default async function HomePage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
           <Link key={item.href} href={item.href} className="block">
-            <Card className="h-full transition-colors hover:border-primary/40">
+            <Card className="h-full transition-[transform,box-shadow] duration-200 hover:-translate-y-[3px] hover:shadow-lg motion-reduce:hover:translate-y-0">
               <CardHeader>
                 <CardTitle className="text-base">{item.label}</CardTitle>
                 <CardDescription>{DESCRIPTIONS[item.href]}</CardDescription>

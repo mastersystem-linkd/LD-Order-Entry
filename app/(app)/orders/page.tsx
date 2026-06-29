@@ -1,14 +1,9 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { auth } from "@/lib/auth";
+import type { Role } from "@/lib/rbac";
+import { OrdersDashboard } from "@/components/orders/orders-dashboard";
 
-export default function OrdersPage() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Orders dashboard</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        The orders table and filters arrive in OE-P2.
-      </CardContent>
-    </Card>
-  );
+export default async function OrdersPage() {
+  const session = await auth();
+  const role = (session?.user?.role as Role) ?? "VIEWER";
+  return <OrdersDashboard role={role} />;
 }

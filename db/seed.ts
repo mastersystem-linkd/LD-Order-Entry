@@ -14,14 +14,20 @@ import {
   type LookupCategory,
 } from "@/db/schema";
 
-const STAGES: { stageKey: string; label: string; sortOrder: number }[] = [
-  { stageKey: "order_entry", label: "Order Entry", sortOrder: 1 },
-  { stageKey: "stock_checking", label: "Stock Checking", sortOrder: 2 },
-  { stageKey: "rolling_checking", label: "Rolling & Checking", sortOrder: 3 },
-  { stageKey: "challan", label: "Challan", sortOrder: 4 },
-  { stageKey: "bill", label: "Bill", sortOrder: 5 },
-  { stageKey: "dispatch", label: "Dispatch", sortOrder: 6 },
-  { stageKey: "received_lr", label: "Received LR", sortOrder: 7 },
+// stageKey, label, sortOrder, planned_offset_days (Time Tracking SLA, §5/§6).
+const STAGES: {
+  stageKey: string;
+  label: string;
+  sortOrder: number;
+  plannedOffsetDays: number;
+}[] = [
+  { stageKey: "order_entry", label: "Order Entry", sortOrder: 1, plannedOffsetDays: 1 },
+  { stageKey: "stock_checking", label: "Stock Checking", sortOrder: 2, plannedOffsetDays: 1 },
+  { stageKey: "rolling_checking", label: "Rolling & Checking", sortOrder: 3, plannedOffsetDays: 1 },
+  { stageKey: "challan", label: "Challan", sortOrder: 4, plannedOffsetDays: 1 },
+  { stageKey: "bill", label: "Bill", sortOrder: 5, plannedOffsetDays: 1 },
+  { stageKey: "dispatch", label: "Dispatch", sortOrder: 6, plannedOffsetDays: 3 },
+  { stageKey: "received_lr", label: "Received LR", sortOrder: 7, plannedOffsetDays: 4 },
 ];
 
 const LOOKUPS: Record<LookupCategory, string[]> = {

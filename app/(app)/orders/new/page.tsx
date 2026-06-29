@@ -1,14 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { OrderForm } from "@/components/orders/order-form";
 
 export default function NewOrderPage() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>New order</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        The order entry form arrives in OE-P2.
-      </CardContent>
-    </Card>
-  );
+  return <OrderForm mode="create" />;
 }

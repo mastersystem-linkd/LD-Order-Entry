@@ -16,8 +16,10 @@ import {
 } from "@/lib/workflow";
 import {
   customerOrders,
+  designDatabase,
   lineStageProgress,
   orderLineItems,
+  workflowStages,
 } from "@/db/schema";
 
 const PAGE_SIZE = 20;
@@ -43,18 +45,18 @@ export async function GET(req: Request) {
       )
     : undefined;
 
-  const [{ value: total }] = await db
-    .select({ value: count() })
-    .from(customerOrders)
-    .where(filter);
-
-  const orders = await db
-    .select()
-    .from(customerOrders)
-    .where(filter)
-    .orderBy(desc(customerOrders.orderDate), desc(customerOrders.createdAt))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+  // count + page are independent — run them in one round trip.
+  const [totalRes, orders] = await Promise.all([
+    db.select({ value: count() }).from(customerOrders).where(filter),
+    db
+      .select()
+      .from(customerOrders)
+      .where(filter)
+      .orderBy(desc(customerOrders.orderDate), desc(customerOrders.createdAt))
+      .limit(PAGE_SIZE)
+      .offset((page - 1) * PAGE_SIZE),
+  ]);
+  const total = totalRes[0].value;
 
   const orderIds = orders.map((o) => o.id);
   const lines = orderIds.length
@@ -150,7 +152,6 @@ export async function POST(req: Request) {
     .limit(1);
   if (dup) return jsonError(`Order number "${orderNo}" already exists.`, 409);
 
-  const now = new Date();
   try {
     const result = await dbx.transaction(async (tx) => {
       const [created] = await tx
@@ -187,10 +188,38 @@ export async function POST(req: Request) {
         .values(lineValues)
         .returning({ id: orderLineItems.id });
 
+      // SLA planned dates from the Time Tracking config (workflow_stages).
+      const offRows = await tx
+        .select({
+          stageKey: workflowStages.stageKey,
+          off: workflowStages.plannedOffsetDays,
+        })
+        .from(workflowStages);
+      const offsets = Object.fromEntries(offRows.map((r) => [r.stageKey, r.off]));
+
       const stageValues = insertedLines.flatMap((l) =>
-        buildInitialStageRows(l.id, now),
+        buildInitialStageRows(l.id, order.order_date, offsets),
       );
       await tx.insert(lineStageProgress).values(stageValues);
+
+      // Design Database log — one row per unique (fabric, design) in this order.
+      const seen = new Set<string>();
+      const designRows = lineValues.flatMap((lv) => {
+        const key = `${lv.quality}__${lv.designNo}`;
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [
+          {
+            orderId,
+            orderNo,
+            fabricName: lv.quality,
+            designNo: lv.designNo,
+          },
+        ];
+      });
+      if (designRows.length) {
+        await tx.insert(designDatabase).values(designRows).onConflictDoNothing();
+      }
 
       return { orderId, lineCount: insertedLines.length };
     });

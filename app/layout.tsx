@@ -1,19 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
-
-// Exposes --font-sans / --font-geist-mono (referenced by @theme in globals.css)
-// on <html>, so `@apply font-sans` resolves on the root element.
-const geistSans = Geist({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { Providers } from "./providers";
+import { Mesh } from "@/components/app-shell/mesh";
+import { clashDisplay, generalSans, jetbrainsMono } from "./fonts/fonts";
 
 export const metadata: Metadata = {
   title: "Order Entry System",
@@ -28,10 +18,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      data-theme="light"
+      suppressHydrationWarning
+      className={`${generalSans.variable} ${clashDisplay.variable} ${jetbrainsMono.variable} antialiased`}
     >
       <body>
-        {children}
+        <Mesh />
+        <Providers>{children}</Providers>
         <Toaster />
       </body>
     </html>

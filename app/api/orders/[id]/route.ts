@@ -17,8 +17,10 @@ import {
 } from "@/lib/workflow";
 import {
   customerOrders,
+  designDatabase,
   lineStageProgress,
   orderLineItems,
+  workflowStages,
 } from "@/db/schema";
 
 type Params = { params: Promise<{ id: string }> };
@@ -223,10 +225,40 @@ export async function PUT(req: Request, { params }: Params) {
             })),
           )
           .returning({ id: orderLineItems.id });
+
+        // SLA planned dates from the Time Tracking config — for new lines only.
+        const offRows = await tx
+          .select({
+            stageKey: workflowStages.stageKey,
+            off: workflowStages.plannedOffsetDays,
+          })
+          .from(workflowStages);
+        const offsets = Object.fromEntries(
+          offRows.map((r) => [r.stageKey, r.off]),
+        );
         const stageValues = inserted.flatMap((l) =>
-          buildInitialStageRows(l.id, now),
+          buildInitialStageRows(l.id, order.order_date, offsets),
         );
         await tx.insert(lineStageProgress).values(stageValues);
+      }
+
+      // Design Database log for every current line (deduped; idempotent re-save).
+      const seen = new Set<string>();
+      const designRows = newLines.flatMap((nl) => {
+        const key = `${nl.quality}__${nl.designNo}`;
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [
+          {
+            orderId: id,
+            orderNo,
+            fabricName: nl.quality,
+            designNo: nl.designNo,
+          },
+        ];
+      });
+      if (designRows.length) {
+        await tx.insert(designDatabase).values(designRows).onConflictDoNothing();
       }
 
       await tx

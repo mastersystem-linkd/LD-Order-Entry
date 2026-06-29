@@ -24,11 +24,11 @@ export default async function AppLayout({
   };
 
   return (
-    <div className="flex min-h-svh bg-bg-light">
+    <div className="relative z-[1] flex min-h-svh">
       <Sidebar role={role} />
-      <div className="flex min-h-svh flex-1 flex-col">
+      <div className="flex min-h-svh min-w-0 flex-1 flex-col">
         <Header user={user} signOutAction={signOutAction} />
-        <main className="mx-auto w-full max-w-[1400px] flex-1 p-[30px]">
+        <main className="mx-auto w-full max-w-[1180px] flex-1 px-[34px] py-[30px]">
           {children}
         </main>
         <Footer />

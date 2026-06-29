@@ -2,145 +2,183 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* next-themes writes data-theme on <html>; map the `dark:` variant to it. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
+  /* Fonts */
+  --font-sans: var(--font-ui);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  /* shadcn semantic tokens → Prism values */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Prism direct tokens */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-inset: var(--inset);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-deep: var(--accent-deep);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
-  --color-bg-light: var(--bg-light);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+  --color-sidebar-ink: var(--sidebar-ink);
+  --color-sidebar-muted: var(--sidebar-muted);
+
+  /* Radius */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-card: 20px;
+  --radius-field: 12px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm: var(--sh-sm);
+  --shadow-md: var(--sh-md);
+  --shadow-lg: var(--sh-lg);
 }
 
+/* ---- Light (default) ---- */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  --radius: 0.75rem;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
+  /* Clean, opaque, high-contrast surfaces (slate base) so fields and text
+     read clearly. White cards lift off a calm cool-gray canvas. */
+  --canvas: #eef1f7;
+  --surface: #ffffff;
+  --surface-2: #f6f8fc;
+  --inset: #eef2f8;
+  --ink: #0f172a; /* slate-900 — primary text */
+  --ink-soft: #475569; /* slate-600 — labels / secondary */
+  --ink-muted: #64748b; /* slate-500 — placeholder / hints (WCAG AA on white) */
+  --line: #e2e8f0; /* slate-200 — hairline dividers */
+  --line-strong: #cbd5e1; /* slate-300 — input / control borders */
 
-/* CLAUDE.md §9 brand tokens — indigo primary, slate-800 sidebar, status palette.
-   Defined after shadcn's :root so these brand values win. */
-:root {
-  --primary: #4f46e5;
-  --primary-foreground: #ffffff;
-  --ring: #6366f1;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
+  /* Indigo accent per CLAUDE.md §9. */
+  --accent: #4f46e5; /* indigo-600 */
+  --accent-deep: #4338ca; /* indigo-700 */
+  --accent-soft: #eef2ff; /* indigo-50 — active pill / selection bg */
+  --accent-ring: rgba(79, 70, 229, 0.22);
+
   --success: #16a34a;
-  --warning: #ca8a04;
+  --warning: #d97706;
   --danger: #dc2626;
-  --bg-light: #f8fafc;
-  --sidebar: #1e293b;
-  --sidebar-foreground: #e2e8f0;
-  --sidebar-primary: #4f46e5;
+
+  /* Gradient + glow accents kept cohesive indigo (logo, primary button,
+     active nav, grand-total all derive from these). */
+  --a1: #4f46e5;
+  --a2: #4338ca;
+  --a3: #6366f1;
+  --a4: #818cf8;
+  --glow: rgba(79, 70, 229, 0.22);
+  --glass: #ffffff;
+  --glass-2: #ffffff;
+
+  /* Soft, neutral slate shadows — depth without the purple haze. */
+  --sh-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --sh-md: 0 2px 6px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --sh-lg: 0 4px 12px rgba(15, 23, 42, 0.08), 0 18px 48px rgba(15, 23, 42, 0.12);
+
+  /* shadcn remap */
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink);
+  --primary: var(--accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--ink);
+  --muted: var(--inset);
+  --muted-foreground: var(--ink-muted);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--accent);
+
+  --sidebar: var(--glass);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--accent);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #334155;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #334155;
-  --sidebar-ring: #6366f1;
+  --sidebar-accent: var(--accent-soft);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--line-strong);
+  --sidebar-ring: var(--accent);
+  --sidebar-ink: var(--ink);
+  --sidebar-muted: var(--ink-soft);
+}
+
+/* ---- Dark ---- */
+html[data-theme="dark"] {
+  --canvas: #0a0f1c; /* deep slate, near-black but tinted */
+  --surface: #141b2d; /* opaque card */
+  --surface-2: #1c2538; /* inputs / insets */
+  --inset: #1c2538;
+  --ink: #f1f5f9; /* slate-100 */
+  --ink-soft: #cbd5e1; /* slate-300 */
+  --ink-muted: #94a3b8; /* slate-400 */
+  --line: #273046; /* visible hairline on dark */
+  --line-strong: #354056; /* control borders */
+
+  --accent: #818cf8; /* indigo-400 — brighter for dark surfaces */
+  --accent-deep: #6366f1;
+  --accent-soft: rgba(99, 102, 241, 0.18);
+  --accent-ring: rgba(129, 140, 248, 0.4);
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  --a1: #6366f1;
+  --a2: #4f46e5;
+  --a3: #818cf8;
+  --a4: #a5b4fc;
+  --glow: rgba(99, 102, 241, 0.32);
+  --glass: #141b2d;
+  --glass-2: #1c2538;
+
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --sh-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
+
+  --popover: #1c2538;
 }
 
 @layer base {
@@ -148,9 +186,155 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--canvas);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.011em;
+    overflow-x: hidden;
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  /* Tabular mono figures. */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    letter-spacing: -0.01em;
+  }
+  /* Solid surface (kept class name for compatibility). Opaque so text and
+     controls stay crisp; no backdrop blur to muddy the background. */
+  .glass {
+    background: var(--glass);
+  }
+  /* Subtle aurora gradient text (grand total) — static, no motion. */
+  .grad-text {
+    background: linear-gradient(120deg, var(--a1), var(--a2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+/* Calm, static background tint (fixed, behind everything). Faint indigo
+   glows at the corners give subtle depth without moving or washing out text. */
+.mesh {
+  position: fixed;
+  inset: -20%;
+  z-index: 0;
+  filter: blur(100px);
+  pointer-events: none;
+}
+.mesh i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  opacity: 0.05;
+}
+html[data-theme="dark"] .mesh i {
+  opacity: 0.12;
+}
+.mesh .m1 {
+  width: 44vw;
+  height: 44vw;
+  background: radial-gradient(circle, var(--a1), transparent 66%);
+  top: -12%;
+  left: -8%;
+}
+.mesh .m2 {
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, var(--a3), transparent 66%);
+  top: -6%;
+  right: -8%;
+}
+.mesh .m3 {
+  width: 38vw;
+  height: 38vw;
+  background: radial-gradient(circle, var(--a4), transparent 66%);
+  bottom: -14%;
+  left: 30%;
+}
+
+/* Glass card with a clean hairline border + soft shadow. */
+.prism-card {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--sh-md);
+}
+
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-3deg);
+  }
+}
+@keyframes drift1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(16vw, 12vh) scale(1.18);
+  }
+}
+@keyframes drift2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-14vw, 14vh) scale(1.12);
+  }
+}
+@keyframes drift3 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(12vw, -12vh) scale(1.2);
+  }
+}
+
+/* Signature page-load reveal — pure CSS. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.reveal {
+  opacity: 0;
+  animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    animation: none;
+  }
+  .prism-card::before,
+  .mesh i,
+  .grad-text {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

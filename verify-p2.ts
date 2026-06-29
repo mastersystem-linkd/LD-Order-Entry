@@ -12,7 +12,6 @@ function check(name: string, cond: boolean, detail = "") {
 
 const jar = new Map<string, string>();
 function setCookies(res: Response) {
-  // @ts-expect-error getSetCookie exists in Node 18+
   const cookies: string[] = res.headers.getSetCookie?.() ?? [];
   for (const c of cookies) {
     const pair = c.split(";")[0];
@@ -92,7 +91,8 @@ async function main() {
   check("28 stage rows (4 lines x 7)", stageRows.length === 28, `got ${stageRows.length}`);
   const oe = stageRows.filter((s) => s.stageKey === "order_entry");
   check("order_entry planned_at set on all lines", oe.length === 4 && oe.every((s) => s.plannedAt != null), JSON.stringify(oe.map((s) => s.plannedAt)));
-  check("non-entry stages have null planned_at", stageRows.filter((s) => s.stageKey !== "order_entry").every((s) => s.plannedAt == null), "some non-entry planned_at set");
+  // SLA: every stage now carries a planned_at = order_date + its offset.
+  check("all stages have SLA planned_at set", stageRows.every((s) => s.plannedAt != null), "some stage missing planned_at");
 
   // Mark stock_checking done on the Cotton/D1/10 line (to be preserved on edit)
   const keep = lines.find((l) => l.quality === "Cotton" && l.designNo === "D1" && Number(l.qtyMtr) === 10)!;

@@ -1,12 +1,13 @@
-import { asc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { jsonData, requireRole } from "@/lib/api";
 import { db } from "@/lib/db";
 import { ROLES } from "@/lib/rbac";
-import { orderLineItems } from "@/db/schema";
+import { designDatabase } from "@/db/schema";
 
-// GET /api/designs?fabric=X — distinct design numbers from past line items
-// (optionally scoped to a fabric). Suggestions only; never blocks free text.
+// GET /api/designs?fabric=X — distinct design numbers from the Design Database
+// (CLAUDE.md §4), most-recent first, optionally scoped to a fabric. With no
+// fabric, returns recent designs across all. Suggestions only; never blocks.
 export async function GET(req: Request) {
   const guard = await requireRole(ROLES);
   if (!guard.ok) return guard.response;
@@ -14,10 +15,25 @@ export async function GET(req: Request) {
   const fabric = new URL(req.url).searchParams.get("fabric")?.trim();
 
   const rows = await db
-    .selectDistinct({ design: orderLineItems.designNo })
-    .from(orderLineItems)
-    .where(fabric ? eq(orderLineItems.quality, fabric) : undefined)
-    .orderBy(asc(orderLineItems.designNo));
+    .select({
+      design: designDatabase.designNo,
+      createdAt: designDatabase.createdAt,
+    })
+    .from(designDatabase)
+    .where(fabric ? eq(designDatabase.fabricName, fabric) : undefined)
+    .orderBy(desc(designDatabase.createdAt))
+    .limit(300);
 
-  return jsonData(rows.map((r) => r.design));
+  // Dedupe design_no preserving most-recent-first order.
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of rows) {
+    if (!seen.has(r.design)) {
+      seen.add(r.design);
+      out.push(r.design);
+    }
+    if (out.length >= 50) break;
+  }
+
+  return jsonData(out);
 }
