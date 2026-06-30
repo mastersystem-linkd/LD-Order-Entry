@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboardIcon,
   LayoutGridIcon,
+  ListChecksIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PlusIcon,
@@ -21,6 +22,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "/": LayoutDashboardIcon,
   "/orders/new": PlusIcon,
   "/orders": LayoutGridIcon,
+  "/order-status": ListChecksIcon,
   "/tracking": WorkflowIcon,
   "/settings": SettingsIcon,
 };

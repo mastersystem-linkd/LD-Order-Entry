@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/", roles: ROLES },
   { label: "New order", href: "/orders/new", roles: ["ADMIN", "SALES"] },
   { label: "Orders", href: "/orders", roles: ["ADMIN", "SALES", "OPS", "VIEWER"] },
+  { label: "Order status", href: "/order-status", roles: ROLES },
   { label: "Operations", href: "/tracking", roles: ["ADMIN", "OPS", "VIEWER"] },
   { label: "Settings", href: "/settings", roles: ["ADMIN"] },
 ];
