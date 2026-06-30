@@ -415,12 +415,12 @@ export function OrderForm({
     >
       {/* Header */}
       <Reveal index={0}>
-        <Card>
+        <Card data-size="sm">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Order details</CardTitle>
             <Eyebrow>{mode === "create" ? "Draft" : "Editing"}</Eyebrow>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-x-5 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          <CardContent className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3 [&_input]:h-10">
             <Field label="Order date" htmlFor="order_date" required>
               <Input
                 id="order_date"
