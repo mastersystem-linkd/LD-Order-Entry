@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftIcon, CheckIcon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { apiGet, apiSend } from "@/lib/api-client";
@@ -24,6 +24,18 @@ import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 
+// Vivid per-stage dot colours (CLAUDE.md §9) — readable in light and dark,
+// unlike pale tinted pills. Paired with a bold dark label in the header.
+const STAGE_DOT: Record<string, string> = {
+  order_entry: "bg-indigo-500",
+  stock_checking: "bg-blue-500",
+  rolling_checking: "bg-amber-500",
+  challan: "bg-rose-500",
+  bill: "bg-emerald-500",
+  dispatch: "bg-violet-500",
+  received_lr: "bg-cyan-500",
+};
+
 export function TrackingBoard({
   orderId,
   role,
@@ -34,6 +46,7 @@ export function TrackingBoard({
   const queryClient = useQueryClient();
   const canEdit = role === "ADMIN" || role === "OPS";
   const [pending, setPending] = React.useState<string | null>(null);
+  const [columnPending, setColumnPending] = React.useState<string | null>(null);
 
   const tracking = useQuery({
     queryKey: ["tracking", orderId],
@@ -77,8 +90,48 @@ export function TrackingBoard({
   const t = tracking.data;
   const active = t.lines.filter((l) => !l.is_cancelled);
 
+  // Per-column "check all": completion state across all active lines for a stage.
+  function columnState(stageKey: string) {
+    const states = active.map(
+      (l) => l.stages.find((s) => s.stage_key === stageKey)?.is_done ?? false,
+    );
+    const done = states.filter(Boolean).length;
+    return {
+      all: states.length > 0 && done === states.length,
+      some: done > 0 && done < states.length,
+    };
+  }
+
+  // Toggle every line item for a stage at once (only the ones that differ).
+  async function toggleColumn(stageKey: string, checked: boolean) {
+    const targets = active.filter((l) => {
+      const s = l.stages.find((x) => x.stage_key === stageKey);
+      return s && s.is_done !== checked;
+    });
+    if (targets.length === 0) return;
+    setColumnPending(stageKey);
+    try {
+      await Promise.all(
+        targets.map((l) =>
+          apiSend("/api/tracking/stage", "PATCH", {
+            line_item_id: l.id,
+            stage_key: stageKey,
+            checked,
+          }),
+        ),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["tracking", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setColumnPending(null);
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Button
@@ -89,7 +142,7 @@ export function TrackingBoard({
           >
             <ArrowLeftIcon />
           </Button>
-          <h2 className="font-display text-lg font-medium tracking-[-0.02em]">
+          <h2 className="font-display text-lg font-semibold tracking-[-0.02em] text-ink">
             {t.order.order_no}
           </h2>
           <StatusBadge status={t.operations_status} />
@@ -101,37 +154,99 @@ export function TrackingBoard({
       </div>
 
       <Reveal index={0}>
-      <Card>
-        <CardHeader>
-          <CardTitle>7-stage workflow</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y divide-line px-0">
-          {active.length === 0 ? (
-            <div className="px-6 py-10 text-center text-sm text-ink-muted">
-              This order has no active line items to track.
-            </div>
-          ) : (
-            active.map((line) => (
-              <LineTrack
-                key={line.id}
-                line={line}
-                stageKeys={t.stage_keys}
-                canEdit={canEdit}
-                pending={pending}
-                onToggle={(stageKey, checked) =>
-                  toggle.mutate({ lineId: line.id, stageKey, checked })
-                }
-              />
-            ))
-          )}
-        </CardContent>
-      </Card>
+        <Card data-size="sm">
+          <CardHeader>
+            <CardTitle>7-stage workflow</CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
+            {active.length === 0 ? (
+              <div className="px-6 py-10 text-center text-sm text-ink-muted">
+                This order has no active line items to track.
+              </div>
+            ) : (
+              <div className="max-h-[72vh] overflow-auto">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead className="sticky top-0 z-20 bg-surface">
+                    <tr className="border-b border-line">
+                      <th className="sticky left-0 z-30 bg-surface px-4 py-2.5 text-[12px] font-semibold whitespace-nowrap text-ink shadow-[1px_0_0_var(--line)]">
+                        Line item
+                      </th>
+                      <th className="px-3 py-2.5 text-right text-[12px] font-semibold whitespace-nowrap text-ink">
+                        Qty / Rate / Total
+                      </th>
+                      <th className="px-3 py-2.5 text-[12px] font-semibold whitespace-nowrap text-ink">
+                        Status
+                      </th>
+                      {t.stage_keys.map((key) => {
+                        const label =
+                          active[0]?.stages.find((s) => s.stage_key === key)
+                            ?.label ?? key;
+                        const cs = columnState(key);
+                        return (
+                          <th
+                            key={key}
+                            className="px-2.5 py-2.5 whitespace-nowrap"
+                          >
+                            <div className="flex items-center gap-2">
+                              {canEdit ? (
+                                columnPending === key ? (
+                                  <Spinner className="size-3.5" />
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={cs.all}
+                                    ref={(el) => {
+                                      if (el) el.indeterminate = cs.some;
+                                    }}
+                                    onChange={(e) =>
+                                      toggleColumn(key, e.target.checked)
+                                    }
+                                    title="Mark all line items for this stage"
+                                    aria-label={`Toggle all — ${label}`}
+                                    className="size-3.5 shrink-0 accent-[var(--accent)]"
+                                  />
+                                )
+                              ) : null}
+                              <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+                                <span
+                                  className={cn(
+                                    "size-2 shrink-0 rounded-full",
+                                    STAGE_DOT[key] ?? "bg-ink-muted",
+                                  )}
+                                />
+                                {label}
+                              </span>
+                            </div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {active.map((line) => (
+                      <LineRow
+                        key={line.id}
+                        line={line}
+                        stageKeys={t.stage_keys}
+                        canEdit={canEdit}
+                        pending={pending}
+                        onToggle={(stageKey, checked) =>
+                          toggle.mutate({ lineId: line.id, stageKey, checked })
+                        }
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </Reveal>
     </div>
   );
 }
 
-function LineTrack({
+function LineRow({
   line,
   stageKeys,
   canEdit,
@@ -149,71 +264,60 @@ function LineTrack({
   const doneCount = line.stages.filter((s) => s.is_done).length;
 
   return (
-    <div className="px-6 py-6">
-      {/* Identity + progress summary */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="font-medium text-ink">
-            {line.quality}
-            <span className="font-normal text-ink-muted"> · {line.design_no}</span>
-          </div>
-          <div className="num mt-1 text-xs text-ink-soft">
-            {formatNumber(Number(line.qty_mtr))} mtr
-            {line.rate != null ? ` · ₹${formatNumber(Number(line.rate))}` : ""}
-            {line.line_total != null
-              ? ` · ₹${formatNumber(Number(line.line_total))}`
-              : ""}
-          </div>
+    <tr className="border-b border-line align-top last:border-0">
+      <td className="sticky left-0 z-10 bg-surface px-4 py-3 shadow-[1px_0_0_var(--line)]">
+        <div className="font-medium whitespace-nowrap text-ink">
+          {line.quality}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="num text-xs text-ink-muted">
-            {doneCount}/{stageKeys.length}
-          </span>
+        <div className="whitespace-nowrap text-xs text-ink">
+          {line.design_no}
+        </div>
+      </td>
+      <td className="num px-3 py-3 text-right whitespace-nowrap text-ink">
+        <div>{formatNumber(Number(line.qty_mtr))} mtr</div>
+        <div className="text-xs text-ink-soft">
+          {line.rate == null ? "—" : `₹${formatNumber(Number(line.rate))}`}
+        </div>
+        <div className="text-xs font-medium">
+          {line.line_total == null
+            ? "—"
+            : `₹${formatNumber(Number(line.line_total))}`}
+        </div>
+      </td>
+      <td className="px-3 py-3">
+        <div className="flex flex-col items-start gap-1.5">
           <StatusBadge status={line.operations_status} />
+          <span className="num text-[11px] font-medium text-ink-soft">
+            {doneCount}/{stageKeys.length} done
+          </span>
         </div>
-      </div>
-
-      {/* Horizontal stepper */}
-      <div className="mt-5 overflow-x-auto pb-1">
-        <div className="grid min-w-[840px] grid-cols-7 gap-1">
-          {stageKeys.map((key, i) => {
-            const stage = stageByKey.get(key);
-            if (!stage) return <div key={key} />;
-            const prevDone = i > 0 && !!stageByKey.get(stageKeys[i - 1])?.is_done;
-            return (
-              <Step
-                key={key}
-                stage={stage}
-                isFirst={i === 0}
-                isLast={i === stageKeys.length - 1}
-                prevDone={prevDone}
-                isLive={key === liveKey}
-                canEdit={canEdit}
-                isPending={pending === `${line.id}:${key}`}
-                onToggle={(checked) => onToggle(key, checked)}
-              />
-            );
-          })}
-        </div>
-      </div>
-    </div>
+      </td>
+      {stageKeys.map((key) => {
+        const stage = stageByKey.get(key);
+        if (!stage) return <td key={key} className="px-2.5 py-3" />;
+        return (
+          <StageCell
+            key={key}
+            stage={stage}
+            isLive={key === liveKey}
+            canEdit={canEdit}
+            isPending={pending === `${line.id}:${key}`}
+            onToggle={(checked) => onToggle(key, checked)}
+          />
+        );
+      })}
+    </tr>
   );
 }
 
-function Step({
+function StageCell({
   stage,
-  isFirst,
-  isLast,
-  prevDone,
   isLive,
   canEdit,
   isPending,
   onToggle,
 }: {
   stage: TrackingStage;
-  isFirst: boolean;
-  isLast: boolean;
-  prevDone: boolean;
   isLive: boolean;
   canEdit: boolean;
   isPending: boolean;
@@ -222,79 +326,53 @@ function Step({
   const done = stage.is_done;
 
   return (
-    <div className="flex min-w-0 flex-col items-center text-center">
-      {/* Rail + node */}
-      <div className="flex w-full items-center">
-        <span
-          className={cn(
-            "h-0.5 flex-1 rounded-full",
-            isFirst ? "opacity-0" : prevDone ? "bg-accent" : "bg-line-strong",
-          )}
-        />
-        <button
-          type="button"
-          disabled={!canEdit || isPending}
-          onClick={() => onToggle(!done)}
-          aria-label={`${stage.label} — ${done ? "done, click to undo" : "pending, click to mark done"}`}
-          className={cn(
-            "grid size-9 shrink-0 place-items-center rounded-full border-2 transition",
-            done
-              ? "border-transparent bg-[linear-gradient(135deg,var(--a1),var(--a2))] text-white shadow-[0_4px_12px_var(--glow)]"
-              : isLive
-                ? "border-accent bg-surface text-accent ring-4 ring-[var(--accent-ring)]"
-                : "border-line-strong bg-surface-2 text-ink-muted",
-            canEdit && !isPending
-              ? "cursor-pointer hover:brightness-105"
-              : "cursor-default",
-          )}
-        >
-          {isPending ? (
-            <Spinner className="size-4 text-current" />
-          ) : done ? (
-            <CheckIcon className="size-4" />
-          ) : (
-            <span className="size-2 rounded-full bg-current opacity-40" />
-          )}
-        </button>
-        <span
-          className={cn(
-            "h-0.5 flex-1 rounded-full",
-            isLast ? "opacity-0" : done ? "bg-accent" : "bg-line-strong",
-          )}
-        />
-      </div>
-
-      {/* Label + meta */}
-      <div className="mt-2.5 flex flex-col items-center gap-1 px-1">
-        <span
-          className={cn(
-            "text-[12px] font-medium leading-tight",
-            done || isLive ? "text-ink" : "text-ink-soft",
-          )}
-        >
-          {stage.label}
-        </span>
-        {done ? (
-          <>
-            <span className="num text-[11px] text-ink-soft">
-              {formatDateTime(stage.actual_at)}
-            </span>
-            <DelayPill minutes={stage.delay_minutes} />
-          </>
-        ) : (
-          <>
-            <span className="num text-[11px] text-ink-muted">
-              Plan {formatDate(stage.planned_at)}
-            </span>
-            {isLive ? (
-              <span className="rounded-pill bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                Current
-              </span>
-            ) : null}
-          </>
+    <td className="px-2.5 py-3 align-top">
+      <div
+        className={cn(
+          "flex min-w-[150px] flex-col gap-1.5 rounded-[10px] border p-2.5 transition-colors",
+          done
+            ? "border-success/30 bg-success/5"
+            : isLive
+              ? "border-accent/40 bg-accent/5"
+              : "border-line bg-surface-2",
         )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-ink">
+            {isPending ? (
+              <Spinner className="size-3.5" />
+            ) : (
+              <input
+                type="checkbox"
+                checked={done}
+                disabled={!canEdit}
+                onChange={(e) => onToggle(e.target.checked)}
+                className="size-3.5 accent-[var(--accent)] disabled:cursor-not-allowed"
+              />
+            )}
+            {done ? "Done" : "Pending"}
+          </label>
+          {isLive && !done ? (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+              <span className="size-1.5 rounded-full bg-accent" />
+              Live
+            </span>
+          ) : null}
+        </div>
+
+        <div className="text-[11px] leading-tight text-ink">
+          <div>
+            Planned: <span className="num">{formatDate(stage.planned_at)}</span>
+          </div>
+          <div>
+            Actual:{" "}
+            <span className="num">{formatDateTime(stage.actual_at)}</span>
+          </div>
+        </div>
+
+        {done ? <DelayPill minutes={stage.delay_minutes} /> : null}
       </div>
-    </div>
+    </td>
   );
 }
 
@@ -303,10 +381,8 @@ function DelayPill({ minutes }: { minutes: number | null }) {
   return (
     <span
       className={cn(
-        "num rounded-pill px-1.5 py-0.5 text-[10px] font-medium",
-        late
-          ? "bg-warning/15 text-warning"
-          : "bg-success/15 text-success",
+        "num inline-flex w-fit rounded-pill px-1.5 py-0.5 text-[10px] font-medium",
+        late ? "bg-warning/15 text-warning" : "bg-success/15 text-success",
       )}
     >
       {formatDelay(minutes)}

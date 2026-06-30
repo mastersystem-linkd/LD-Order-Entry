@@ -5,8 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ClipboardListIcon,
+  ClockIcon,
   EyeIcon,
+  LayersIcon,
   PencilIcon,
+  PlusIcon,
   RefreshCwIcon,
   RouteIcon,
   SearchIcon,
@@ -20,6 +24,7 @@ import type { Role } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Reveal } from "@/components/ui/reveal";
+import { StatCard } from "@/components/ui/stat-card";
 import {
   Dialog,
   DialogContent,
@@ -77,18 +82,30 @@ export function OrdersDashboard({ role }: { role: Role }) {
   ).length;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {/* Stat cards */}
       <Reveal index={0}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Total orders" value={data ? String(data.total) : "—"} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <StatCard
-            label="Pending (this page)"
-            value={data ? String(pendingOnPage) : "—"}
+            tone="indigo"
+            icon={<ClipboardListIcon />}
+            label="Total orders"
+            value={data ? formatNumber(data.total).replace(".00", "") : "—"}
+            sub="Across all pages"
           />
           <StatCard
+            tone="amber"
+            icon={<ClockIcon />}
+            label="Pending"
+            value={data ? String(pendingOnPage) : "—"}
+            sub="On this page"
+          />
+          <StatCard
+            tone="slate"
+            icon={<LayersIcon />}
             label="Page"
             value={data ? `${data.page} / ${data.total_pages}` : "—"}
+            sub={data ? `${data.page_size} per page` : undefined}
           />
         </div>
       </Reveal>
@@ -97,7 +114,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <form onSubmit={applySearch} className="flex w-full max-w-md gap-2">
           <div className="relative flex-1">
-            <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -118,17 +135,19 @@ export function OrdersDashboard({ role }: { role: Role }) {
             {list.isFetching ? <Spinner /> : <RefreshCwIcon />} Refresh
           </Button>
           {canEdit ? (
-            <Button onClick={() => router.push("/orders/new")}>New order</Button>
+            <Button onClick={() => router.push("/orders/new")}>
+              <PlusIcon /> New order
+            </Button>
           ) : null}
         </div>
       </div>
 
       {/* Table */}
       <Reveal index={1}>
-      <Card>
+      <Card data-size="sm">
         <CardContent className="px-0">
           {list.isLoading ? (
-            <div className="flex items-center gap-2 px-4 py-10 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 px-4 py-10 text-sm text-ink-soft">
               <Spinner /> Loading orders…
             </div>
           ) : list.isError ? (
@@ -136,7 +155,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
               {(list.error as Error)?.message ?? "Failed to load orders."}
             </div>
           ) : rows.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            <div className="px-4 py-10 text-center text-sm text-ink-soft">
               No orders found{search ? ` for “${search}”` : ""}.
             </div>
           ) : (
@@ -168,7 +187,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
                       <Td className="font-medium">
                         <Link
                           href={`/orders/${o.id}`}
-                          className="hover:text-primary hover:underline"
+                          className="hover:text-accent hover:underline"
                         >
                           {o.order_no}
                         </Link>
@@ -235,7 +254,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
       {/* Pagination */}
       {data && data.total_pages > 1 ? (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
+          <span className="text-ink-soft">
             {data.total} order{data.total === 1 ? "" : "s"}
           </span>
           <div className="flex items-center gap-2">
@@ -247,7 +266,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
             >
               Previous
             </Button>
-            <span className="tabular-nums">
+            <span className="num">
               {data.page} / {data.total_pages}
             </span>
             <Button
@@ -274,7 +293,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
             <DialogTitle>Delete order</DialogTitle>
             <DialogDescription>
               Delete order{" "}
-              <span className="font-medium text-foreground">
+              <span className="font-medium text-ink">
                 {toDelete?.order_no}
               </span>{" "}
               and all its line items and stage progress? This cannot be undone.
@@ -308,21 +327,6 @@ export function OrdersDashboard({ role }: { role: Role }) {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="transition-shadow hover:shadow-lg">
-      <CardContent className="py-1">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-          {label}
-        </div>
-        <div className="num mt-1.5 font-display text-[30px] font-semibold tracking-[-0.02em] text-ink">
-          {value}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function Th({
   children,
   className,
@@ -331,7 +335,7 @@ function Th({
   className?: string;
 }) {
   return (
-    <th className={`px-3 py-2.5 font-medium ${className ?? ""}`}>{children}</th>
+    <th className={`px-4 py-2 font-medium ${className ?? ""}`}>{children}</th>
   );
 }
 
@@ -342,7 +346,7 @@ function Td({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <td className={`px-3 py-2.5 ${className ?? ""}`}>{children}</td>;
+  return <td className={`px-4 py-2.5 ${className ?? ""}`}>{children}</td>;
 }
 
 function IconLink({

@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 // Operations status per line/order (CLAUDE.md §5). This app's status — not stock.
@@ -7,18 +6,25 @@ export type OperationsStatus =
   | "PARTIALLY COMPLETED"
   | "PENDING";
 
-const STATUS: Record<OperationsStatus, { label: string; className: string }> = {
+// Reference style (SOS / FlowMail): a soft tinted pill with a colored status dot.
+const STATUS: Record<
+  OperationsStatus,
+  { label: string; pill: string; dot: string }
+> = {
   COMPLETED: {
     label: "Completed",
-    className: "bg-success/15 text-success border-success/30",
+    pill: "bg-success/10 text-success",
+    dot: "bg-success",
   },
   "PARTIALLY COMPLETED": {
     label: "Partially completed",
-    className: "bg-warning/15 text-warning border-warning/30",
+    pill: "bg-warning/10 text-warning",
+    dot: "bg-warning",
   },
   PENDING: {
     label: "Pending",
-    className: "bg-muted text-muted-foreground border-border",
+    pill: "bg-inset text-ink-soft",
+    dot: "bg-ink-muted",
   },
 };
 
@@ -31,9 +37,16 @@ export function StatusBadge({
 }) {
   const cfg = STATUS[status];
   return (
-    <Badge variant="outline" className={cn("border", cfg.className, className)}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[12px] font-medium whitespace-nowrap",
+        cfg.pill,
+        className,
+      )}
+    >
+      <span className={cn("size-1.5 shrink-0 rounded-full", cfg.dot)} />
       {cfg.label}
-    </Badge>
+    </span>
   );
 }
 

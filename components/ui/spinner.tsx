@@ -8,7 +8,7 @@ export function Spinner({ className }: { className?: string }) {
     <Loader2Icon
       role="status"
       aria-label="Loading"
-      className={cn("size-4 animate-spin text-muted-foreground", className)}
+      className={cn("size-4 animate-spin text-ink-muted", className)}
     />
   );
 }

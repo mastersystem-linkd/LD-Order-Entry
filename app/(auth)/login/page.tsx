@@ -30,10 +30,10 @@ export default async function LoginPage({
     <div className="relative z-[1] flex min-h-svh items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2.5 text-center">
-          <div className="grid size-11 place-items-center rounded-[12px] bg-[linear-gradient(145deg,var(--accent),var(--accent-deep))] font-display text-lg font-semibold text-white shadow-[0_6px_16px_var(--accent-ring),inset_0_1px_0_rgba(255,255,255,.25)]">
+          <div className="grid size-11 place-items-center rounded-[12px] bg-accent font-display text-lg font-semibold text-white shadow-sm">
             LD
           </div>
-          <h1 className="font-display text-[22px] font-medium tracking-[-0.02em] text-ink">
+          <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em] text-ink">
             Order Entry System
           </h1>
         </div>
@@ -48,7 +48,7 @@ export default async function LoginPage({
             <LoginForm callbackUrl={safeCallback} />
           </CardContent>
         </Card>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
+        <p className="mt-4 text-center text-xs text-ink-muted">
           Operations tracking · 7-stage TAT
         </p>
       </div>

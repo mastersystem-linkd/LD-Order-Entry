@@ -15,6 +15,7 @@ export type NavItem = {
 
 // Sidebar nav (CLAUDE.md OE-P1 §3). Visibility mirrors canAccessPath below.
 export const NAV_ITEMS: NavItem[] = [
+  { label: "Dashboard", href: "/", roles: ROLES },
   { label: "New order", href: "/orders/new", roles: ["ADMIN", "SALES"] },
   { label: "Orders", href: "/orders", roles: ["ADMIN", "SALES", "OPS", "VIEWER"] },
   { label: "Operations", href: "/tracking", roles: ["ADMIN", "OPS", "VIEWER"] },

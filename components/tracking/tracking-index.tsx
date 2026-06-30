@@ -3,7 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCwIcon, RouteIcon, SearchIcon } from "lucide-react";
+import {
+  CheckCircle2Icon,
+  ClipboardListIcon,
+  ClockIcon,
+  RefreshCwIcon,
+  RouteIcon,
+  SearchIcon,
+} from "lucide-react";
 
 import { apiGet } from "@/lib/api-client";
 import { formatNumber, type OrdersList } from "@/lib/orders";
@@ -12,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
+import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export function TrackingIndex() {
@@ -36,17 +44,49 @@ export function TrackingIndex() {
 
   const data = list.data;
   const rows = data?.orders ?? [];
+  const pendingOnPage = rows.filter(
+    (r) => r.operations_status === "PENDING",
+  ).length;
+  const completedOnPage = rows.filter(
+    (r) => r.operations_status === "COMPLETED",
+  ).length;
 
   return (
-    <div className="flex flex-col gap-5">
-      <p className="text-sm text-muted-foreground">
+    <div className="flex flex-col gap-4">
+      <Reveal index={0}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard
+            tone="indigo"
+            icon={<ClipboardListIcon />}
+            label="Total orders"
+            value={data ? formatNumber(data.total).replace(".00", "") : "—"}
+            sub="Across all pages"
+          />
+          <StatCard
+            tone="amber"
+            icon={<ClockIcon />}
+            label="Pending"
+            value={data ? String(pendingOnPage) : "—"}
+            sub="On this page"
+          />
+          <StatCard
+            tone="green"
+            icon={<CheckCircle2Icon />}
+            label="Completed"
+            value={data ? String(completedOnPage) : "—"}
+            sub="On this page"
+          />
+        </div>
+      </Reveal>
+
+      <p className="text-sm text-ink-soft">
         Pick an order to open its 7-stage workflow.
       </p>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <form onSubmit={applySearch} className="flex w-full max-w-md gap-2">
           <div className="relative flex-1">
-            <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -71,7 +111,7 @@ export function TrackingIndex() {
       <Card>
         <CardContent className="px-0">
           {list.isLoading ? (
-            <div className="flex items-center gap-2 px-4 py-10 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 px-4 py-10 text-sm text-ink-soft">
               <Spinner /> Loading orders…
             </div>
           ) : list.isError ? (
@@ -79,7 +119,7 @@ export function TrackingIndex() {
               {(list.error as Error)?.message ?? "Failed to load orders."}
             </div>
           ) : rows.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            <div className="px-4 py-10 text-center text-sm text-ink-soft">
               No orders found{search ? ` for “${search}”` : ""}.
             </div>
           ) : (
@@ -145,7 +185,7 @@ export function TrackingIndex() {
           >
             Previous
           </Button>
-          <span className="tabular-nums">
+          <span className="num">
             {data.page} / {data.total_pages}
           </span>
           <Button

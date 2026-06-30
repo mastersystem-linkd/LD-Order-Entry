@@ -63,8 +63,8 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-card: 20px;
-  --radius-field: 12px;
+  --radius-card: 16px;
+  --radius-field: 10px;
   --radius-pill: 999px;
 
   /* Shadows */
@@ -77,42 +77,42 @@
 :root {
   --radius: 0.75rem;
 
-  /* Clean, opaque, high-contrast surfaces (slate base) so fields and text
-     read clearly. White cards lift off a calm cool-gray canvas. */
-  --canvas: #eef1f7;
+  /* Clean SaaS surfaces (SOS / FlowMail reference): near-white neutral canvas,
+     pure-white cards separated by hairline neutral-gray borders + soft shadows.
+     Neutral grays (not slate-blue) for a crisp, high-tech read. */
+  --canvas: #f7f8fa;
   --surface: #ffffff;
-  --surface-2: #f6f8fc;
-  --inset: #eef2f8;
-  --ink: #0f172a; /* slate-900 — primary text */
-  --ink-soft: #475569; /* slate-600 — labels / secondary */
-  --ink-muted: #64748b; /* slate-500 — placeholder / hints (WCAG AA on white) */
-  --line: #e2e8f0; /* slate-200 — hairline dividers */
-  --line-strong: #cbd5e1; /* slate-300 — input / control borders */
+  --surface-2: #f5f6f8; /* input / inset fill */
+  --inset: #f2f3f5;
+  --ink: #16181d; /* near-black — headings / primary text */
+  --ink-soft: #5a616e; /* neutral gray — labels / secondary */
+  --ink-muted: #989da8; /* light gray — placeholder / hints */
+  --line: #ececf0; /* hairline dividers / card borders */
+  --line-strong: #dee0e5; /* input / control borders */
 
-  /* Indigo accent per CLAUDE.md §9. */
+  /* Indigo accent (brand + FlowMail reference) per CLAUDE.md §9. */
   --accent: #4f46e5; /* indigo-600 */
   --accent-deep: #4338ca; /* indigo-700 */
-  --accent-soft: #eef2ff; /* indigo-50 — active pill / selection bg */
-  --accent-ring: rgba(79, 70, 229, 0.22);
+  --accent-soft: #eef0ff; /* indigo-50 — active/selection tint */
+  --accent-ring: rgba(79, 70, 229, 0.18);
 
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
 
-  /* Gradient + glow accents kept cohesive indigo (logo, primary button,
-     active nav, grand-total all derive from these). */
+  /* Accent ramp (logo, primary button, active nav derive from these). */
   --a1: #4f46e5;
   --a2: #4338ca;
   --a3: #6366f1;
   --a4: #818cf8;
-  --glow: rgba(79, 70, 229, 0.22);
+  --glow: rgba(79, 70, 229, 0.16);
   --glass: #ffffff;
   --glass-2: #ffffff;
 
-  /* Soft, neutral slate shadows — depth without the purple haze. */
-  --sh-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
-  --sh-md: 0 2px 6px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
-  --sh-lg: 0 4px 12px rgba(15, 23, 42, 0.08), 0 18px 48px rgba(15, 23, 42, 0.12);
+  /* Soft neutral shadows — gentle elevation like the reference cards. */
+  --sh-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --sh-md: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.05);
+  --sh-lg: 0 4px 12px rgba(16, 24, 40, 0.06), 0 16px 40px rgba(16, 24, 40, 0.1);
 
   /* shadcn remap */
   --background: var(--canvas);
@@ -147,15 +147,16 @@
 
 /* ---- Dark ---- */
 html[data-theme="dark"] {
-  --canvas: #0a0f1c; /* deep slate, near-black but tinted */
-  --surface: #141b2d; /* opaque card */
-  --surface-2: #1c2538; /* inputs / insets */
-  --inset: #1c2538;
-  --ink: #f1f5f9; /* slate-100 */
-  --ink-soft: #cbd5e1; /* slate-300 */
-  --ink-muted: #94a3b8; /* slate-400 */
-  --line: #273046; /* visible hairline on dark */
-  --line-strong: #354056; /* control borders */
+  /* Neutral near-black (SOS dark reference) — no blue tint. */
+  --canvas: #0b0c0e;
+  --surface: #16181c; /* card */
+  --surface-2: #1d2025; /* inputs / insets */
+  --inset: #1d2025;
+  --ink: #f4f5f7;
+  --ink-soft: #b8bdc7;
+  --ink-muted: #868c97;
+  --line: #25272d; /* hairline on dark */
+  --line-strong: #33363d; /* control borders */
 
   --accent: #818cf8; /* indigo-400 — brighter for dark surfaces */
   --accent-deep: #6366f1;
@@ -170,15 +171,15 @@ html[data-theme="dark"] {
   --a2: #4f46e5;
   --a3: #818cf8;
   --a4: #a5b4fc;
-  --glow: rgba(99, 102, 241, 0.32);
-  --glass: #141b2d;
-  --glass-2: #1c2538;
+  --glow: rgba(99, 102, 241, 0.3);
+  --glass: #16181c;
+  --glass-2: #1d2025;
 
   --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sh-md: 0 4px 16px rgba(0, 0, 0, 0.45);
   --sh-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
 
-  --popover: #1c2538;
+  --popover: #1d2025;
 }
 
 @layer base {
@@ -260,10 +261,10 @@ html[data-theme="dark"] .mesh i {
   left: 30%;
 }
 
-/* Glass card with a clean hairline border + soft shadow. */
+/* Card: hairline neutral border + soft shadow (SOS / FlowMail reference). */
 .prism-card {
   position: relative;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   box-shadow: var(--sh-md);
 }
 

@@ -27,7 +27,7 @@ export function OrderDetailView({
 
   if (detail.isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 text-sm text-ink-muted">
         <Spinner /> Loading order…
       </div>
     );
@@ -48,7 +48,9 @@ export function OrderDetailView({
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">{d.order.order_no}</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">
+            {d.order.order_no}
+          </h2>
           <StatusBadge status={d.operations_status} />
         </div>
         <div className="flex gap-2">
@@ -96,7 +98,7 @@ export function OrderDetailView({
         <CardContent className="px-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-border text-xs text-muted-foreground">
+              <thead className="border-b border-line text-xs text-ink-muted">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Fabric</th>
                   <th className="px-4 py-2.5 font-medium">Design no</th>
@@ -112,7 +114,7 @@ export function OrderDetailView({
                 {d.lines.map((l) => (
                   <tr
                     key={l.id}
-                    className="border-b border-border last:border-0"
+                    className="border-b border-line last:border-0"
                   >
                     <td className="px-4 py-2.5">{l.quality}</td>
                     <td className="px-4 py-2.5">{l.design_no}</td>
@@ -167,8 +169,8 @@ function Detail({
 }) {
   return (
     <div className={className}>
-      <dt className="text-xs text-muted-foreground">{term}</dt>
-      <dd className="mt-0.5 font-medium">{value}</dd>
+      <dt className="text-xs text-ink-muted">{term}</dt>
+      <dd className="mt-0.5 font-medium text-ink">{value}</dd>
     </div>
   );
 }
