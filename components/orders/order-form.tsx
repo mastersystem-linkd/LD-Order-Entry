@@ -8,7 +8,6 @@ import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { apiGet, apiSend } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
 import { formatNumber, type OrderDetail } from "@/lib/orders";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
+import { Th } from "@/components/ui/table";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useDesigns, useLookup } from "@/components/orders/use-lookups";
 
@@ -420,7 +420,7 @@ export function OrderForm({
             <CardTitle>Order details</CardTitle>
             <Eyebrow>{mode === "create" ? "Draft" : "Editing"}</Eyebrow>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3 [&_input]:h-10">
+          <CardContent className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:gap-x-4 lg:grid-cols-3 [&_input]:h-10">
             <Field label="Order date" htmlFor="order_date" required>
               <Input
                 id="order_date"
@@ -536,7 +536,7 @@ export function OrderForm({
             <Field
               label="Remarks"
               htmlFor="remarks"
-              className="sm:col-span-2 lg:col-span-3"
+              className="col-span-2 lg:col-span-3"
             >
               <Input
                 id="remarks"
@@ -571,115 +571,78 @@ export function OrderForm({
               </button>
             </div>
 
-            {/* Line items — one aligned row per design; Fabric + Rate are
-                shared for the block, shown as merged cells spanning its rows.
-                The -mx/px wrapper gives narrow screens horizontal scroll so the
-                Line-total and remove columns stay reachable; the suggestion
-                dropdowns portal out, so this overflow never clips them. */}
-            <div className="-mx-1 overflow-x-auto px-1 pb-1">
-              <div
-                className="grid min-w-[680px] items-start gap-x-2.5 gap-y-2"
-                style={{
-                  gridTemplateColumns:
-                    "minmax(168px,1.6fr) 88px minmax(150px,1.4fr) 84px 124px 36px",
-                }}
-              >
-              {[
-                { label: "Fabric", req: true },
-                { label: "Rate", right: true },
-                { label: "Design no", req: true },
-                { label: "Qty (mtr)", right: true },
-                { label: "Line total", right: true },
-              ].map((h, ci) => (
-                <span
-                  key={h.label}
-                  style={{ gridColumn: ci + 1, gridRow: 1 }}
-                  className={cn(
-                    "px-0.5 pb-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted",
-                    h.right && "text-right",
-                  )}
-                >
-                  {h.label}
-                  {h.req ? <span className="text-danger"> *</span> : null}
-                </span>
-              ))}
-
-              {/* Fabric — merged across the block's design rows */}
-              <div
-                style={{
-                  gridColumn: 1,
-                  gridRow: `2 / span ${block.designs.length}`,
-                }}
-              >
-                <Autocomplete
-                  value={block.fabric}
-                  onValueChange={(v) => updateBlock(bi, { fabric: v })}
-                  suggestions={fabricOptionsFor(bi)}
-                  placeholder="Fabric / quality"
-                  aria-label={`Fabric, block ${bi + 1}`}
-                  className="h-10 text-[13.5px]"
-                />
-              </div>
-              {/* Rate — merged across the block's design rows */}
-              <div
-                style={{
-                  gridColumn: 2,
-                  gridRow: `2 / span ${block.designs.length}`,
-                }}
-              >
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="num h-10 px-2 text-right text-[13.5px]"
-                  value={block.rate}
-                  onChange={(e) => updateBlock(bi, { rate: e.target.value })}
-                  placeholder="0.00"
-                  aria-label={`Rate per metre, block ${bi + 1}`}
-                />
+            {/* Shared block fields (one fabric + rate per block), then an
+                aligned list of design rows. Fully responsive: the columns fit
+                the viewport so mobile never needs horizontal scrolling. The
+                suggestion dropdowns portal out, so nothing clips them. */}
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-[1fr_6rem] gap-2.5 sm:grid-cols-[minmax(180px,1.6fr)_120px]">
+                <Field label="Fabric" required>
+                  <Autocomplete
+                    value={block.fabric}
+                    onValueChange={(v) => updateBlock(bi, { fabric: v })}
+                    suggestions={fabricOptionsFor(bi)}
+                    placeholder="Fabric / quality"
+                    aria-label={`Fabric, block ${bi + 1}`}
+                    className="h-10 text-[13.5px]"
+                  />
+                </Field>
+                <Field label="Rate">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="num h-10 px-2 text-right text-[13.5px]"
+                    value={block.rate}
+                    onChange={(e) => updateBlock(bi, { rate: e.target.value })}
+                    placeholder="0.00"
+                    aria-label={`Rate per metre, block ${bi + 1}`}
+                  />
+                </Field>
               </div>
 
-              {block.designs.map((d, di) => {
-                const r = 2 + di;
-                return (
-                  <React.Fragment key={di}>
-                    <div style={{ gridColumn: 3, gridRow: r }}>
-                      <DesignAutocomplete
-                        fabric={block.fabric}
-                        value={d.design_no}
-                        onValueChange={(v) =>
-                          updateDesign(bi, di, { design_no: v })
-                        }
-                        aria-label={`Design no, row ${di + 1}`}
-                        className="h-10 text-[13.5px]"
-                      />
-                    </div>
-                    <div style={{ gridColumn: 4, gridRow: r }}>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="num h-10 px-2 text-right text-[13.5px]"
-                        value={d.qty_mtr}
-                        onChange={(e) =>
-                          di === 0
-                            ? setFirstDesignQty(bi, e.target.value)
-                            : updateDesign(bi, di, { qty_mtr: e.target.value })
-                        }
-                        placeholder="0"
-                        aria-label={`Quantity in metres, row ${di + 1}`}
-                      />
-                    </div>
-                    <div
-                      style={{ gridColumn: 5, gridRow: r }}
-                      className="num flex h-10 items-center justify-end pr-1 text-[14px] font-medium text-ink"
-                    >
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_4rem_5.5rem_2rem] gap-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted">
+                  <span>
+                    Design no<span className="text-danger"> *</span>
+                  </span>
+                  <span className="text-right">Qty</span>
+                  <span className="text-right">Total</span>
+                  <span />
+                </div>
+
+                {block.designs.map((d, di) => (
+                  <div
+                    key={di}
+                    className="grid grid-cols-[minmax(0,1fr)_4rem_5.5rem_2rem] items-center gap-2"
+                  >
+                    <DesignAutocomplete
+                      fabric={block.fabric}
+                      value={d.design_no}
+                      onValueChange={(v) =>
+                        updateDesign(bi, di, { design_no: v })
+                      }
+                      aria-label={`Design no, row ${di + 1}`}
+                      className="h-10 text-[13.5px]"
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="num h-10 px-2 text-right text-[13.5px]"
+                      value={d.qty_mtr}
+                      onChange={(e) =>
+                        di === 0
+                          ? setFirstDesignQty(bi, e.target.value)
+                          : updateDesign(bi, di, { qty_mtr: e.target.value })
+                      }
+                      placeholder="0"
+                      aria-label={`Quantity in metres, row ${di + 1}`}
+                    />
+                    <div className="num flex h-10 items-center justify-end pr-0.5 text-[13px] font-medium text-ink">
                       <Money value={blockTotals[bi].rows[di]?.lineTotal ?? 0} />
                     </div>
-                    <div
-                      style={{ gridColumn: 6, gridRow: r }}
-                      className="flex h-10 items-center justify-center"
-                    >
+                    <div className="flex h-10 items-center justify-center">
                       <button
                         type="button"
                         onClick={() => removeDesign(bi, di)}
@@ -690,9 +653,8 @@ export function OrderForm({
                         <Trash2Icon className="size-[15px]" />
                       </button>
                     </div>
-                  </React.Fragment>
-                );
-              })}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -796,13 +758,13 @@ export function OrderForm({
 
             <div className="overflow-x-auto rounded-field border border-line">
               <table className="w-full min-w-[440px] text-left text-sm">
-                <thead className="bg-inset text-xs text-ink-muted">
+                <thead className="bg-inset">
                   <tr>
-                    <th className="px-3 py-2">Fabric</th>
-                    <th className="px-3 py-2">Design</th>
-                    <th className="px-3 py-2 text-right">Qty</th>
-                    <th className="px-3 py-2 text-right">Rate</th>
-                    <th className="px-3 py-2 text-right">Line total</th>
+                    <Th>Fabric</Th>
+                    <Th>Design</Th>
+                    <Th className="text-right">Qty</Th>
+                    <Th className="text-right">Rate</Th>
+                    <Th className="text-right">Line total</Th>
                   </tr>
                 </thead>
                 <tbody>

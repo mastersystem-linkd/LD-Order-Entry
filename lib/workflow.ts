@@ -18,6 +18,20 @@ export const STAGE_KEYS = [
 
 export type StageKey = (typeof STAGE_KEYS)[number];
 
+// Stock outcome recorded on the stock_checking stage. 'in_stock' completes it
+// and unlocks downstream stages; 'out_of_stock' records the block.
+export type StockStatus = "in_stock" | "out_of_stock";
+
+// Thrown when a stage change breaks the sequencing rules (fully sequential;
+// downgrades blocked while later stages are done). The API maps it to a 409
+// with the message surfaced to the user.
+export class WorkflowError extends Error {}
+
+// Position of each stage in the fixed 7-stage order, for prerequisite checks.
+const STAGE_INDEX: Record<string, number> = Object.fromEntries(
+  STAGE_KEYS.map((k, i) => [k, i]),
+);
+
 // Sentence-case labels for the tracking UI (CLAUDE.md §8 conventions).
 export const STAGE_LABELS: Record<StageKey, string> = {
   order_entry: "Order entry",
@@ -100,23 +114,44 @@ export function computeDelayMinutes(planned: Date | null, actual: Date): number 
   return Math.round((actual.getTime() - planned.getTime()) / 60000);
 }
 
-// Stage completion / un-tick for a single line item, in ONE transaction (§6):
-//   check   → set actual (client value or now), is_done=true, compute delay,
-//             and if the NEXT stage has no planned_at, set it to this actual_at.
-//   uncheck → clear actual/done/delay (planned_at is left untouched).
-// An optional `plannedAt` lets a caller (re)set the target stage's planned time.
-// Returns the line's recomputed operations status.
+// Stage completion / un-tick for a single line item, in ONE transaction (§6),
+// enforcing the sequencing rules:
+//   - fully sequential: a stage can only be completed once the stage before it
+//     is done (stock_checking must be 'in_stock' to unlock everything after it);
+//   - block downgrades: a done stage can't be un-completed (or stock set to
+//     'out_of_stock') while a later stage is still done.
+// For stock_checking, `stockStatus` drives it: 'in_stock' completes the stage,
+// 'out_of_stock'/null leaves it incomplete (and downstream locked).
+// Violations throw WorkflowError. Returns the line's recomputed status.
 export async function applyStageProgress(params: {
   orderLineItemId: string;
   stageKey: StageKey;
   isDone: boolean;
+  stockStatus?: StockStatus | null;
   plannedAt?: Date | null;
   actualAt?: Date | null;
   updatedBy?: string | null;
 }): Promise<OperationsStatus> {
-  const { orderLineItemId, stageKey, isDone, plannedAt, actualAt, updatedBy } =
-    params;
+  const {
+    orderLineItemId,
+    stageKey,
+    isDone,
+    stockStatus,
+    plannedAt,
+    actualAt,
+    updatedBy,
+  } = params;
   const now = new Date();
+  const idx = STAGE_INDEX[stageKey];
+  const isStock = stageKey === "stock_checking";
+
+  // Stock completes only when 'in_stock'; every other stage uses `isDone`.
+  const becomingDone = isStock ? stockStatus === "in_stock" : isDone;
+  const nextStock: StockStatus | null = isStock
+    ? becomingDone
+      ? "in_stock"
+      : (stockStatus ?? null)
+    : null;
 
   return dbx.transaction(async (tx) => {
     const rows = await tx
@@ -128,38 +163,49 @@ export async function applyStageProgress(params: {
     if (!target) {
       throw new Error("Stage row not found for this line item.");
     }
+    const byKey = new Map(rows.map((r) => [r.stageKey, r]));
+
+    // --- Sequencing rules ---
+    if (becomingDone) {
+      // Fully sequential: the immediately-previous stage must be done first.
+      if (idx > 0) {
+        const prevKey = STAGE_KEYS[idx - 1];
+        if (!byKey.get(prevKey)?.isDone) {
+          throw new WorkflowError(`Complete "${STAGE_LABELS[prevKey]}" first.`);
+        }
+      }
+    } else if (target.isDone) {
+      // Block: can't un-complete a done stage while a later stage is still done.
+      const laterDoneKey = STAGE_KEYS.slice(idx + 1).find(
+        (k) => byKey.get(k)?.isDone,
+      );
+      if (laterDoneKey) {
+        throw new WorkflowError(
+          `Clear "${STAGE_LABELS[laterDoneKey]}" first — a later stage is still marked done.`,
+        );
+      }
+    }
 
     // Effective planned time for delay = an explicit override, else what's stored.
     const planned = plannedAt !== undefined ? plannedAt : target.plannedAt;
+    const actual = becomingDone ? (actualAt ?? now) : null;
 
-    if (isDone) {
-      const actual = actualAt ?? now;
-      // Planned date is config-driven (SLA) — completing a stage never changes
-      // any stage's planned_at (§6).
-      await tx
-        .update(lineStageProgress)
-        .set({
-          plannedAt: planned,
-          actualAt: actual,
-          isDone: true,
-          delayMinutes: computeDelayMinutes(planned, actual),
-          updatedBy: updatedBy ?? null,
-          updatedAt: now,
-        })
-        .where(eq(lineStageProgress.id, target.id));
-    } else {
-      await tx
-        .update(lineStageProgress)
-        .set({
-          plannedAt: planned,
-          actualAt: null,
-          isDone: false,
-          delayMinutes: null,
-          updatedBy: updatedBy ?? null,
-          updatedAt: now,
-        })
-        .where(eq(lineStageProgress.id, target.id));
-    }
+    // Planned date is config-driven (SLA) — completing a stage never changes
+    // any stage's planned_at (§6).
+    await tx
+      .update(lineStageProgress)
+      .set({
+        plannedAt: planned,
+        actualAt: actual,
+        isDone: becomingDone,
+        delayMinutes: becomingDone
+          ? computeDelayMinutes(planned, actual as Date)
+          : null,
+        stockStatus: isStock ? nextStock : target.stockStatus,
+        updatedBy: updatedBy ?? null,
+        updatedAt: now,
+      })
+      .where(eq(lineStageProgress.id, target.id));
 
     const updated = await tx
       .select({ isDone: lineStageProgress.isDone })

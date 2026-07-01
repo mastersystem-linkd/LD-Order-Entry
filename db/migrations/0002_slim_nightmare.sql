@@ -1,0 +1,1 @@
+ALTER TABLE "line_stage_progress" ADD COLUMN IF NOT EXISTS "stock_status" varchar(20);

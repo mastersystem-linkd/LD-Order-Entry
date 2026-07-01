@@ -116,16 +116,6 @@ export function DashboardView() {
               {p.label}
             </button>
           ))}
-          <span
-            role="status"
-            className={cn(
-              pillBase,
-              "cursor-default",
-              activePreset === "custom" ? pillActive : pillIdle,
-            )}
-          >
-            Custom
-          </span>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
           <Input

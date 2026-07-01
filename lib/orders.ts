@@ -12,6 +12,8 @@ export type OrderRow = {
   order_date: string;
   party_name: string;
   sales_person: string | null;
+  agent: string | null;
+  haste: string | null;
   challan_no: string | null;
   lot_no: string | null;
   department: string | null;
@@ -75,6 +77,8 @@ export type OrderDetail = {
 };
 
 // ---- OE-P3 operations tracking ----
+export type StockStatus = "in_stock" | "out_of_stock";
+
 export type TrackingStage = {
   stage_key: string;
   label: string;
@@ -83,6 +87,8 @@ export type TrackingStage = {
   is_done: boolean;
   delay_minutes: number | null;
   updated_at: string;
+  // Only set on the stock_checking stage (null elsewhere / undecided).
+  stock_status: StockStatus | null;
 };
 
 export type TrackingLine = {
@@ -105,6 +111,7 @@ export type OrderTracking = {
     party_name: string;
     sales_person: string | null;
     agent: string | null;
+    haste: string | null;
     department: string | null;
     challan_no: string | null;
     lot_no: string | null;

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { jsonData, jsonError, requireRole } from "@/lib/api";
 import { db } from "@/lib/db";
 import { firstZodError, stageToggleSchema } from "@/lib/validation";
-import { applyStageProgress } from "@/lib/workflow";
+import { applyStageProgress, WorkflowError } from "@/lib/workflow";
 import { orderLineItems } from "@/db/schema";
 
 // PATCH /api/tracking/stage — tick/untick one stage on one line item (OE-P3).
@@ -18,7 +18,8 @@ export async function PATCH(req: Request) {
   const parsed = stageToggleSchema.safeParse(body);
   if (!parsed.success) return jsonError(firstZodError(parsed.error), 422);
 
-  const { line_item_id, stage_key, checked, planned, actual } = parsed.data;
+  const { line_item_id, stage_key, checked, stock_status, planned, actual } =
+    parsed.data;
 
   // Guard against a stage_key on a line that doesn't exist → clean 404.
   const [line] = await db
@@ -33,6 +34,7 @@ export async function PATCH(req: Request) {
       orderLineItemId: line_item_id,
       stageKey: stage_key,
       isDone: checked,
+      stockStatus: stock_status ?? null,
       plannedAt: planned === undefined ? undefined : planned ? new Date(planned) : null,
       actualAt: actual ? new Date(actual) : null,
       updatedBy: guard.user.email ?? guard.user.name ?? null,
@@ -42,9 +44,12 @@ export async function PATCH(req: Request) {
       line_item_id,
       stage_key,
       checked,
+      stock_status: stock_status ?? null,
       line_status: lineStatus,
     });
   } catch (e) {
+    // Sequencing-rule violations are user-facing (409); anything else is a 500.
+    if (e instanceof WorkflowError) return jsonError(e.message, 409);
     console.error("PATCH /api/tracking/stage failed:", e);
     return jsonError("Failed to update stage", 500);
   }

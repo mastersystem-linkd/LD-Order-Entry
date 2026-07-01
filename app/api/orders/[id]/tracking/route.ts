@@ -76,6 +76,7 @@ export async function GET(_req: Request, { params }: Params) {
         is_done: s.isDone,
         delay_minutes: s.delayMinutes,
         updated_at: s.updatedAt,
+        stock_status: s.stockStatus ?? null,
       })),
     };
   });
@@ -90,6 +91,7 @@ export async function GET(_req: Request, { params }: Params) {
       party_name: order.partyName,
       sales_person: order.salesPerson,
       agent: order.agent,
+      haste: order.haste,
       department: order.department,
       challan_no: order.challanNo,
       lot_no: order.lotNo,

@@ -54,6 +54,8 @@ export const stageToggleSchema = z.object({
   line_item_id: z.string().uuid("line_item_id must be a UUID"),
   stage_key: z.enum(STAGE_KEYS),
   checked: z.boolean(),
+  // Only for stage_key === "stock_checking": the chosen stock outcome.
+  stock_status: z.enum(["in_stock", "out_of_stock"]).nullable().optional(),
   planned: z.string().datetime({ offset: true }).optional().nullable(),
   actual: z.string().datetime({ offset: true }).optional().nullable(),
 });

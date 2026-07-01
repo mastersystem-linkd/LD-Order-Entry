@@ -15,6 +15,13 @@
       "when": 1782726576661,
       "tag": "0001_new_peter_quill",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782890076777,
+      "tag": "0002_slim_nightmare",
+      "breakpoints": true
     }
   ]
 }

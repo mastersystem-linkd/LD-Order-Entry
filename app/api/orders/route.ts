@@ -1,4 +1,15 @@
-import { count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import {
   isUniqueViolation,
@@ -23,20 +34,34 @@ import {
 } from "@/db/schema";
 
 const PAGE_SIZE = 20;
+const EXPORT_MAX = 5000;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-// GET /api/orders?search=&page= — dashboard list with rolled-up qty/total/status.
+// GET /api/orders?search=&page=&order_no=&challan_no=&lot_no=&haste=&from=&to=&all=
+// Dashboard list with rolled-up qty/total/status. `all=1` returns the whole
+// filtered set (no pagination) for CSV export.
 export async function GET(req: Request) {
   const guard = await requireRole(ROLES);
   if (!guard.ok) return guard.response;
 
   const url = new URL(req.url);
-  const search = url.searchParams.get("search")?.trim() ?? "";
-  const page = Math.max(
-    1,
-    Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1,
-  );
+  const q = url.searchParams;
+  const search = q.get("search")?.trim() ?? "";
+  const page = Math.max(1, Number.parseInt(q.get("page") ?? "1", 10) || 1);
+  const exportAll = q.get("all") === "1";
+  // Operations view opts into this: hide orders that don't yet have both a
+  // challan no and a lot no (they aren't ready to be tracked).
+  const requireChallanLot = q.get("require_challan_lot") === "1";
 
-  const filter = search
+  // Column filters (case-insensitive contains for text; inclusive date range).
+  const orderNo = q.get("order_no")?.trim() ?? "";
+  const challanNo = q.get("challan_no")?.trim() ?? "";
+  const lotNo = q.get("lot_no")?.trim() ?? "";
+  const haste = q.get("haste")?.trim() ?? "";
+  const from = q.get("from") ?? "";
+  const to = q.get("to") ?? "";
+
+  const searchFilter = search
     ? or(
         ilike(customerOrders.orderNo, `%${search}%`),
         ilike(customerOrders.partyName, `%${search}%`),
@@ -44,17 +69,33 @@ export async function GET(req: Request) {
         ilike(customerOrders.lotNo, `%${search}%`),
       )
     : undefined;
+  const challanLotFilter = requireChallanLot
+    ? sql`btrim(coalesce(${customerOrders.challanNo}, '')) <> '' and btrim(coalesce(${customerOrders.lotNo}, '')) <> ''`
+    : undefined;
+  // and() drops undefined operands and returns undefined if none remain.
+  const filter = and(
+    searchFilter,
+    challanLotFilter,
+    orderNo ? ilike(customerOrders.orderNo, `%${orderNo}%`) : undefined,
+    challanNo ? ilike(customerOrders.challanNo, `%${challanNo}%`) : undefined,
+    lotNo ? ilike(customerOrders.lotNo, `%${lotNo}%`) : undefined,
+    haste ? ilike(customerOrders.haste, `%${haste}%`) : undefined,
+    ISO_DATE.test(from) ? gte(customerOrders.orderDate, from) : undefined,
+    ISO_DATE.test(to) ? lte(customerOrders.orderDate, to) : undefined,
+  );
+
+  const listQuery = db
+    .select()
+    .from(customerOrders)
+    .where(filter)
+    .orderBy(desc(customerOrders.orderDate), desc(customerOrders.createdAt));
 
   // count + page are independent — run them in one round trip.
   const [totalRes, orders] = await Promise.all([
     db.select({ value: count() }).from(customerOrders).where(filter),
-    db
-      .select()
-      .from(customerOrders)
-      .where(filter)
-      .orderBy(desc(customerOrders.orderDate), desc(customerOrders.createdAt))
-      .limit(PAGE_SIZE)
-      .offset((page - 1) * PAGE_SIZE),
+    exportAll
+      ? listQuery.limit(EXPORT_MAX)
+      : listQuery.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE),
   ]);
   const total = totalRes[0].value;
 
@@ -111,6 +152,8 @@ export async function GET(req: Request) {
       order_date: o.orderDate,
       party_name: o.partyName,
       sales_person: o.salesPerson,
+      agent: o.agent,
+      haste: o.haste,
       challan_no: o.challanNo,
       lot_no: o.lotNo,
       department: o.department,

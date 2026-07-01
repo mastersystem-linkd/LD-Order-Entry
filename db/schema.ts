@@ -137,6 +137,10 @@ export const lineStageProgress = pgTable(
     actualAt: timestamp("actual_at", { withTimezone: true }),
     isDone: boolean("is_done").notNull().default(false),
     delayMinutes: integer("delay_minutes"),
+    // Only meaningful on the stock_checking row: 'in_stock' | 'out_of_stock'
+    // (null = undecided). 'in_stock' is what completes the stage; 'out_of_stock'
+    // records the block. Downstream stages stay locked until this is 'in_stock'.
+    stockStatus: varchar("stock_status", { length: 20 }),
     updatedBy: varchar("updated_by", { length: 120 }),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

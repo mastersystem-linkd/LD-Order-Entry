@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { Th, THead } from "@/components/ui/table";
 
 type UserRow = {
   id: string;
@@ -122,14 +123,14 @@ export function UsersAccess() {
               </div>
             ) : (
               <table className="w-full min-w-[620px] text-left text-sm">
-                <thead className="border-b border-line text-[11px] uppercase tracking-[0.06em] text-ink-muted">
+                <THead>
                   <tr>
-                    <th className="px-4 py-2.5 font-medium">User</th>
-                    <th className="px-4 py-2.5 font-medium">Role</th>
-                    <th className="px-4 py-2.5 font-medium">Status</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+                    <Th>User</Th>
+                    <Th>Role</Th>
+                    <Th>Status</Th>
+                    <Th className="text-right">Actions</Th>
                   </tr>
-                </thead>
+                </THead>
                 <tbody>
                   {users.map((u) => {
                     const isSelf = u.id === selfId;
@@ -138,7 +139,7 @@ export function UsersAccess() {
                         key={u.id}
                         className="border-b border-line align-middle last:border-0"
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5 min-w-[180px]">
                           {editId === u.id ? (
                             <div className="flex max-w-xs flex-col gap-1.5">
                               <Input
@@ -171,7 +172,7 @@ export function UsersAccess() {
                             </>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <select
                             className={selectCls}
                             value={u.role}
@@ -191,7 +192,7 @@ export function UsersAccess() {
                             ))}
                           </select>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <button
                             type="button"
                             disabled={isSelf || patch.isPending}
@@ -218,7 +219,7 @@ export function UsersAccess() {
                             {u.is_active ? "Active" : "Inactive"}
                           </button>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           {editId === u.id ? (
                             <div className="flex items-center justify-end gap-2">
                               <Button

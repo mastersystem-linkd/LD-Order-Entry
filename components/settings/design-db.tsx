@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Th, THead } from "@/components/ui/table";
 
 type DesignRow = {
   id: string;
@@ -144,7 +145,7 @@ export function DesignDatabasePanel() {
 
         {/* Bulk action bar */}
         {selected.size > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-line bg-surface-2 px-3 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-line bg-surface-2 px-3 py-2 text-sm">
             <span className="font-medium">
               {selected.size} selected
             </span>
@@ -201,9 +202,9 @@ export function DesignDatabasePanel() {
           ) : (
             <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
-              <thead className="border-b border-line text-[11px] uppercase tracking-[0.06em] text-ink-muted">
+              <THead>
                 <tr>
-                  <th className="px-3 py-2.5 w-10">
+                  <Th className="w-10">
                     <input
                       type="checkbox"
                       aria-label="Select all on page"
@@ -211,14 +212,14 @@ export function DesignDatabasePanel() {
                       onChange={toggleAll}
                       className="size-4 accent-[var(--accent)]"
                     />
-                  </th>
-                  <th className="px-3 py-2.5 font-medium">Date</th>
-                  <th className="px-3 py-2.5 font-medium">Order no</th>
-                  <th className="px-3 py-2.5 font-medium">Fabric</th>
-                  <th className="px-3 py-2.5 font-medium">Design no</th>
-                  <th className="px-3 py-2.5" />
+                  </Th>
+                  <Th>Date</Th>
+                  <Th>Order no</Th>
+                  <Th>Fabric</Th>
+                  <Th>Design no</Th>
+                  <Th />
                 </tr>
-              </thead>
+              </THead>
               <tbody>
                 {rows.map((r) => {
                   const checked = selected.has(r.id);
@@ -230,7 +231,7 @@ export function DesignDatabasePanel() {
                         (checked ? "bg-accent-soft/60" : "")
                       }
                     >
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2">
                         <input
                           type="checkbox"
                           aria-label={`Select ${r.design_no}`}
@@ -239,13 +240,13 @@ export function DesignDatabasePanel() {
                           className="size-4 accent-[var(--accent)]"
                         />
                       </td>
-                      <td className="num px-3 py-2.5 whitespace-nowrap text-ink-soft">
+                      <td className="num px-3 py-2 whitespace-nowrap text-ink-soft">
                         {formatDateTime(r.created_at)}
                       </td>
-                      <td className="px-3 py-2.5 font-medium">{r.order_no}</td>
-                      <td className="px-3 py-2.5">{r.fabric_name}</td>
-                      <td className="px-3 py-2.5">{r.design_no}</td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-3 py-2 font-medium">{r.order_no}</td>
+                      <td className="px-3 py-2 min-w-[160px]">{r.fabric_name}</td>
+                      <td className="px-3 py-2">{r.design_no}</td>
+                      <td className="px-3 py-2 text-right">
                         <Button
                           size="icon-sm"
                           variant="ghost"

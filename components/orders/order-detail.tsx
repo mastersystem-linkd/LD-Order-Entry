@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Th, THead } from "@/components/ui/table";
 
 export function OrderDetailView({
   orderId,
@@ -98,38 +99,36 @@ export function OrderDetailView({
         <CardContent className="px-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-line text-xs text-ink-muted">
+              <THead>
                 <tr>
-                  <th className="px-4 py-2.5 font-medium">Fabric</th>
-                  <th className="px-4 py-2.5 font-medium">Design no</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Qty</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Rate</th>
-                  <th className="px-4 py-2.5 text-right font-medium">
-                    Line total
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <Th>Fabric</Th>
+                  <Th>Design no</Th>
+                  <Th className="text-right">Qty</Th>
+                  <Th className="text-right">Rate</Th>
+                  <Th className="text-right">Line total</Th>
+                  <Th>Status</Th>
                 </tr>
-              </thead>
+              </THead>
               <tbody>
                 {d.lines.map((l) => (
                   <tr
                     key={l.id}
                     className="border-b border-line last:border-0"
                   >
-                    <td className="px-4 py-2.5">{l.quality}</td>
-                    <td className="px-4 py-2.5">{l.design_no}</td>
-                    <td className="num px-4 py-2.5 text-right">
+                    <td className="px-3 py-2 min-w-[160px]">{l.quality}</td>
+                    <td className="px-3 py-2">{l.design_no}</td>
+                    <td className="num px-3 py-2 text-right">
                       {formatNumber(Number(l.qty_mtr))}
                     </td>
-                    <td className="num px-4 py-2.5 text-right">
+                    <td className="num px-3 py-2 text-right">
                       {l.rate == null ? "—" : formatNumber(Number(l.rate))}
                     </td>
-                    <td className="num px-4 py-2.5 text-right">
+                    <td className="num px-3 py-2 text-right">
                       {l.line_total == null
                         ? "—"
                         : `₹${formatNumber(Number(l.line_total))}`}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 py-2">
                       <StatusBadge status={l.operations_status} />
                     </td>
                   </tr>
@@ -137,17 +136,17 @@ export function OrderDetailView({
               </tbody>
               <tfoot>
                 <tr className="bg-inset font-medium">
-                  <td className="px-4 py-2.5" colSpan={2}>
+                  <td className="px-3 py-2" colSpan={2}>
                     Grand total
                   </td>
-                  <td className="num px-4 py-2.5 text-right">
+                  <td className="num px-3 py-2 text-right">
                     {formatNumber(d.qty_total)}
                   </td>
-                  <td className="px-4 py-2.5" />
-                  <td className="num px-4 py-2.5 text-right">
+                  <td className="px-3 py-2" />
+                  <td className="num px-3 py-2 text-right">
                     ₹{formatNumber(d.grand_total)}
                   </td>
-                  <td className="px-4 py-2.5" />
+                  <td className="px-3 py-2" />
                 </tr>
               </tfoot>
             </table>

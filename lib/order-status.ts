@@ -32,6 +32,10 @@ export type StageCell = {
   state: StageState;
   date: string | null; // actual_at ISO, when done
   daysOverdue: number;
+  // Order-level aggregate only (undefined for a single line): how many of the
+  // order's lines have finished this stage, out of how many total.
+  doneOf?: number;
+  totalLines?: number;
 };
 
 export type OrderStatusRow = {
@@ -48,6 +52,24 @@ export type OrderStatusRow = {
   doneCount: number;
   currentStageKey: string | null;
   overall: OverallStatus;
+};
+
+// One row per order for the grouped board — an aggregate of its non-cancelled
+// design lines. A stage counts as "done" only when EVERY line has finished it.
+export type OrderStatusGroup = {
+  orderId: string;
+  orderNo: string;
+  party: string;
+  salesPerson: string | null;
+  odDate: string;
+  fabrics: string[];
+  designCount: number;
+  qtyTotal: number;
+  stages: StageCell[];
+  doneCount: number;
+  currentStageKey: string | null;
+  overall: OverallStatus;
+  lines: OrderStatusRow[];
 };
 
 export type OrderStatusList = {
@@ -183,4 +205,99 @@ export function computeStages(
         : "in_progress";
 
   return { cells, detailStages, doneCount, currentStageKey, overall };
+}
+
+// Roll per-line rows up into one group per order for the grouped board.
+// Per-stage aggregate (across the order's lines):
+//   done        → every line finished it (date = latest actual)
+//   overdue     → at least one line is currently overdue at it
+//   in_progress → some finished / a line is working on it (doneOf/totalLines set)
+//   not_started → no line has reached it
+// Order overall: completed only if all lines completed; overdue if any line is.
+export function aggregateOrderGroups(
+  rows: OrderStatusRow[],
+): OrderStatusGroup[] {
+  const byOrder = new Map<string, OrderStatusRow[]>();
+  for (const r of rows) {
+    const arr = byOrder.get(r.orderId) ?? [];
+    arr.push(r);
+    byOrder.set(r.orderId, arr);
+  }
+
+  const groups: OrderStatusGroup[] = [];
+  for (const lines of byOrder.values()) {
+    const first = lines[0];
+    const total = lines.length;
+    const stageCount = first.stages.length;
+
+    const stages: StageCell[] = [];
+    for (let i = 0; i < stageCount; i += 1) {
+      const cells = lines.map((l) => l.stages[i]);
+      const base = cells[0];
+      const doneCells = cells.filter((c) => c.state === "done");
+      const doneN = doneCells.length;
+      const anyOverdue = cells.some((c) => c.state === "overdue");
+      const anyInProgress = cells.some((c) => c.state === "in_progress");
+
+      let state: StageState;
+      let date: string | null = null;
+      let daysOverdue = 0;
+      if (doneN === total) {
+        state = "done";
+        date = doneCells.reduce<string | null>(
+          (acc, c) => (c.date && (acc == null || c.date > acc) ? c.date : acc),
+          null,
+        );
+      } else if (anyOverdue) {
+        state = "overdue";
+        daysOverdue = Math.max(
+          ...cells.map((c) => (c.state === "overdue" ? c.daysOverdue : 0)),
+        );
+      } else if (doneN > 0 || anyInProgress) {
+        state = "in_progress";
+      } else {
+        state = "not_started";
+      }
+
+      stages.push({
+        stageKey: base.stageKey,
+        label: base.label,
+        state,
+        date,
+        daysOverdue,
+        doneOf: doneN,
+        totalLines: total,
+      });
+    }
+
+    const doneCount = stages.filter((s) => s.state === "done").length;
+    const currentIdx = stages.findIndex((s) => s.state !== "done");
+    const currentStageKey =
+      currentIdx === -1 ? null : stages[currentIdx].stageKey;
+    const overall: OverallStatus = lines.every(
+      (l) => l.overall === "completed",
+    )
+      ? "completed"
+      : lines.some((l) => l.overall === "overdue")
+        ? "overdue"
+        : "in_progress";
+
+    groups.push({
+      orderId: first.orderId,
+      orderNo: first.orderNo,
+      party: first.party,
+      salesPerson: first.salesPerson,
+      odDate: first.odDate,
+      fabrics: [...new Set(lines.map((l) => l.fabric))],
+      designCount: total,
+      qtyTotal: lines.reduce((s, l) => s + Number(l.qtyMtr), 0),
+      stages,
+      doneCount,
+      currentStageKey,
+      overall,
+      lines,
+    });
+  }
+
+  return groups;
 }

@@ -36,6 +36,10 @@ export async function GET(req: Request) {
   const stage = p.get("stage");
   const from = p.get("from");
   const to = p.get("to");
+  const orderNo = p.get("order_no")?.trim();
+  const challanNo = p.get("challan_no")?.trim();
+  const lotNo = p.get("lot_no")?.trim();
+  const haste = p.get("haste")?.trim();
   const sort = p.get("sort") ?? "od_date";
   const page = Math.max(1, Number.parseInt(p.get("page") ?? "1", 10) || 1);
 
@@ -56,6 +60,10 @@ export async function GET(req: Request) {
   if (salesPerson) conds.push(eq(customerOrders.salesPerson, salesPerson));
   if (party) conds.push(eq(customerOrders.partyName, party));
   if (fabric) conds.push(eq(orderLineItems.quality, fabric));
+  if (orderNo) conds.push(ilike(customerOrders.orderNo, `%${orderNo}%`));
+  if (challanNo) conds.push(ilike(customerOrders.challanNo, `%${challanNo}%`));
+  if (lotNo) conds.push(ilike(customerOrders.lotNo, `%${lotNo}%`));
+  if (haste) conds.push(ilike(customerOrders.haste, `%${haste}%`));
   if (from && ISO_DATE.test(from)) conds.push(gte(customerOrders.orderDate, from));
   if (to && ISO_DATE.test(to)) conds.push(lte(customerOrders.orderDate, to));
 

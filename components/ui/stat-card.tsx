@@ -38,7 +38,7 @@ export function StatCard({
     <Card
       data-size="sm"
       className={cn(
-        "relative overflow-hidden transition-shadow duration-200 hover:shadow-lg",
+        "relative overflow-hidden py-3 transition-shadow duration-200 hover:shadow-lg sm:py-4",
         className,
       )}
     >
@@ -49,10 +49,10 @@ export function StatCard({
           background: `radial-gradient(circle, ${t.glow}, transparent 70%)`,
         }}
       />
-      <CardContent className="relative flex items-center gap-3">
+      <CardContent className="relative flex items-center gap-2.5 sm:gap-3">
         <span
           className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-[11px] [&_svg]:size-[18px]",
+            "grid size-9 shrink-0 place-items-center rounded-[11px] [&_svg]:size-4 sm:size-10 sm:[&_svg]:size-[18px]",
             t.tile,
           )}
         >
@@ -60,11 +60,11 @@ export function StatCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12px] font-medium text-ink-soft">{label}</div>
-          <div className="num font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] break-words text-ink">
+          <div className="num font-display text-[19px] font-semibold leading-tight tracking-[-0.02em] break-words text-ink sm:text-[22px]">
             {value}
           </div>
           {sub ? (
-            <div className="text-[11px] text-ink-muted">{sub}</div>
+            <div className="hidden text-[11px] text-ink-muted sm:block">{sub}</div>
           ) : null}
         </div>
         {trend ? (

@@ -47,25 +47,25 @@ export async function GET(req: Request) {
     and(gte(customerOrders.orderDate, f), lte(customerOrders.orderDate, t), deptCond);
   const orderWhere = rangeWhere(from, to);
 
-  // Headline totals for any window (reused for the prior period).
+  // Headline totals for any window (reused for the prior period). Its two
+  // aggregates are independent, so fire them together.
   async function totals(f: string, t: string) {
     const w = rangeWhere(f, t);
-    const [oc] = await db
-      .select({ n: count() })
-      .from(customerOrders)
-      .where(w);
-    const [agg] = await db
-      .select({
-        value: sql<string>`coalesce(sum(${orderLineItems.lineTotal}), 0)`,
-        meters: sql<string>`coalesce(sum(${orderLineItems.qtyMtr}), 0)`,
-      })
-      .from(orderLineItems)
-      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-      .where(and(w, eq(orderLineItems.isCancelled, false)));
+    const [ocRes, aggRes] = await Promise.all([
+      db.select({ n: count() }).from(customerOrders).where(w),
+      db
+        .select({
+          value: sql<string>`coalesce(sum(${orderLineItems.lineTotal}), 0)`,
+          meters: sql<string>`coalesce(sum(${orderLineItems.qtyMtr}), 0)`,
+        })
+        .from(orderLineItems)
+        .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+        .where(and(w, eq(orderLineItems.isCancelled, false))),
+    ]);
     return {
-      orders: Number(oc.n),
-      value: Number(agg.value),
-      meters: Number(agg.meters),
+      orders: Number(ocRes[0].n),
+      value: Number(aggRes[0].value),
+      meters: Number(aggRes[0].meters),
     };
   }
 
@@ -73,41 +73,162 @@ export async function GET(req: Request) {
   const prevTo = shiftDays(from, -1);
   const prevFrom = shiftDays(prevTo, -(len - 1));
 
-  const stages = await db
-    .select({
-      key: workflowStages.stageKey,
-      label: workflowStages.label,
-      sort: workflowStages.sortOrder,
-    })
-    .from(workflowStages)
-    .orderBy(asc(workflowStages.sortOrder));
-  const stageCount = stages.length || 7;
+  // Every query below reads independently from the range/department filters —
+  // none depends on another query's *result* (all cross-query work is the pure
+  // JS below, run after the data lands). On Neon's HTTP driver each query is its
+  // own network round trip, so we fire them all at once rather than awaiting 13
+  // in series — the endpoint answers them concurrently.
+  const [
+    stages,
+    lineRows,
+    otRes,
+    ordersByDay,
+    valueByDay,
+    topPartiesRaw,
+    topFabricsRaw,
+    overdueRows,
+    current,
+    prev,
+  ] = await Promise.all([
+    // Ordered stages (labels + sort) for the pipeline + status roll-up.
+    db
+      .select({
+        key: workflowStages.stageKey,
+        label: workflowStages.label,
+        sort: workflowStages.sortOrder,
+      })
+      .from(workflowStages)
+      .orderBy(asc(workflowStages.sortOrder)),
 
-  // Per-line progress: done-stage count + current (lowest undone) stage.
-  const lineRows = await db
-    .select({
-      orderId: orderLineItems.orderId,
-      orderNo: customerOrders.orderNo,
-      party: customerOrders.partyName,
-      orderDate: customerOrders.orderDate,
-      lineTotal: orderLineItems.lineTotal,
-      doneCount: sql<number>`count(*) filter (where ${lineStageProgress.isDone})`,
-      currentSort: sql<
-        number | null
-      >`min(${workflowStages.sortOrder}) filter (where ${lineStageProgress.isDone} = false)`,
-    })
-    .from(orderLineItems)
-    .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .innerJoin(
-      lineStageProgress,
-      eq(lineStageProgress.orderLineItemId, orderLineItems.id),
-    )
-    .innerJoin(
-      workflowStages,
-      eq(workflowStages.stageKey, lineStageProgress.stageKey),
-    )
-    .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
-    .groupBy(orderLineItems.id, customerOrders.id);
+    // Per-line progress: done-stage count + current (lowest undone) stage.
+    db
+      .select({
+        orderId: orderLineItems.orderId,
+        orderNo: customerOrders.orderNo,
+        party: customerOrders.partyName,
+        orderDate: customerOrders.orderDate,
+        lineTotal: orderLineItems.lineTotal,
+        doneCount: sql<number>`count(*) filter (where ${lineStageProgress.isDone})`,
+        currentSort: sql<
+          number | null
+        >`min(${workflowStages.sortOrder}) filter (where ${lineStageProgress.isDone} = false)`,
+      })
+      .from(orderLineItems)
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .innerJoin(
+        lineStageProgress,
+        eq(lineStageProgress.orderLineItemId, orderLineItems.id),
+      )
+      .innerJoin(
+        workflowStages,
+        eq(workflowStages.stageKey, lineStageProgress.stageKey),
+      )
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .groupBy(orderLineItems.id, customerOrders.id),
+
+    // On-time rate over completed stages.
+    db
+      .select({
+        done: sql<number>`count(*)`,
+        onTime: sql<number>`count(*) filter (where coalesce(${lineStageProgress.delayMinutes}, 0) <= 0)`,
+      })
+      .from(lineStageProgress)
+      .innerJoin(
+        orderLineItems,
+        eq(orderLineItems.id, lineStageProgress.orderLineItemId),
+      )
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .where(
+        and(orderWhere, eq(orderLineItems.isCancelled, false), eq(lineStageProgress.isDone, true)),
+      ),
+
+    // Trend: order count per day.
+    db
+      .select({ d: customerOrders.orderDate, n: count() })
+      .from(customerOrders)
+      .where(orderWhere)
+      .groupBy(customerOrders.orderDate),
+
+    // Trend: order value per day.
+    db
+      .select({
+        d: customerOrders.orderDate,
+        v: sql<string>`coalesce(sum(${orderLineItems.lineTotal}), 0)`,
+      })
+      .from(orderLineItems)
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .groupBy(customerOrders.orderDate),
+
+    // Top parties by value.
+    db
+      .select({
+        party: customerOrders.partyName,
+        orders: sql<number>`count(distinct ${customerOrders.id})`,
+        value: sql<string>`coalesce(sum(${orderLineItems.lineTotal}), 0)`,
+      })
+      .from(orderLineItems)
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .groupBy(customerOrders.partyName)
+      .orderBy(desc(sql`coalesce(sum(${orderLineItems.lineTotal}), 0)`))
+      .limit(6),
+
+    // Top fabrics by meters.
+    db
+      .select({
+        fabric: orderLineItems.quality,
+        meters: sql<string>`coalesce(sum(${orderLineItems.qtyMtr}), 0)`,
+      })
+      .from(orderLineItems)
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .groupBy(orderLineItems.quality)
+      .orderBy(desc(sql`coalesce(sum(${orderLineItems.qtyMtr}), 0)`))
+      .limit(6),
+
+    // Attention: every overdue (undone, past-planned) stage; reduced in JS to
+    // the most-overdue one per order.
+    db
+      .select({
+        orderId: customerOrders.id,
+        orderNo: customerOrders.orderNo,
+        party: customerOrders.partyName,
+        label: workflowStages.label,
+        plannedAt: lineStageProgress.plannedAt,
+      })
+      .from(lineStageProgress)
+      .innerJoin(
+        orderLineItems,
+        eq(orderLineItems.id, lineStageProgress.orderLineItemId),
+      )
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .innerJoin(
+        workflowStages,
+        eq(workflowStages.stageKey, lineStageProgress.stageKey),
+      )
+      .where(
+        and(
+          orderWhere,
+          eq(orderLineItems.isCancelled, false),
+          eq(lineStageProgress.isDone, false),
+          lt(lineStageProgress.plannedAt, now),
+        ),
+      ),
+
+    // KPI totals for the current and prior windows.
+    totals(from, to),
+    totals(prevFrom, prevTo),
+  ]);
+
+  const stageCount = stages.length || 7;
+  // Same predicate as overdueRows (the workflow_stages join is 1:1 via PK, so
+  // it can't change the count) — derive the count instead of a second scan.
+  const overdueStages = overdueRows.length;
+  const doneStages = Number(otRes[0].done);
+  const onTimeStages = Number(otRes[0].onTime);
+  const onTimePct =
+    doneStages === 0 ? 100 : Math.round((onTimeStages / doneStages) * 100);
 
   const lineStatus = (done: number): OperationsStatus =>
     done >= stageCount
@@ -173,59 +294,7 @@ export async function GET(req: Request) {
     .sort((a, b) => (a.orderDate < b.orderDate ? 1 : a.orderDate > b.orderDate ? -1 : 0))
     .slice(0, 8);
 
-  // Overdue stages + on-time rate.
-  const [ov] = await db
-    .select({ n: count() })
-    .from(lineStageProgress)
-    .innerJoin(
-      orderLineItems,
-      eq(orderLineItems.id, lineStageProgress.orderLineItemId),
-    )
-    .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .where(
-      and(
-        orderWhere,
-        eq(orderLineItems.isCancelled, false),
-        eq(lineStageProgress.isDone, false),
-        lt(lineStageProgress.plannedAt, now),
-      ),
-    );
-  const overdueStages = Number(ov.n);
-
-  const [ot] = await db
-    .select({
-      done: sql<number>`count(*)`,
-      onTime: sql<number>`count(*) filter (where coalesce(${lineStageProgress.delayMinutes}, 0) <= 0)`,
-    })
-    .from(lineStageProgress)
-    .innerJoin(
-      orderLineItems,
-      eq(orderLineItems.id, lineStageProgress.orderLineItemId),
-    )
-    .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .where(
-      and(orderWhere, eq(orderLineItems.isCancelled, false), eq(lineStageProgress.isDone, true)),
-    );
-  const doneStages = Number(ot.done);
-  const onTimeStages = Number(ot.onTime);
-  const onTimePct =
-    doneStages === 0 ? 100 : Math.round((onTimeStages / doneStages) * 100);
-
   // Trend (one point per day, zero-filled).
-  const ordersByDay = await db
-    .select({ d: customerOrders.orderDate, n: count() })
-    .from(customerOrders)
-    .where(orderWhere)
-    .groupBy(customerOrders.orderDate);
-  const valueByDay = await db
-    .select({
-      d: customerOrders.orderDate,
-      v: sql<string>`coalesce(sum(${orderLineItems.lineTotal}), 0)`,
-    })
-    .from(orderLineItems)
-    .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
-    .groupBy(customerOrders.orderDate);
   const oMap = new Map(ordersByDay.map((r) => [r.d, Number(r.n)]));
   const vMap = new Map(valueByDay.map((r) => [r.d, Number(r.v)]));
   const trend: { date: string; orders: number; value: number }[] = [];
@@ -242,68 +311,17 @@ export async function GET(req: Request) {
     }
   }
 
-  // Top lists.
-  const topPartiesRaw = await db
-    .select({
-      party: customerOrders.partyName,
-      orders: sql<number>`count(distinct ${customerOrders.id})`,
-      value: sql<string>`coalesce(sum(${orderLineItems.lineTotal}), 0)`,
-    })
-    .from(orderLineItems)
-    .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
-    .groupBy(customerOrders.partyName)
-    .orderBy(desc(sql`coalesce(sum(${orderLineItems.lineTotal}), 0)`))
-    .limit(6);
   const topParties = topPartiesRaw.map((r) => ({
     party: r.party,
     orders: Number(r.orders),
     value: Number(r.value),
   }));
-
-  const topFabricsRaw = await db
-    .select({
-      fabric: orderLineItems.quality,
-      meters: sql<string>`coalesce(sum(${orderLineItems.qtyMtr}), 0)`,
-    })
-    .from(orderLineItems)
-    .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
-    .groupBy(orderLineItems.quality)
-    .orderBy(desc(sql`coalesce(sum(${orderLineItems.qtyMtr}), 0)`))
-    .limit(6);
   const topFabrics = topFabricsRaw.map((r) => ({
     fabric: r.fabric,
     meters: Number(r.meters),
   }));
 
   // Attention: per order, its most-overdue (earliest planned) undone stage.
-  const overdueRows = await db
-    .select({
-      orderId: customerOrders.id,
-      orderNo: customerOrders.orderNo,
-      party: customerOrders.partyName,
-      label: workflowStages.label,
-      plannedAt: lineStageProgress.plannedAt,
-    })
-    .from(lineStageProgress)
-    .innerJoin(
-      orderLineItems,
-      eq(orderLineItems.id, lineStageProgress.orderLineItemId),
-    )
-    .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .innerJoin(
-      workflowStages,
-      eq(workflowStages.stageKey, lineStageProgress.stageKey),
-    )
-    .where(
-      and(
-        orderWhere,
-        eq(orderLineItems.isCancelled, false),
-        eq(lineStageProgress.isDone, false),
-        lt(lineStageProgress.plannedAt, now),
-      ),
-    );
   const attnMap = new Map<
     string,
     { orderNo: string; party: string; plannedAt: Date; label: string }
@@ -333,9 +351,6 @@ export async function GET(req: Request) {
     }))
     .sort((x, y) => y.daysOverdue - x.daysOverdue)
     .slice(0, 10);
-
-  const current = await totals(from, to);
-  const prev = await totals(prevFrom, prevTo);
 
   return jsonData({
     range: { from, to, department },
