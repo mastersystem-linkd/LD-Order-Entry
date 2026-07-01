@@ -415,12 +415,17 @@ export function OrderStatusBoard({ role }: { role: Role }) {
                 <thead className="sticky top-0 z-20 bg-surface">
                   <tr className="border-b border-line">
                     <Th className="sticky left-0 z-30 bg-surface shadow-[1px_1px_0_var(--line)]">
-                      Order no
+                      Date
                     </Th>
+                    <Th>Order no</Th>
                     <Th>Party</Th>
+                    <Th>Haste</Th>
                     <Th>Fabric</Th>
                     <Th className="text-right">Designs</Th>
-                    <Th className="text-right">Mtr</Th>
+                    <Th className="text-right">Total Qty</Th>
+                    <Th className="text-right">Total</Th>
+                    <Th>Challan</Th>
+                    <Th>Lot</Th>
                     <Th>Sales</Th>
                     {STAGE_OPTIONS.map((s) => (
                       <Th key={s.key} className="min-w-[104px]">
@@ -463,7 +468,7 @@ export function OrderStatusBoard({ role }: { role: Role }) {
                           }}
                           className="group cursor-pointer border-b border-line transition-colors outline-none last:border-0 hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent-ring)]"
                         >
-                          <Td className="num sticky left-0 z-10 bg-surface font-semibold text-ink shadow-[1px_0_0_var(--line)] group-hover:bg-surface-2 group-focus-visible:bg-surface-2">
+                          <Td className="num sticky left-0 z-10 bg-surface font-medium whitespace-nowrap text-ink shadow-[1px_0_0_var(--line)] group-hover:bg-surface-2 group-focus-visible:bg-surface-2">
                             <span className="inline-flex items-center gap-1.5">
                               <button
                                 type="button"
@@ -486,10 +491,16 @@ export function OrderStatusBoard({ role }: { role: Role }) {
                                   )}
                                 />
                               </button>
-                              {g.orderNo}
+                              {g.odDate}
                             </span>
                           </Td>
+                          <Td className="num font-semibold whitespace-nowrap text-ink">
+                            {g.orderNo}
+                          </Td>
                           <Td className="whitespace-nowrap text-ink">{g.party}</Td>
+                          <Td className="whitespace-nowrap text-ink">
+                            {g.haste ?? "—"}
+                          </Td>
                           <Td className="max-w-[220px] truncate text-ink">
                             {g.fabrics.join(", ")}
                           </Td>
@@ -498,6 +509,15 @@ export function OrderStatusBoard({ role }: { role: Role }) {
                           </Td>
                           <Td className="num whitespace-nowrap text-right text-ink">
                             {formatNumber(g.qtyTotal)}
+                          </Td>
+                          <Td className="num whitespace-nowrap text-right text-ink">
+                            ₹{formatNumber(g.grandTotal)}
+                          </Td>
+                          <Td className="whitespace-nowrap text-ink">
+                            {g.challanNo ?? "—"}
+                          </Td>
+                          <Td className="whitespace-nowrap text-ink">
+                            {g.lotNo ?? "—"}
                           </Td>
                           <Td className="whitespace-nowrap text-ink">
                             {g.salesPerson ?? "—"}
@@ -539,6 +559,8 @@ export function OrderStatusBoard({ role }: { role: Role }) {
                                   <ChevronRightIcon className="size-3.5 -rotate-45 text-ink-muted" />
                                 </Td>
                                 <Td />
+                                <Td />
+                                <Td />
                                 <Td className="whitespace-nowrap text-ink">
                                   {line.fabric}
                                 </Td>
@@ -548,6 +570,13 @@ export function OrderStatusBoard({ role }: { role: Role }) {
                                 <Td className="num whitespace-nowrap text-right text-ink">
                                   {formatNumber(Number(line.qtyMtr))}
                                 </Td>
+                                <Td className="num whitespace-nowrap text-right text-ink">
+                                  {line.lineTotal == null
+                                    ? "—"
+                                    : `₹${formatNumber(Number(line.lineTotal))}`}
+                                </Td>
+                                <Td />
+                                <Td />
                                 <Td className="whitespace-nowrap text-ink">
                                   {line.salesPerson ?? "—"}
                                 </Td>

@@ -117,28 +117,28 @@ export function OrdersDashboard({ role }: { role: Role }) {
         "Date",
         "Order no",
         "Party",
-        "Challan",
-        "Lot",
         "Haste",
         "Agent",
         "Fabrics",
         "Designs",
         "Qty",
         "Total",
+        "Challan",
+        "Lot",
         "Status",
       ];
       const body = all.orders.map((o) => [
         o.order_date,
         o.order_no,
         o.party_name,
-        o.challan_no ?? "",
-        o.lot_no ?? "",
         o.haste ?? "",
         o.agent ?? "",
         o.fabrics.join(" | "),
         o.line_count,
         o.qty_total,
         o.grand_total,
+        o.challan_no ?? "",
+        o.lot_no ?? "",
         o.operations_status,
       ]);
       downloadCsv(
@@ -203,9 +203,10 @@ export function OrdersDashboard({ role }: { role: Role }) {
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3">
-        {/* Search bar + primary action */}
-        <div className="flex items-center gap-2">
-          <form onSubmit={applySearch} className="relative flex-1">
+        {/* Search + actions on one line; wraps on mobile (search full width,
+            buttons below). */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <form onSubmit={applySearch} className="relative w-full sm:flex-1">
             <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
             <Input
               value={searchInput}
@@ -214,41 +215,37 @@ export function OrdersDashboard({ role }: { role: Role }) {
               className="pl-8"
             />
           </form>
-          {canEdit ? (
+          <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() => router.push("/orders/new")}
-              className="shrink-0"
+              variant="outline"
+              onClick={() => setShowFilters((s) => !s)}
+              aria-pressed={showFilters}
             >
-              <PlusIcon /> New order
+              <SlidersHorizontalIcon /> Filters
+              {hasActiveOrderFilters(debouncedFilters) ? (
+                <span className="ml-1 size-1.5 rounded-full bg-accent" />
+              ) : null}
             </Button>
-          ) : null}
-        </div>
-        {/* Secondary actions */}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters((s) => !s)}
-            aria-pressed={showFilters}
-          >
-            <SlidersHorizontalIcon /> Filters
-            {hasActiveOrderFilters(debouncedFilters) ? (
-              <span className="ml-1 size-1.5 rounded-full bg-accent" />
+            <Button
+              variant="outline"
+              onClick={() => list.refetch()}
+              disabled={list.isFetching}
+            >
+              {list.isFetching ? <Spinner /> : <RefreshCwIcon />} Refresh
+            </Button>
+            <Button
+              variant="outline"
+              onClick={exportCsv}
+              disabled={exporting || !rows.length}
+            >
+              {exporting ? <Spinner /> : <DownloadIcon />} Export
+            </Button>
+            {canEdit ? (
+              <Button onClick={() => router.push("/orders/new")}>
+                <PlusIcon /> New order
+              </Button>
             ) : null}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => list.refetch()}
-            disabled={list.isFetching}
-          >
-            {list.isFetching ? <Spinner /> : <RefreshCwIcon />} Refresh
-          </Button>
-          <Button
-            variant="outline"
-            onClick={exportCsv}
-            disabled={exporting || !rows.length}
-          >
-            {exporting ? <Spinner /> : <DownloadIcon />} Export
-          </Button>
+          </div>
         </div>
         {showFilters ? (
           <OrderFilters
@@ -298,14 +295,14 @@ export function OrdersDashboard({ role }: { role: Role }) {
                     <Th>Date</Th>
                     <Th>Order no</Th>
                     <Th>Party</Th>
-                    <Th>Challan</Th>
-                    <Th>Lot</Th>
                     <Th>Haste</Th>
                     <Th>Agent</Th>
                     <Th>Fabrics</Th>
                     <Th className="text-right">Designs</Th>
                     <Th className="text-right">Total Qty</Th>
                     <Th className="text-right">Total</Th>
+                    <Th>Challan</Th>
+                    <Th>Lot</Th>
                     <Th>Status</Th>
                     <Th className="text-right">Actions</Th>
                   </tr>
@@ -328,8 +325,6 @@ export function OrdersDashboard({ role }: { role: Role }) {
                         </Link>
                       </Td>
                       <Td>{o.party_name}</Td>
-                      <Td>{o.challan_no ?? "—"}</Td>
-                      <Td>{o.lot_no ?? "—"}</Td>
                       <Td>{o.haste ?? "—"}</Td>
                       <Td>{o.agent ?? "—"}</Td>
                       <Td className="min-w-[160px] whitespace-normal text-ink">
@@ -342,6 +337,8 @@ export function OrdersDashboard({ role }: { role: Role }) {
                       <Td className="num text-right">
                         ₹{formatNumber(o.grand_total)}
                       </Td>
+                      <Td>{o.challan_no ?? "—"}</Td>
+                      <Td>{o.lot_no ?? "—"}</Td>
                       <Td>
                         <StatusBadge status={o.operations_status} />
                       </Td>

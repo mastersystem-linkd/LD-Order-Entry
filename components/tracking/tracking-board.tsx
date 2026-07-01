@@ -12,6 +12,7 @@ import {
   formatDateTime,
   formatDelay,
   formatNumber,
+  type OperationsStatus,
   type OrderTracking,
   type StockStatus,
   type TrackingLine,
@@ -21,6 +22,14 @@ import type { Role } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -47,20 +56,91 @@ type CellState =
   | "locked"
   | "pending";
 
+// Cell colour. Gating is stock-only: order entry + stock checking are always
+// editable ("live"); the stages after stock stay "locked" until this line's
+// stock is In stock, then they open in any order.
 function cellState(
   stage: TrackingStage,
-  i: number,
-  firstNotDoneIdx: number,
+  key: string,
+  stockInStock: boolean,
 ): CellState {
-  const stock = stage.stock_status ?? (stage.is_done ? "in_stock" : null);
   if (stage.is_done)
     return (stage.delay_minutes ?? 0) > 0 ? "done_late" : "done_ontime";
-  if (stock === "out_of_stock") return "out_of_stock";
-  if (i === firstNotDoneIdx) {
-    const p = stage.planned_at ? new Date(stage.planned_at).getTime() : 0;
-    return p && p < Date.now() ? "overdue" : "live";
-  }
-  return "locked";
+  const isStock = key === "stock_checking";
+  if (isStock && stage.stock_status === "out_of_stock") return "out_of_stock";
+  const editable = key === "order_entry" || isStock || stockInStock;
+  if (!editable) return "locked";
+  const p = stage.planned_at ? new Date(stage.planned_at).getTime() : 0;
+  return p && p < Date.now() ? "overdue" : "live";
+}
+
+type ToggleVars = {
+  lineId: string;
+  stageKey: string;
+  checked: boolean;
+  stockStatus?: StockStatus | null;
+};
+
+// Client mirrors of computeLineStatus / computeOrderStatus (lib/workflow.ts is
+// server-only — it pulls in the DB pool — so we can't import it here).
+function lineStatusOf(stages: { is_done: boolean }[]): OperationsStatus {
+  const done = stages.filter((s) => s.is_done).length;
+  if (done === 0) return "PENDING";
+  if (done === stages.length) return "COMPLETED";
+  return "PARTIALLY COMPLETED";
+}
+function orderStatusOf(statuses: OperationsStatus[]): OperationsStatus {
+  if (statuses.length === 0) return "PENDING";
+  if (statuses.every((s) => s === "COMPLETED")) return "COMPLETED";
+  if (statuses.every((s) => s === "PENDING")) return "PENDING";
+  return "PARTIALLY COMPLETED";
+}
+
+// Signed delay in whole minutes (positive = late), mirroring the server's
+// computeDelayMinutes with actual = now — so the delay pill is right on click.
+function optimisticDelay(plannedAt: string | null): number {
+  if (!plannedAt) return 0;
+  return Math.round((Date.now() - new Date(plannedAt).getTime()) / 60000);
+}
+
+// Apply a stage toggle to the cached tracking data so the UI reacts instantly,
+// mirroring the server. Reconciled by the background refetch on settle.
+function applyOptimisticToggle(
+  data: OrderTracking,
+  vars: ToggleVars,
+): OrderTracking {
+  const nowIso = new Date().toISOString();
+  const lines = data.lines.map((line) => {
+    if (line.id !== vars.lineId) return line;
+    const isStock = vars.stageKey === "stock_checking";
+    const becomingDone = isStock
+      ? vars.stockStatus === "in_stock"
+      : vars.checked;
+    const stages = line.stages.map((s) =>
+      s.stage_key === vars.stageKey
+        ? {
+            ...s,
+            is_done: becomingDone,
+            stock_status: isStock
+              ? becomingDone
+                ? ("in_stock" as StockStatus)
+                : (vars.stockStatus ?? null)
+              : s.stock_status,
+            actual_at: becomingDone ? (s.actual_at ?? nowIso) : null,
+            delay_minutes: becomingDone
+              ? (s.actual_at ? s.delay_minutes : optimisticDelay(s.planned_at))
+              : null,
+          }
+        : s,
+    );
+    // Reverting stock no longer clears the stages after it — they stay done and
+    // the line drops to PARTIALLY COMPLETED (surfaced by a confirm popup).
+    return { ...line, stages, operations_status: lineStatusOf(stages) };
+  });
+  const operations_status = orderStatusOf(
+    lines.filter((l) => !l.is_cancelled).map((l) => l.operations_status),
+  );
+  return { ...data, lines, operations_status };
 }
 
 // Border + tint + text per status (green done, amber late, indigo live, red
@@ -116,7 +196,7 @@ const LEGEND: { state: CellState; label: string; hint: string }[] = [
   {
     state: "locked",
     label: "Locked",
-    hint: "Finish the previous stage first",
+    hint: "Set Stock checking to In stock to unlock",
   },
 ];
 
@@ -129,38 +209,80 @@ export function TrackingBoard({
 }) {
   const queryClient = useQueryClient();
   const canEdit = role === "ADMIN" || role === "OPS";
-  const [pending, setPending] = React.useState<string | null>(null);
+  // Cells with an in-flight toggle (each shows its own spinner). A ref counts
+  // total in-flight toggles so we only reconcile after the LAST one settles.
+  const [pending, setPending] = React.useState<Set<string>>(() => new Set());
+  const inFlight = React.useRef(0);
   const [columnPending, setColumnPending] = React.useState<string | null>(null);
   // Mobile: which line item's 7-stage workflow is currently open (defaults to
   // the first active line).
   const [mobileLineId, setMobileLineId] = React.useState<string | null>(null);
+  // A stock downgrade (Pending / Out of stock) on a line that already has stages
+  // completed after stock checking pops a confirm — those stages stay done but
+  // the line becomes Partially completed.
+  const [stockWarn, setStockWarn] = React.useState<{
+    lineId: string;
+    stockStatus: StockStatus | null;
+    label: string;
+  } | null>(null);
 
   const tracking = useQuery({
     queryKey: ["tracking", orderId],
     queryFn: () => apiGet<OrderTracking>(`/api/orders/${orderId}/tracking`),
   });
 
-  const toggle = useMutation({
-    mutationFn: (vars: {
-      lineId: string;
-      stageKey: string;
-      checked: boolean;
-      stockStatus?: StockStatus | null;
-    }) =>
+  const toggle = useMutation<
+    unknown,
+    Error,
+    ToggleVars,
+    { prev?: OrderTracking }
+  >({
+    mutationFn: (vars) =>
       apiSend("/api/tracking/stage", "PATCH", {
         line_item_id: vars.lineId,
         stage_key: vars.stageKey,
         checked: vars.checked,
         stock_status: vars.stockStatus ?? null,
       }),
-    onMutate: (vars) => setPending(`${vars.lineId}:${vars.stageKey}`),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["tracking", orderId] });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+    // Optimistic: flip the cell in the cache immediately so it feels instant.
+    onMutate: async (vars) => {
+      const key = `${vars.lineId}:${vars.stageKey}`;
+      inFlight.current += 1;
+      setPending((p) => new Set(p).add(key));
+      // Stop any in-flight refetch from clobbering the optimistic write.
+      await queryClient.cancelQueries({ queryKey: ["tracking", orderId] });
+      const prev = queryClient.getQueryData<OrderTracking>([
+        "tracking",
+        orderId,
+      ]);
+      if (prev)
+        queryClient.setQueryData<OrderTracking>(
+          ["tracking", orderId],
+          applyOptimisticToggle(prev, vars),
+        );
+      return { prev };
     },
-    onError: (err: Error) => toast.error(err.message),
-    onSettled: () => setPending(null),
+    onError: (err, _vars, ctx) => {
+      // Instantly revert this cell; the settle below fetches server truth.
+      if (ctx?.prev)
+        queryClient.setQueryData(["tracking", orderId], ctx.prev);
+      toast.error(err.message);
+    },
+    onSettled: (_data, _err, vars) => {
+      inFlight.current -= 1;
+      setPending((p) => {
+        const n = new Set(p);
+        n.delete(`${vars.lineId}:${vars.stageKey}`);
+        return n;
+      });
+      // Reconcile only once the LAST in-flight toggle settles — one refetch for
+      // a burst of clicks, and no refetch landing mid-edit (which would flicker).
+      if (inFlight.current === 0) {
+        queryClient.invalidateQueries({ queryKey: ["tracking", orderId] });
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      }
+    },
   });
 
   // Mobile: when the fabric you're editing finishes all its stages, jump to the
@@ -227,23 +349,38 @@ export function TrackingBoard({
     haste: t.order.haste ?? "",
   };
 
-  // Per-column "check all": completion state across all active lines for a stage.
+  // Header check-all state. Measured over the lines that can actually carry
+  // this stage (editable now, or already done) — NOT every line. Otherwise an
+  // out-of-stock line (which can never complete a post-stock stage) keeps the
+  // "all done" state permanently out of reach, so the header checkbox never
+  // shows as checked and clicking it can only ever mark-done, never un-check.
   function columnState(stageKey: string) {
-    const states = active.map(
-      (l) => l.stages.find((s) => s.stage_key === stageKey)?.is_done ?? false,
-    );
-    const done = states.filter(Boolean).length;
-    return {
-      all: states.length > 0 && done === states.length,
-      some: done > 0 && done < states.length,
-    };
+    let inPlay = 0;
+    let inPlayDone = 0;
+    let anyDone = 0;
+    for (const l of active) {
+      const byKey = new Map(l.stages.map((s) => [s.stage_key, s]));
+      const isDone = byKey.get(stageKey)?.is_done ?? false;
+      if (isDone) anyDone += 1;
+      const stockInStock = byKey.get("stock_checking")?.is_done ?? false;
+      const canComplete =
+        stageKey === "order_entry" ||
+        stageKey === "stock_checking" ||
+        stockInStock;
+      if (canComplete || isDone) {
+        inPlay += 1;
+        if (isDone) inPlayDone += 1;
+      }
+    }
+    const allDone = inPlay > 0 && inPlayDone === inPlay;
+    return { all: allDone, some: anyDone > 0 && !allDone };
   }
 
-  // Toggle a whole stage column, respecting the sequencing rules per line:
-  // when marking done, skip lines whose previous stage isn't done; when
-  // un-marking, skip lines that still have a later stage done. Reports skips.
+  // Toggle a whole stage column (stock-only gating). Marking done: only lines
+  // where this cell is editable — order entry always; the stages after stock
+  // need that line's stock In stock (others are skipped). Un-marking: any line
+  // currently done for the stage. There is no per-column control for stock.
   async function toggleColumn(stageKey: string, checked: boolean) {
-    const sIdx = t.stage_keys.indexOf(stageKey);
     const targets: typeof active = [];
     let skipped = 0;
     for (const line of active) {
@@ -251,29 +388,25 @@ export function TrackingBoard({
       const isDoneNow = byKey.get(stageKey)?.is_done ?? false;
       if (checked) {
         if (isDoneNow) continue;
-        const prevDone =
-          sIdx <= 0 || (byKey.get(t.stage_keys[sIdx - 1])?.is_done ?? false);
-        if (prevDone) targets.push(line);
+        const stockInStock = byKey.get("stock_checking")?.is_done ?? false;
+        const editable =
+          stageKey === "order_entry" ||
+          stageKey === "stock_checking" ||
+          stockInStock;
+        if (editable) targets.push(line);
         else skipped += 1;
       } else {
-        if (!isDoneNow) continue;
-        const laterDone = t.stage_keys
-          .slice(sIdx + 1)
-          .some((k) => byKey.get(k)?.is_done);
-        if (!laterDone) targets.push(line);
-        else skipped += 1;
+        if (isDoneNow) targets.push(line);
       }
     }
     if (targets.length === 0) {
       if (skipped > 0)
         toast.error(
-          `Skipped ${skipped} — the previous stage isn't done for ${skipped === 1 ? "that line" : "those lines"}.`,
+          `Skipped ${skipped} — set stock to In stock first for ${skipped === 1 ? "that line" : "those lines"}.`,
         );
       return;
     }
     setColumnPending(stageKey);
-    const stockStatus: StockStatus | null =
-      stageKey === "stock_checking" ? (checked ? "in_stock" : null) : null;
     try {
       await Promise.all(
         targets.map((l) =>
@@ -281,22 +414,52 @@ export function TrackingBoard({
             line_item_id: l.id,
             stage_key: stageKey,
             checked,
-            stock_status: stockStatus,
+            stock_status: null,
           }),
         ),
       );
       await queryClient.invalidateQueries({ queryKey: ["tracking", orderId] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
-      if (skipped > 0)
+      if (checked && skipped > 0)
         toast.success(
-          `Updated ${targets.length}; skipped ${skipped} (previous stage not done).`,
+          `Updated ${targets.length}; skipped ${skipped} (stock not In stock).`,
         );
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setColumnPending(null);
     }
+  }
+
+  function applyStock(lineId: string, stockStatus: StockStatus | null) {
+    lastToggledLineId.current = lineId;
+    toggle.mutate({
+      lineId,
+      stageKey: "stock_checking",
+      checked: stockStatus === "in_stock",
+      stockStatus,
+    });
+  }
+  // Dropping stock to Pending / Out of stock on a line that already has stages
+  // done after stock checking → confirm first. Those stages stay done; the line
+  // just becomes Partially completed.
+  function requestStock(line: TrackingLine, stockStatus: StockStatus | null) {
+    const stockIdx = t.stage_keys.indexOf("stock_checking");
+    const downstreamDone =
+      stockStatus !== "in_stock" &&
+      line.stages.some(
+        (s) => t.stage_keys.indexOf(s.stage_key) > stockIdx && s.is_done,
+      );
+    if (downstreamDone) {
+      setStockWarn({
+        lineId: line.id,
+        stockStatus,
+        label: `${line.quality} · ${line.design_no}`,
+      });
+      return;
+    }
+    applyStock(line.id, stockStatus);
   }
 
   return (
@@ -316,9 +479,9 @@ export function TrackingBoard({
           </h2>
           <StatusBadge status={t.operations_status} />
         </div>
-        <div className="text-sm break-words text-ink-muted">
-          {t.order.party_name} · {t.order.order_date}
-          {t.order.department ? ` · ${t.order.department}` : ""}
+        <div className="text-sm font-medium break-words text-ink">
+          {t.order.haste ? `${t.order.haste} · ` : ""}
+          {t.order.order_date}
         </div>
       </div>
 
@@ -403,15 +566,9 @@ export function TrackingBoard({
                     checked,
                   });
                 }}
-                onStock={(stockStatus) => {
-                  lastToggledLineId.current = selectedMobileLine.id;
-                  toggle.mutate({
-                    lineId: selectedMobileLine.id,
-                    stageKey: "stock_checking",
-                    checked: stockStatus === "in_stock",
-                    stockStatus,
-                  });
-                }}
+                onStock={(stockStatus) =>
+                  requestStock(selectedMobileLine, stockStatus)
+                }
               />
             ) : null}
           </div>
@@ -432,20 +589,20 @@ export function TrackingBoard({
                       </Th>
                       <Th>Design</Th>
                       <Th className="text-right">Qty</Th>
-                      <Th className="text-right">Designs</Th>
-                      <Th className="whitespace-nowrap">Lot no</Th>
-                      <Th>Challan</Th>
-                      <Th>Haste</Th>
                       <Th>Status</Th>
                       {t.stage_keys.map((key) => {
                         const label =
                           active[0]?.stages.find((s) => s.stage_key === key)
                             ?.label ?? key;
                         const cs = columnState(key);
+                        // Stock checking has no check-all — it's a per-line
+                        // dropdown (Pending / In stock / Out of stock).
+                        const showCheckAll =
+                          canEdit && key !== "stock_checking";
                         return (
                           <Th key={key} className="px-2.5">
                             <div className="flex items-center gap-2">
-                              {canEdit ? (
+                              {showCheckAll ? (
                                 columnPending === key ? (
                                   <Spinner className="size-3.5" />
                                 ) : (
@@ -484,7 +641,6 @@ export function TrackingBoard({
                       <LineRow
                         key={line.id}
                         line={line}
-                        meta={meta}
                         stageKeys={t.stage_keys}
                         canEdit={canEdit}
                         pending={pending}
@@ -492,12 +648,7 @@ export function TrackingBoard({
                           toggle.mutate({ lineId: line.id, stageKey, checked })
                         }
                         onStock={(stockStatus) =>
-                          toggle.mutate({
-                            lineId: line.id,
-                            stageKey: "stock_checking",
-                            checked: stockStatus === "in_stock",
-                            stockStatus,
-                          })
+                          requestStock(line, stockStatus)
                         }
                       />
                     ))}
@@ -509,13 +660,54 @@ export function TrackingBoard({
           </Reveal>
         </>
       )}
+
+      {/* Stock downgrade with completed later stages → confirm + flag. */}
+      <Dialog
+        open={!!stockWarn}
+        onOpenChange={(open) => {
+          if (!open) setStockWarn(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change stock status?</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-ink">{stockWarn?.label}</span>{" "}
+              already has stages completed after stock checking. Marking stock as{" "}
+              <span className="font-medium text-ink">
+                {stockWarn?.stockStatus === "out_of_stock"
+                  ? "Out of stock"
+                  : "Pending"}
+              </span>{" "}
+              keeps those stages completed, but this line will be flagged{" "}
+              <span className="font-medium text-warning">
+                Partially completed
+              </span>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStockWarn(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (stockWarn)
+                  applyStock(stockWarn.lineId, stockWarn.stockStatus);
+                setStockWarn(null);
+              }}
+            >
+              Change stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function LineRow({
   line,
-  meta,
   stageKeys,
   canEdit,
   pending,
@@ -523,20 +715,16 @@ function LineRow({
   onStock,
 }: {
   line: TrackingLine;
-  meta: { designs: number; lotNo: string; challanNo: string; haste: string };
   stageKeys: string[];
   canEdit: boolean;
-  pending: string | null;
+  pending: Set<string>;
   onToggle: (stageKey: string, checked: boolean) => void;
   onStock: (status: StockStatus | null) => void;
 }) {
   const stageByKey = new Map(line.stages.map((s) => [s.stage_key, s]));
-  const doneFlags = stageKeys.map((k) => stageByKey.get(k)?.is_done ?? false);
-  // Fully sequential + block: the only editable cells are the next stage to
-  // complete (first not-done) and the last done stage (to un-do).
-  const firstNotDoneIdx = doneFlags.findIndex((d) => !d);
-  const lastDoneIdx = doneFlags.lastIndexOf(true);
-  const doneCount = doneFlags.filter(Boolean).length;
+  // Stock-only gating: stages after stock checking unlock once stock is In stock.
+  const stockInStock = stageByKey.get("stock_checking")?.is_done ?? false;
+  const doneCount = line.stages.filter((s) => s.is_done).length;
 
   return (
     <tr className="border-b border-line align-top last:border-0">
@@ -551,18 +739,6 @@ function LineRow({
       <td className="num px-3 py-3 text-right whitespace-nowrap text-ink">
         {formatNumber(Number(line.qty_mtr))} mtr
       </td>
-      <td className="num px-3 py-3 text-right whitespace-nowrap text-ink">
-        {meta.designs}
-      </td>
-      <td className="px-3 py-3 whitespace-nowrap text-ink">
-        {meta.lotNo || "—"}
-      </td>
-      <td className="px-3 py-3 whitespace-nowrap text-ink">
-        {meta.challanNo || "—"}
-      </td>
-      <td className="px-3 py-3 whitespace-nowrap text-ink">
-        {meta.haste || "—"}
-      </td>
       <td className="px-3 py-3">
         <div className="flex flex-col items-start gap-1.5">
           <StatusBadge status={line.operations_status} />
@@ -571,20 +747,26 @@ function LineRow({
           </span>
         </div>
       </td>
-      {stageKeys.map((key, i) => {
+      {stageKeys.map((key) => {
         const stage = stageByKey.get(key);
         if (!stage) return <td key={key} className="px-2.5 py-3" />;
-        const state = cellState(stage, i, firstNotDoneIdx);
-        const locked = !(i === firstNotDoneIdx || i === lastDoneIdx);
+        const state = cellState(stage, key, stockInStock);
+        // Editable: order entry + stock always; stages after stock once In
+        // stock; plus any already-done cell so it can be un-checked.
+        const editable =
+          key === "order_entry" ||
+          key === "stock_checking" ||
+          stockInStock ||
+          stage.is_done;
         return (
           <StageCell
             key={key}
             stage={stage}
             state={state}
             isStock={key === "stock_checking"}
-            locked={locked}
+            locked={!editable}
             canEdit={canEdit}
-            isPending={pending === `${line.id}:${key}`}
+            isPending={pending.has(`${line.id}:${key}`)}
             onToggle={(checked) => onToggle(key, checked)}
             onStock={onStock}
           />
@@ -619,23 +801,26 @@ function StageCell({
     stage.stock_status ?? (done ? "in_stock" : null);
   // Dates hidden from the cell — surfaced on hover instead.
   const tip = `${stage.label} — ${STATE_LABEL[state]} · Plan: ${formatDate(stage.planned_at)} · Actual: ${formatDateTime(stage.actual_at)}`;
+  const boxCls = cn(
+    "flex min-w-[112px] flex-col gap-1.5 rounded-[10px] border p-2 transition-colors",
+    CELL_TONE[state],
+    disabled && !done && state !== "out_of_stock" && "opacity-70",
+  );
+  const pill =
+    done && (stage.delay_minutes ?? 0) > 0 ? (
+      <DelayPill minutes={stage.delay_minutes} />
+    ) : state === "out_of_stock" ? (
+      <span className="inline-flex w-fit rounded-pill bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+        Blocked
+      </span>
+    ) : null;
 
-  return (
-    <td className="px-2 py-2.5 align-top">
-      <div
-        title={tip}
-        className={cn(
-          "flex min-w-[112px] flex-col gap-1.5 rounded-[10px] border p-2 transition-colors",
-          CELL_TONE[state],
-          disabled && !done && state !== "out_of_stock" && "opacity-70",
-        )}
-      >
-        <div className="flex items-center justify-between gap-1.5">
-          {isPending ? (
-            <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink">
-              <Spinner className="size-3.5" /> Saving…
-            </span>
-          ) : isStock ? (
+  // Stock checking stays a 3-way dropdown (can't be a single toggle).
+  if (isStock) {
+    return (
+      <td className="px-2 py-2.5 align-top">
+        <div title={tip} className={boxCls}>
+          <div className="flex items-center justify-between gap-1.5">
             <select
               value={value ?? ""}
               disabled={disabled}
@@ -649,37 +834,72 @@ function StageCell({
               <option value="in_stock">In stock</option>
               <option value="out_of_stock">Out of stock</option>
             </select>
-          ) : (
-            <label
-              className={cn(
-                "flex items-center gap-1.5 text-[11px] font-medium text-ink",
-                disabled && "cursor-not-allowed",
-              )}
-            >
-              <input
-                type="checkbox"
-                checked={done}
-                disabled={disabled}
-                onChange={(e) => onToggle(e.target.checked)}
-                className="size-3.5 accent-[var(--accent)] disabled:cursor-not-allowed"
-              />
-              {STATE_LABEL[state]}
-            </label>
-          )}
-          {!isStock && locked && !done ? (
-            <LockIcon className="size-3 shrink-0 text-ink-muted" />
+            {isPending ? (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-accent/50 motion-safe:animate-pulse"
+            />
           ) : null}
+          </div>
+          {pill}
         </div>
+      </td>
+    );
+  }
 
-        {done && (stage.delay_minutes ?? 0) > 0 ? (
-          <DelayPill minutes={stage.delay_minutes} />
-        ) : state === "out_of_stock" ? (
-          <span className="inline-flex w-fit rounded-pill bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
-            Blocked
+  // Non-stock: the whole cell is the toggle — click anywhere to mark done / undo.
+  return (
+    <td className="px-2 py-2.5 align-top">
+      <button
+        type="button"
+        title={tip}
+        disabled={disabled}
+        aria-pressed={done}
+        aria-label={`${stage.label} — ${STATE_LABEL[state]}`}
+        onClick={() => onToggle(!done)}
+        className={cn(
+          boxCls,
+          "w-full text-left",
+          disabled ? "cursor-not-allowed" : "cursor-pointer",
+        )}
+      >
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink">
+            <CheckBox checked={done} />
+            {STATE_LABEL[state]}
           </span>
-        ) : null}
-      </div>
+          <span className="flex items-center gap-1">
+            {isPending ? (
+              <span
+                aria-hidden
+                className="size-1.5 shrink-0 rounded-full bg-accent/50 motion-safe:animate-pulse"
+              />
+            ) : null}
+            {locked && !done ? (
+              <LockIcon className="size-3 shrink-0 text-ink-muted" />
+            ) : null}
+          </span>
+        </div>
+        {pill}
+      </button>
     </td>
+  );
+}
+
+// A checkbox-styled indicator (not a real input) so the whole cell/button can
+// own the click.
+function CheckBox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={cn(
+        "grid size-3.5 shrink-0 place-items-center rounded-[4px] border transition-colors",
+        checked
+          ? "border-accent bg-accent text-white"
+          : "border-line-strong bg-surface",
+      )}
+    >
+      {checked ? <CheckIcon className="size-2.5" /> : null}
+    </span>
   );
 }
 
@@ -733,17 +953,14 @@ function MobileLineCard({
   line: TrackingLine;
   stageKeys: string[];
   canEdit: boolean;
-  pending: string | null;
+  pending: Set<string>;
   onToggle: (stageKey: string, checked: boolean) => void;
   onStock: (status: StockStatus | null) => void;
 }) {
   const stageByKey = new Map(line.stages.map((s) => [s.stage_key, s]));
-  const doneFlags = stageKeys.map((k) => stageByKey.get(k)?.is_done ?? false);
-  // Same sequencing rule as the desktop row: only the live (first not-done)
-  // and last-done stages are editable.
-  const firstNotDoneIdx = doneFlags.findIndex((d) => !d);
-  const lastDoneIdx = doneFlags.lastIndexOf(true);
-  const doneCount = doneFlags.filter(Boolean).length;
+  // Same stock-only gating as the desktop row.
+  const stockInStock = stageByKey.get("stock_checking")?.is_done ?? false;
+  const doneCount = line.stages.filter((s) => s.is_done).length;
 
   return (
     <div className="rounded-card border border-line bg-surface p-3 shadow-sm">
@@ -763,11 +980,15 @@ function MobileLineCard({
       </div>
 
       <div className="mt-3 flex flex-col gap-2">
-        {stageKeys.map((key, i) => {
+        {stageKeys.map((key) => {
           const stage = stageByKey.get(key);
           if (!stage) return null;
-          const state = cellState(stage, i, firstNotDoneIdx);
-          const locked = !(i === firstNotDoneIdx || i === lastDoneIdx);
+          const state = cellState(stage, key, stockInStock);
+          const editable =
+            key === "order_entry" ||
+            key === "stock_checking" ||
+            stockInStock ||
+            stage.is_done;
           return (
             <MobileStageRow
               key={key}
@@ -775,9 +996,9 @@ function MobileLineCard({
               stage={stage}
               state={state}
               isStock={key === "stock_checking"}
-              locked={locked}
+              locked={!editable}
               canEdit={canEdit}
-              isPending={pending === `${line.id}:${key}`}
+              isPending={pending.has(`${line.id}:${key}`)}
               onToggle={(checked) => onToggle(key, checked)}
               onStock={onStock}
             />
@@ -813,77 +1034,96 @@ function MobileStageRow({
   const disabled = !canEdit || locked;
   const value: StockStatus | null =
     stage.stock_status ?? (done ? "in_stock" : null);
+  const boxCls = cn(
+    "flex flex-col gap-1.5 rounded-[10px] border p-2.5 text-left transition-colors",
+    CELL_TONE[state],
+    disabled && !done && state !== "out_of_stock" && "opacity-70",
+  );
+  const header = (
+    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+      <span
+        className={cn(
+          "size-2 shrink-0 rounded-full",
+          STAGE_DOT[stageKey] ?? "bg-ink-muted",
+        )}
+      />
+      {stage.label}
+    </span>
+  );
+  const dates = (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-muted">
+      <span className="num">Plan {formatDate(stage.planned_at)}</span>
+      <span className="num">Actual {formatDateTime(stage.actual_at)}</span>
+      {done && (stage.delay_minutes ?? 0) > 0 ? (
+        <DelayPill minutes={stage.delay_minutes} />
+      ) : null}
+      {state === "out_of_stock" ? (
+        <span className="inline-flex w-fit rounded-pill bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+          Blocked
+        </span>
+      ) : null}
+    </div>
+  );
 
+  if (isStock) {
+    return (
+      <div className={boxCls}>
+        <div className="flex items-center justify-between gap-2">
+          {header}
+          <div className="flex items-center gap-1.5">
+            <select
+              value={value ?? ""}
+              disabled={disabled}
+              onChange={(e) =>
+                onStock((e.target.value || null) as StockStatus | null)
+              }
+              aria-label="Stock status"
+              className="h-7 rounded-md border border-line-strong bg-surface px-1.5 text-[11px] font-medium text-ink outline-none focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-80"
+            >
+              <option value="">Pending</option>
+              <option value="in_stock">In stock</option>
+              <option value="out_of_stock">Out of stock</option>
+            </select>
+            {isPending ? (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-accent/50 motion-safe:animate-pulse"
+            />
+          ) : null}
+          </div>
+        </div>
+        {dates}
+      </div>
+    );
+  }
+
+  // Non-stock: tap anywhere on the row to mark done / undo.
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-1.5 rounded-[10px] border p-2.5 transition-colors",
-        CELL_TONE[state],
-        disabled && !done && state !== "out_of_stock" && "opacity-70",
-      )}
+    <button
+      type="button"
+      disabled={disabled}
+      aria-pressed={done}
+      aria-label={`${stage.label} — ${STATE_LABEL[state]}`}
+      onClick={() => onToggle(!done)}
+      className={cn(boxCls, disabled ? "cursor-not-allowed" : "cursor-pointer")}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink">
-          <span
-            className={cn(
-              "size-2 shrink-0 rounded-full",
-              STAGE_DOT[stageKey] ?? "bg-ink-muted",
-            )}
-          />
-          {stage.label}
-        </span>
-        {isPending ? (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink">
-            <Spinner className="size-3.5" /> Saving…
-          </span>
-        ) : isStock ? (
-          <select
-            value={value ?? ""}
-            disabled={disabled}
-            onChange={(e) =>
-              onStock((e.target.value || null) as StockStatus | null)
-            }
-            aria-label="Stock status"
-            className="h-7 rounded-md border border-line-strong bg-surface px-1.5 text-[11px] font-medium text-ink outline-none focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-80"
-          >
-            <option value="">Pending</option>
-            <option value="in_stock">In stock</option>
-            <option value="out_of_stock">Out of stock</option>
-          </select>
-        ) : (
-          <label
-            className={cn(
-              "flex items-center gap-1.5 text-[11px] font-medium text-ink",
-              disabled && "cursor-not-allowed",
-            )}
-          >
-            {locked && !done ? (
-              <LockIcon className="size-3 shrink-0 text-ink-muted" />
-            ) : null}
-            <input
-              type="checkbox"
-              checked={done}
-              disabled={disabled}
-              onChange={(e) => onToggle(e.target.checked)}
-              className="size-4 accent-[var(--accent)] disabled:cursor-not-allowed"
+        {header}
+        <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink">
+          {isPending ? (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-accent/50 motion-safe:animate-pulse"
             />
-            {STATE_LABEL[state]}
-          </label>
-        )}
+          ) : null}
+          {locked && !done ? (
+            <LockIcon className="size-3 shrink-0 text-ink-muted" />
+          ) : null}
+          <CheckBox checked={done} />
+          {STATE_LABEL[state]}
+        </span>
       </div>
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-muted">
-        <span className="num">Plan {formatDate(stage.planned_at)}</span>
-        <span className="num">Actual {formatDateTime(stage.actual_at)}</span>
-        {done && (stage.delay_minutes ?? 0) > 0 ? (
-          <DelayPill minutes={stage.delay_minutes} />
-        ) : null}
-        {state === "out_of_stock" ? (
-          <span className="inline-flex w-fit rounded-pill bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
-            Blocked
-          </span>
-        ) : null}
-      </div>
-    </div>
+      {dates}
+    </button>
   );
 }

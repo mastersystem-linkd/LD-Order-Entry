@@ -94,26 +94,28 @@ export function TrackingIndex() {
         "Date",
         "Order no",
         "Party",
-        "Fabrics",
-        "Challan no",
-        "Lot no",
-        "Designs",
         "Haste",
         "Agent",
-        "Qty",
+        "Fabrics",
+        "Designs",
+        "Total Qty",
+        "Total",
+        "Challan no",
+        "Lot no",
         "Status",
       ];
       const body = all.orders.map((o) => [
         o.order_date,
         o.order_no,
         o.party_name,
-        o.fabrics.join(" | "),
-        o.challan_no ?? "",
-        o.lot_no ?? "",
-        o.line_count,
         o.haste ?? "",
         o.agent ?? "",
+        o.fabrics.join(" | "),
+        o.line_count,
         o.qty_total,
+        o.grand_total,
+        o.challan_no ?? "",
+        o.lot_no ?? "",
         o.operations_status,
       ]);
       downloadCsv(
@@ -202,13 +204,14 @@ export function TrackingIndex() {
                       <Th>Date</Th>
                       <Th>Order no</Th>
                       <Th>Party</Th>
-                      <Th>Fabrics</Th>
-                      <Th>Challan no</Th>
-                      <Th>Lot no</Th>
-                      <Th className="text-right">Designs</Th>
                       <Th>Haste</Th>
                       <Th>Agent</Th>
-                      <Th className="text-right">Qty</Th>
+                      <Th>Fabrics</Th>
+                      <Th className="text-right">Designs</Th>
+                      <Th className="text-right">Total Qty</Th>
+                      <Th className="text-right">Total</Th>
+                      <Th>Challan no</Th>
+                      <Th>Lot no</Th>
                       <Th>Status</Th>
                       <Th className="text-right" />
                     </tr>
@@ -229,26 +232,29 @@ export function TrackingIndex() {
                         <td className="px-3 py-2 whitespace-nowrap">
                           {o.party_name}
                         </td>
-                        <td className="px-3 py-2 min-w-[160px] whitespace-normal">
-                          {o.fabrics.length ? o.fabrics.join(", ") : "—"}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {o.challan_no || "—"}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {o.lot_no || "—"}
-                        </td>
-                        <td className="num px-3 py-2 text-right">
-                          {o.line_count}
-                        </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {o.haste || "—"}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {o.agent || "—"}
                         </td>
+                        <td className="px-3 py-2 min-w-[160px] whitespace-normal">
+                          {o.fabrics.length ? o.fabrics.join(", ") : "—"}
+                        </td>
+                        <td className="num px-3 py-2 text-right">
+                          {o.line_count}
+                        </td>
                         <td className="num px-3 py-2 text-right">
                           {formatNumber(o.qty_total)}
+                        </td>
+                        <td className="num px-3 py-2 text-right whitespace-nowrap">
+                          ₹{formatNumber(o.grand_total)}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {o.challan_no || "—"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {o.lot_no || "—"}
                         </td>
                         <td className="px-3 py-2">
                           <StatusBadge status={o.operations_status} />

@@ -114,15 +114,17 @@ export function computeDelayMinutes(planned: Date | null, actual: Date): number 
   return Math.round((actual.getTime() - planned.getTime()) / 60000);
 }
 
-// Stage completion / un-tick for a single line item, in ONE transaction (§6),
-// enforcing the sequencing rules:
-//   - fully sequential: a stage can only be completed once the stage before it
-//     is done (stock_checking must be 'in_stock' to unlock everything after it);
-//   - block downgrades: a done stage can't be un-completed (or stock set to
-//     'out_of_stock') while a later stage is still done.
-// For stock_checking, `stockStatus` drives it: 'in_stock' completes the stage,
-// 'out_of_stock'/null leaves it incomplete (and downstream locked).
-// Violations throw WorkflowError. Returns the line's recomputed status.
+// Stage completion / un-tick for a single line item, in ONE transaction (§6).
+// Gating is STOCK-ONLY: Order entry and Stock checking have no prerequisite;
+// the stages AFTER stock checking (Rolling, Challan, Bill, Dispatch, Received
+// LR) can be completed only once stock is 'in_stock' — in any order among
+// themselves (no step-by-step sequencing). Any stage may be un-completed at any
+// time (no downgrade block). For stock_checking, `stockStatus` drives it:
+// 'in_stock' completes the stage (unlocking downstream), 'out_of_stock'/null
+// leaves it incomplete. Reverting stock does NOT clear stages already completed
+// after it — they stay done and the line drops to PARTIALLY COMPLETED (the UI
+// flags this with a confirm popup). Violations throw WorkflowError. Returns the
+// recomputed line status.
 export async function applyStageProgress(params: {
   orderLineItemId: string;
   stageKey: StageKey;
@@ -165,23 +167,14 @@ export async function applyStageProgress(params: {
     }
     const byKey = new Map(rows.map((r) => [r.stageKey, r]));
 
-    // --- Sequencing rules ---
-    if (becomingDone) {
-      // Fully sequential: the immediately-previous stage must be done first.
-      if (idx > 0) {
-        const prevKey = STAGE_KEYS[idx - 1];
-        if (!byKey.get(prevKey)?.isDone) {
-          throw new WorkflowError(`Complete "${STAGE_LABELS[prevKey]}" first.`);
-        }
-      }
-    } else if (target.isDone) {
-      // Block: can't un-complete a done stage while a later stage is still done.
-      const laterDoneKey = STAGE_KEYS.slice(idx + 1).find(
-        (k) => byKey.get(k)?.isDone,
-      );
-      if (laterDoneKey) {
+    // --- Gating rule (stock-only) ---
+    // The only prerequisite in the workflow is stock: a stage AFTER stock
+    // checking can be completed only once stock is 'in_stock'. Order entry and
+    // stock checking have none, and un-completing is always allowed.
+    if (becomingDone && idx > STAGE_INDEX.stock_checking) {
+      if (!byKey.get("stock_checking")?.isDone) {
         throw new WorkflowError(
-          `Clear "${STAGE_LABELS[laterDoneKey]}" first — a later stage is still marked done.`,
+          `Set "${STAGE_LABELS.stock_checking}" to In stock first.`,
         );
       }
     }

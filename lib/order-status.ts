@@ -46,8 +46,12 @@ export type OrderStatusRow = {
   fabric: string;
   design: string;
   qtyMtr: string;
+  lineTotal: string | null;
   salesPerson: string | null;
   odDate: string;
+  haste: string | null;
+  challanNo: string | null;
+  lotNo: string | null;
   stages: StageCell[];
   doneCount: number;
   currentStageKey: string | null;
@@ -62,9 +66,13 @@ export type OrderStatusGroup = {
   party: string;
   salesPerson: string | null;
   odDate: string;
+  haste: string | null;
+  challanNo: string | null;
+  lotNo: string | null;
   fabrics: string[];
   designCount: number;
   qtyTotal: number;
+  grandTotal: number;
   stages: StageCell[];
   doneCount: number;
   currentStageKey: string | null;
@@ -288,9 +296,13 @@ export function aggregateOrderGroups(
       party: first.party,
       salesPerson: first.salesPerson,
       odDate: first.odDate,
+      haste: first.haste,
+      challanNo: first.challanNo,
+      lotNo: first.lotNo,
       fabrics: [...new Set(lines.map((l) => l.fabric))],
       designCount: total,
       qtyTotal: lines.reduce((s, l) => s + Number(l.qtyMtr), 0),
+      grandTotal: lines.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0),
       stages,
       doneCount,
       currentStageKey,

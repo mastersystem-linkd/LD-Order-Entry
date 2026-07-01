@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import NumberFlow from "@number-flow/react";
-import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, ClipboardListIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { apiGet, apiSend } from "@/lib/api-client";
@@ -417,7 +417,12 @@ export function OrderForm({
       <Reveal index={0}>
         <Card data-size="sm">
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Order details</CardTitle>
+            <div className="flex items-center gap-2.5">
+              <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-accent-soft text-accent ring-1 ring-inset ring-accent/15">
+                <ClipboardListIcon className="size-[18px]" />
+              </span>
+              <CardTitle>Order details</CardTitle>
+            </div>
             <Eyebrow>{mode === "create" ? "Draft" : "Editing"}</Eyebrow>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:gap-x-4 lg:grid-cols-3 [&_input]:h-10">
@@ -553,10 +558,18 @@ export function OrderForm({
       {blocks.map((block, bi) => (
         <Reveal key={bi} index={bi + 1}>
           <div className="glass relative overflow-hidden rounded-card border border-line-strong p-4 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-[2px] hover:shadow-md motion-reduce:hover:translate-y-0 sm:p-5">
-            <span className="absolute inset-y-0 left-0 w-1 bg-accent" />
+            <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-accent to-[var(--a3)]" />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-12 -right-12 size-32 rounded-full opacity-[0.05]"
+              style={{
+                background:
+                  "radial-gradient(circle, var(--accent), transparent 70%)",
+              }}
+            />
             <div className="mb-3.5 flex items-center justify-between">
               <div className="flex items-center gap-2 text-[14px] font-semibold text-ink">
-                <span className="num grid size-[24px] place-items-center rounded-[7px] bg-accent-soft text-[12.5px] text-accent">
+                <span className="num grid size-[24px] place-items-center rounded-[7px] bg-gradient-to-br from-accent to-[var(--a3)] text-[12.5px] font-semibold text-white shadow-sm">
                   {bi + 1}
                 </span>
                 Fabric block
@@ -702,9 +715,13 @@ export function OrderForm({
       ) : null}
 
       {/* Sticky totals bar */}
-      <div className="glass fixed inset-x-0 bottom-0 z-30 flex flex-col gap-3 border-t border-line px-4 py-3 sm:px-[34px] sm:py-4 sm:flex-row sm:items-center sm:justify-between md:left-[264px]">
+      <div className="glass fixed inset-x-0 bottom-0 z-30 flex flex-col gap-3 border-t border-line px-4 py-3 shadow-[0_-4px_20px_rgba(16,24,40,0.06)] sm:px-[34px] sm:py-4 sm:flex-row sm:items-center sm:justify-between md:left-[264px]">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent"
+        />
         <div className="flex items-baseline gap-3.5">
-          <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-accent">
             Grand total
           </span>
           <span className="num font-display text-2xl font-semibold tracking-[-0.02em] text-ink sm:text-[30px]">
