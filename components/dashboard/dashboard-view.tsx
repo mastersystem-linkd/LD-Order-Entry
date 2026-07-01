@@ -127,13 +127,13 @@ export function DashboardView() {
             Custom
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
           <Input
             type="date"
             value={from}
             max={to}
             onChange={(e) => e.target.value && setParams({ from: e.target.value })}
-            className="num h-9 w-[150px]"
+            className="num h-9 min-w-0 flex-1 sm:w-[150px] sm:flex-none"
             aria-label="From date"
           />
           <span className="text-ink-muted">–</span>
@@ -142,7 +142,7 @@ export function DashboardView() {
             value={to}
             min={from}
             onChange={(e) => e.target.value && setParams({ to: e.target.value })}
-            className="num h-9 w-[150px]"
+            className="num h-9 min-w-0 flex-1 sm:w-[150px] sm:flex-none"
             aria-label="To date"
           />
         </div>
@@ -360,7 +360,7 @@ export function DashboardView() {
                         className="flex items-center justify-between gap-3 rounded-[8px] px-2 py-2 transition-colors hover:bg-surface-2"
                       >
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-ink">
+                          <div className="truncate text-sm font-medium text-ink">
                             {o.orderNo}
                           </div>
                           <div className="truncate text-xs text-ink-muted">
@@ -395,14 +395,14 @@ export function DashboardView() {
                       className="flex items-center justify-between gap-3 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 transition-colors hover:border-danger/40"
                     >
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-ink">
+                        <div className="truncate text-sm font-medium text-ink">
                           {a.orderNo}
                           <span className="font-normal text-ink-muted">
                             {" "}
                             · {a.party}
                           </span>
                         </div>
-                        <div className="text-xs text-ink-soft">
+                        <div className="truncate text-xs text-ink-soft">
                           Stage: {a.stageLabel}
                         </div>
                       </div>

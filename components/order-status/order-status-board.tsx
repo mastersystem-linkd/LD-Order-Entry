@@ -201,7 +201,7 @@ export function OrderStatusBoard({ role }: { role: Role }) {
               className="pl-8"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => setShowFilters((s) => !s)}

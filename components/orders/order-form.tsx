@@ -552,7 +552,7 @@ export function OrderForm({
       {/* Fabric blocks */}
       {blocks.map((block, bi) => (
         <Reveal key={bi} index={bi + 1}>
-          <div className="glass relative overflow-hidden rounded-card border border-line-strong p-5 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-[2px] hover:shadow-md motion-reduce:hover:translate-y-0">
+          <div className="glass relative overflow-hidden rounded-card border border-line-strong p-4 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-[2px] hover:shadow-md motion-reduce:hover:translate-y-0 sm:p-5">
             <span className="absolute inset-y-0 left-0 w-1 bg-accent" />
             <div className="mb-3.5 flex items-center justify-between">
               <div className="flex items-center gap-2 text-[14px] font-semibold text-ink">
@@ -740,12 +740,12 @@ export function OrderForm({
       ) : null}
 
       {/* Sticky totals bar */}
-      <div className="glass fixed inset-x-0 bottom-0 z-30 flex flex-col gap-3 border-t border-line px-[34px] py-4 sm:flex-row sm:items-center sm:justify-between md:left-[264px]">
+      <div className="glass fixed inset-x-0 bottom-0 z-30 flex flex-col gap-3 border-t border-line px-4 py-3 sm:px-[34px] sm:py-4 sm:flex-row sm:items-center sm:justify-between md:left-[264px]">
         <div className="flex items-baseline gap-3.5">
           <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
             Grand total
           </span>
-          <span className="num font-display text-[30px] font-semibold tracking-[-0.02em] text-ink">
+          <span className="num font-display text-2xl font-semibold tracking-[-0.02em] text-ink sm:text-[30px]">
             <Money value={grandTotal} />
           </span>
         </div>
@@ -753,7 +753,7 @@ export function OrderForm({
           {blocks.length} fabric · {designCount} design
           {designCount === 1 ? "" : "s"} · {formatNumber(grandQty)} mtr
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 [&>*]:flex-1 sm:[&>*]:flex-none">
           <Button
             type="button"
             variant="ghost"
@@ -771,7 +771,7 @@ export function OrderForm({
 
       {/* Preview modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-h-[85vh] overflow-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[85dvh] overflow-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {mode === "create" ? "Confirm new order" : "Confirm changes"}
@@ -794,8 +794,8 @@ export function OrderForm({
               <Detail term="Lot no" value={payload.order.lot_no ?? "—"} />
             </dl>
 
-            <div className="overflow-hidden rounded-field border border-line">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto rounded-field border border-line">
+              <table className="w-full min-w-[440px] text-left text-sm">
                 <thead className="bg-inset text-xs text-ink-muted">
                   <tr>
                     <th className="px-3 py-2">Fabric</th>

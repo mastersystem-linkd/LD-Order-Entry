@@ -112,7 +112,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <form onSubmit={applySearch} className="flex w-full max-w-md gap-2">
+        <form onSubmit={applySearch} className="flex w-full gap-2 sm:max-w-md">
           <div className="relative flex-1">
             <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
             <Input
@@ -126,7 +126,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
             Search
           </Button>
         </form>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             onClick={() => list.refetch()}

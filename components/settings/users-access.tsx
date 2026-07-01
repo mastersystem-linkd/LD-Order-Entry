@@ -121,7 +121,7 @@ export function UsersAccess() {
                 <Spinner /> Loading…
               </div>
             ) : (
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="border-b border-line text-[11px] uppercase tracking-[0.06em] text-ink-muted">
                   <tr>
                     <th className="px-4 py-2.5 font-medium">User</th>

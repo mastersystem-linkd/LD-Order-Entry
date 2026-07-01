@@ -1,7 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeftIcon, LogOutIcon, PanelLeftIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  LogOutIcon,
+  MenuIcon,
+  PanelLeftIcon,
+} from "lucide-react";
 
 import { NAV_ITEMS, type Role } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -30,16 +35,29 @@ export function Header({
   user,
   signOutAction,
   onToggleSidebar,
+  onOpenMobileNav,
 }: {
   user: { name: string; role: Role };
   signOutAction: () => Promise<void>;
   onToggleSidebar?: () => void;
+  onOpenMobileNav?: () => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
 
   return (
-    <header className="glass sticky top-0 z-20 flex items-center gap-3 border-b border-line px-5 py-3.5 lg:px-7">
+    <header className="glass sticky top-0 z-20 flex items-center gap-2 border-b border-line px-4 py-3.5 sm:gap-3 sm:px-5 lg:px-7">
+      {onOpenMobileNav ? (
+        <button
+          type="button"
+          onClick={onOpenMobileNav}
+          aria-label="Open navigation"
+          title="Menu"
+          className={cn(iconBtn, "md:hidden")}
+        >
+          <MenuIcon className="size-[18px]" />
+        </button>
+      ) : null}
       {onToggleSidebar ? (
         <button
           type="button"
@@ -60,7 +78,7 @@ export function Header({
         <ArrowLeftIcon className="size-[18px]" />
       </button>
 
-      <h1 className="flex-1 font-display text-[20px] font-semibold tracking-[-0.02em] text-ink">
+      <h1 className="min-w-0 flex-1 truncate font-display text-[17px] font-semibold tracking-[-0.02em] text-ink sm:text-[20px]">
         {titleFor(pathname)}
       </h1>
 
@@ -72,8 +90,8 @@ export function Header({
         </button>
       </form>
 
-      <div className="flex items-center gap-2.5 rounded-pill border border-line bg-surface py-1.5 pr-1.5 pl-3">
-        <small className="text-right text-[12px] leading-tight text-ink-muted">
+      <div className="flex shrink-0 items-center gap-2.5 rounded-pill border border-line bg-surface p-1.5 sm:py-1.5 sm:pr-1.5 sm:pl-3">
+        <small className="hidden text-right text-[12px] leading-tight text-ink-muted sm:block">
           <b className="block text-[13px] font-medium text-ink">{user.name}</b>
           {user.role}
         </small>

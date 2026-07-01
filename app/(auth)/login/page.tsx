@@ -27,7 +27,7 @@ export default async function LoginPage({
       : "/";
 
   return (
-    <div className="relative z-[1] flex min-h-svh items-center justify-center p-6">
+    <div className="relative z-[1] flex min-h-svh items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2.5 text-center">
           <div className="grid size-11 place-items-center rounded-[12px] bg-accent font-display text-lg font-semibold text-white shadow-sm">

@@ -47,13 +47,13 @@ export function OrderDetailView({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="font-display text-lg font-semibold text-ink">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <h2 className="font-display text-lg font-semibold text-ink break-words">
             {d.order.order_no}
           </h2>
           <StatusBadge status={d.operations_status} />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {role !== "SALES" ? (
             <Button variant="outline" render={<Link href={`/tracking/${orderId}`} />}>
               <RouteIcon /> Track

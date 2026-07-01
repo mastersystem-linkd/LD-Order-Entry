@@ -4,6 +4,7 @@ import * as React from "react";
 
 import type { Role } from "@/lib/rbac";
 import { Sidebar } from "@/components/app-shell/sidebar";
+import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { Header } from "@/components/app-shell/header";
 import { Footer } from "@/components/app-shell/footer";
 
@@ -21,6 +22,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = React.useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
   React.useEffect(() => {
     try {
@@ -41,13 +43,21 @@ export function AppShell({
   return (
     <div className="relative z-[1] flex min-h-svh">
       <Sidebar role={role} collapsed={collapsed} onToggle={toggle} />
+      <MobileNav
+        role={role}
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
       <div className="flex min-h-svh min-w-0 flex-1 flex-col">
         <Header
           user={user}
           signOutAction={signOutAction}
           onToggleSidebar={toggle}
+          onOpenMobileNav={() => setMobileNavOpen(true)}
         />
-        <main className="w-full flex-1 px-5 py-5 lg:px-7">{children}</main>
+        <main className="w-full flex-1 px-4 py-4 sm:px-5 sm:py-5 lg:px-7">
+          {children}
+        </main>
         <Footer />
       </div>
     </div>

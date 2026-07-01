@@ -59,8 +59,8 @@ export function StatCard({
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[12px] font-medium text-ink-soft">{label}</div>
-          <div className="num font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+          <div className="truncate text-[12px] font-medium text-ink-soft">{label}</div>
+          <div className="num font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] break-words text-ink">
             {value}
           </div>
           {sub ? (

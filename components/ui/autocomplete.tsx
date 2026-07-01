@@ -119,7 +119,7 @@ export function Autocomplete({
                 left: rect.left,
                 width: rect.width,
               }}
-              className="z-50 max-h-56 overflow-auto rounded-[10px] border border-line bg-surface py-1 text-sm shadow-lg"
+              className="z-50 max-h-56 max-w-[calc(100vw-1rem)] overflow-auto rounded-[10px] border border-line bg-surface py-1 text-sm shadow-lg"
             >
               {matches.map((s, i) => (
                 <li key={s}>

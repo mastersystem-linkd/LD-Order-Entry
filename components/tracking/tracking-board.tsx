@@ -133,7 +133,7 @@ export function TrackingBoard({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <Button
             variant="outline"
             size="icon-sm"
@@ -142,12 +142,12 @@ export function TrackingBoard({
           >
             <ArrowLeftIcon />
           </Button>
-          <h2 className="font-display text-lg font-semibold tracking-[-0.02em] text-ink">
+          <h2 className="font-display text-lg font-semibold tracking-[-0.02em] break-words text-ink">
             {t.order.order_no}
           </h2>
           <StatusBadge status={t.operations_status} />
         </div>
-        <div className="text-sm text-ink-muted">
+        <div className="text-sm break-words text-ink-muted">
           {t.order.party_name} · {t.order.order_date}
           {t.order.department ? ` · ${t.order.department}` : ""}
         </div>

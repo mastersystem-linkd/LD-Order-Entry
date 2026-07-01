@@ -119,7 +119,7 @@ export function StatusDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="Line status detail"
-        className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-card border border-line bg-surface shadow-lg motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150"
+        className="relative z-10 flex max-h-[85dvh] w-full max-w-3xl flex-col overflow-hidden rounded-card border border-line bg-surface shadow-lg motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150"
       >
         <div className="flex items-center gap-2 border-b border-line p-4">
           <button
@@ -176,8 +176,8 @@ export function StatusDrawer({
             </p>
           ) : (
             <>
-              <div className="rounded-card border border-line bg-surface-2 p-5">
-                <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
+              <div className="rounded-card border border-line bg-surface-2 p-4 sm:p-5">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4 sm:gap-x-5">
                   <Field label="OD date" value={formatDate(d.order.odDate)} mono />
                   <Field label="Order no" value={d.order.orderNo} mono />
                   <Field label="Agent" value={d.order.agent ?? "—"} />
