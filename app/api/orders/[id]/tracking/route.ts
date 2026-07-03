@@ -1,8 +1,7 @@
 import { asc, eq, inArray } from "drizzle-orm";
 
-import { jsonData, jsonError, requireRole } from "@/lib/api";
+import { jsonData, jsonError, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
-import { ROLES } from "@/lib/rbac";
 import {
   STAGE_KEYS,
   STAGE_LABELS,
@@ -22,7 +21,7 @@ const STAGE_ORDER = new Map<string, number>(STAGE_KEYS.map((k, i) => [k, i]));
 // GET /api/orders/:id/tracking — order header + each line with its 7 ordered
 // stages and derived operations status (per line and rolled up). All roles read.
 export async function GET(_req: Request, { params }: Params) {
-  const guard = await requireRole(ROLES);
+  const guard = await requireCapability("operations.view");
   if (!guard.ok) return guard.response;
   const { id } = await params;
 

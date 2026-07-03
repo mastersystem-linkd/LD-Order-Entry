@@ -22,6 +22,20 @@
       "when": 1782890076777,
       "tag": "0002_slim_nightmare",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783056361606,
+      "tag": "0003_smart_sally_floyd",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783057569083,
+      "tag": "0004_sturdy_lightspeed",
+      "breakpoints": true
     }
   ]
 }

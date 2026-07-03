@@ -18,13 +18,33 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-// Roles (§1). Default VIEWER.
+// Roles (§1). Default VIEWER. MANAGER = orders + operations, no settings.
 export const userRole = pgEnum("user_role", [
   "ADMIN",
   "SALES",
   "OPS",
   "VIEWER",
+  "MANAGER",
 ]);
+
+// Per-role capability grants — the admin-editable access matrix (Settings →
+// Access). A row (role, capability) with allowed=true means that role has that
+// capability. ADMIN is ALWAYS full and is never stored/edited here. Capability
+// keys are defined in lib/rbac.ts (CAPABILITIES). Resolved into the session JWT
+// at login; changes take effect on the user's next login.
+export const rolePermissions = pgTable(
+  "role_permissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    role: userRole("role").notNull(),
+    capability: varchar("capability", { length: 40 }).notNull(),
+    allowed: boolean("allowed").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [unique("uq_role_permissions_role_cap").on(t.role, t.capability)],
+);
 
 // Allowed lookup categories (§5). Kept as a TS const, not a DB enum — the column
 // is VARCHAR(30) per the spec.

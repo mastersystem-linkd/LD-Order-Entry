@@ -15,10 +15,10 @@ import {
   isUniqueViolation,
   jsonData,
   jsonError,
-  requireRole,
+  requireAnyCapability,
+  requireCapability,
 } from "@/lib/api";
 import { db, dbx } from "@/lib/db";
-import { ROLES } from "@/lib/rbac";
 import { firstZodError, orderPayloadSchema } from "@/lib/validation";
 import {
   buildInitialStageRows,
@@ -41,7 +41,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // Dashboard list with rolled-up qty/total/status. `all=1` returns the whole
 // filtered set (no pagination) for CSV export.
 export async function GET(req: Request) {
-  const guard = await requireRole(ROLES);
+  const guard = await requireAnyCapability(["orders.view", "operations.view"]);
   if (!guard.ok) return guard.response;
 
   const url = new URL(req.url);
@@ -178,7 +178,7 @@ export async function GET(req: Request) {
 // POST /api/orders — create one header + fabric×design lines + 7 stage rows each,
 // in a single transaction (CLAUDE.md §6). SALES/ADMIN only.
 export async function POST(req: Request) {
-  const guard = await requireRole(["ADMIN", "SALES"]);
+  const guard = await requireCapability("orders.edit");
   if (!guard.ok) return guard.response;
 
   const body = await req.json().catch(() => null);

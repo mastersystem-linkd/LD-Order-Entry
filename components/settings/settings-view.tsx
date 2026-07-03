@@ -1,22 +1,30 @@
 "use client";
 
 import * as React from "react";
-import { DatabaseIcon, ListIcon, TimerIcon, UsersIcon } from "lucide-react";
+import {
+  DatabaseIcon,
+  ListIcon,
+  ShieldCheckIcon,
+  TimerIcon,
+  UsersIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/ui/reveal";
 import { DropdownMaster } from "@/components/settings/dropdown-master";
 import { DesignDatabasePanel } from "@/components/settings/design-db";
 import { TimeTracking } from "@/components/settings/time-tracking";
-import { UsersAccess } from "@/components/settings/users-access";
+import { UsersManage } from "@/components/settings/users-manage";
+import { AccessControl } from "@/components/settings/access-control";
 
-type Tab = "dropdowns" | "designs" | "sla" | "users";
+type Tab = "dropdowns" | "designs" | "sla" | "users" | "access";
 
 const TABS: { key: Tab; label: string; icon: typeof ListIcon }[] = [
   { key: "dropdowns", label: "Dropdown Master", icon: ListIcon },
   { key: "designs", label: "Design Database", icon: DatabaseIcon },
   { key: "sla", label: "Time tracking", icon: TimerIcon },
-  { key: "users", label: "Users & access", icon: UsersIcon },
+  { key: "users", label: "Users", icon: UsersIcon },
+  { key: "access", label: "Access", icon: ShieldCheckIcon },
 ];
 
 export function SettingsView() {
@@ -53,7 +61,8 @@ export function SettingsView() {
         {tab === "dropdowns" ? <DropdownMaster /> : null}
         {tab === "designs" ? <DesignDatabasePanel /> : null}
         {tab === "sla" ? <TimeTracking /> : null}
-        {tab === "users" ? <UsersAccess /> : null}
+        {tab === "users" ? <UsersManage /> : null}
+        {tab === "access" ? <AccessControl /> : null}
       </Reveal>
     </div>
   );

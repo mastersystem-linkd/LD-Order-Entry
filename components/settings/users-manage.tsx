@@ -25,17 +25,13 @@ type UserRow = {
 };
 type UsersResponse = { users: UserRow[]; current_user_id: string };
 
-const ROLE_HINT: Record<Role, string> = {
-  ADMIN: "Full access incl. settings & users",
-  SALES: "Create & edit orders",
-  OPS: "Update operations tracking",
-  VIEWER: "Read-only",
-};
-
 const selectCls =
   "h-9 rounded-field border border-line-strong bg-surface-2 px-2 text-sm font-medium text-ink outline-none transition-[border-color,box-shadow] focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)] disabled:opacity-50";
 
-export function UsersAccess() {
+// Users tab: admin adds users and sets each user's access level (role), plus
+// account management (edit name/email, reset password, activate/deactivate,
+// delete). WHAT each role can do is configured in the Access tab.
+export function UsersManage() {
   const queryClient = useQueryClient();
 
   const [email, setEmail] = React.useState("");
@@ -54,7 +50,6 @@ export function UsersAccess() {
     queryKey: ["users"],
     queryFn: () => apiGet<UsersResponse>("/api/users"),
   });
-
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["users"] });
 
@@ -113,7 +108,7 @@ export function UsersAccess() {
       {/* Users table */}
       <Card>
         <CardHeader>
-          <CardTitle>Users &amp; access</CardTitle>
+          <CardTitle>Users</CardTitle>
         </CardHeader>
         <CardContent className="px-0">
           <div className="overflow-x-auto">
@@ -177,7 +172,11 @@ export function UsersAccess() {
                             className={selectCls}
                             value={u.role}
                             disabled={isSelf || patch.isPending}
-                            title={isSelf ? "You can't change your own role" : undefined}
+                            title={
+                              isSelf
+                                ? "You can't change your own role"
+                                : undefined
+                            }
                             onChange={(e) =>
                               patch.mutate({
                                 id: u.id,
@@ -284,7 +283,9 @@ export function UsersAccess() {
                             </div>
                           ) : confirmId === u.id ? (
                             <div className="flex items-center justify-end gap-2">
-                              <span className="text-xs text-danger">Delete user?</span>
+                              <span className="text-xs text-danger">
+                                Delete user?
+                              </span>
                               <Button
                                 size="sm"
                                 variant="destructive"
@@ -395,7 +396,7 @@ export function UsersAccess() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="u-role" className="text-[13px] text-ink-soft">
-                Role
+                Access level (role)
               </Label>
               <select
                 id="u-role"
@@ -405,11 +406,14 @@ export function UsersAccess() {
               >
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
-                    {r} — {ROLE_HINT[r]}
+                    {r}
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-ink-muted">{ROLE_HINT[role]}</p>
+              <p className="text-xs text-ink-muted">
+                Set what each role can access in the{" "}
+                <span className="font-medium text-ink">Access</span> tab.
+              </p>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="u-pw" className="text-[13px] text-ink-soft">

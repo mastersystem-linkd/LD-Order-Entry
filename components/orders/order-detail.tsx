@@ -6,7 +6,7 @@ import { PencilIcon, RouteIcon } from "lucide-react";
 
 import { apiGet } from "@/lib/api-client";
 import { formatNumber, type OrderDetail } from "@/lib/orders";
-import type { Role } from "@/lib/rbac";
+import { hasCap, type Capability } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -15,12 +15,13 @@ import { Th, THead } from "@/components/ui/table";
 
 export function OrderDetailView({
   orderId,
-  role,
+  caps,
 }: {
   orderId: string;
-  role: Role;
+  caps: Capability[];
 }) {
-  const canEdit = role === "ADMIN" || role === "SALES";
+  const canEdit = hasCap(caps, "orders.edit");
+  const canTrack = hasCap(caps, "operations.view");
   const detail = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => apiGet<OrderDetail>(`/api/orders/${orderId}`),
@@ -55,7 +56,7 @@ export function OrderDetailView({
           <StatusBadge status={d.operations_status} />
         </div>
         <div className="flex flex-wrap gap-2">
-          {role !== "SALES" ? (
+          {canTrack ? (
             <Button variant="outline" render={<Link href={`/tracking/${orderId}`} />}>
               <RouteIcon /> Track
             </Button>

@@ -407,7 +407,7 @@ export function OrderForm({
 
   return (
     <form
-      className="flex flex-col gap-3.5 pb-[104px]"
+      className="flex flex-col gap-3 pb-[104px]"
       onSubmit={(e) => {
         e.preventDefault();
         openPreview();
@@ -425,7 +425,7 @@ export function OrderForm({
             </div>
             <Eyebrow>{mode === "create" ? "Draft" : "Editing"}</Eyebrow>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:gap-x-4 lg:grid-cols-3 [&_input]:h-10">
+          <CardContent className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-x-4 lg:grid-cols-3 [&_input]:h-9">
             <Field label="Order date" htmlFor="order_date" required>
               <Input
                 id="order_date"
@@ -557,7 +557,7 @@ export function OrderForm({
       {/* Fabric blocks */}
       {blocks.map((block, bi) => (
         <Reveal key={bi} index={bi + 1}>
-          <div className="glass relative overflow-hidden rounded-card border border-line-strong p-4 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-[2px] hover:shadow-md motion-reduce:hover:translate-y-0 sm:p-5">
+          <div className="glass relative overflow-hidden rounded-card border border-line-strong p-3 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-[2px] hover:shadow-md motion-reduce:hover:translate-y-0 sm:p-4">
             <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-accent to-[var(--a3)]" />
             <span
               aria-hidden
@@ -567,7 +567,7 @@ export function OrderForm({
                   "radial-gradient(circle, var(--accent), transparent 70%)",
               }}
             />
-            <div className="mb-3.5 flex items-center justify-between">
+            <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2 text-[14px] font-semibold text-ink">
                 <span className="num grid size-[24px] place-items-center rounded-[7px] bg-gradient-to-br from-accent to-[var(--a3)] text-[12.5px] font-semibold text-white shadow-sm">
                   {bi + 1}
@@ -588,7 +588,7 @@ export function OrderForm({
                 aligned list of design rows. Fully responsive: the columns fit
                 the viewport so mobile never needs horizontal scrolling. The
                 suggestion dropdowns portal out, so nothing clips them. */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               <div className="grid grid-cols-[1fr_6rem] gap-2.5 sm:grid-cols-[minmax(180px,1.6fr)_120px]">
                 <Field label="Fabric" required>
                   <Autocomplete
@@ -614,7 +614,7 @@ export function OrderForm({
                 </Field>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 <div className="grid grid-cols-[minmax(0,1fr)_4rem_5.5rem_2rem] gap-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted">
                   <span>
                     Design no<span className="text-danger"> *</span>
@@ -652,10 +652,10 @@ export function OrderForm({
                       placeholder="0"
                       aria-label={`Quantity in metres, row ${di + 1}`}
                     />
-                    <div className="num flex h-10 items-center justify-end pr-0.5 text-[13px] font-medium text-ink">
+                    <div className="num flex h-9 items-center justify-end pr-0.5 text-[13px] font-medium text-ink">
                       <Money value={blockTotals[bi].rows[di]?.lineTotal ?? 0} />
                     </div>
-                    <div className="flex h-10 items-center justify-center">
+                    <div className="flex h-9 items-center justify-center">
                       <button
                         type="button"
                         onClick={() => removeDesign(bi, di)}
@@ -671,7 +671,7 @@ export function OrderForm({
               </div>
             </div>
 
-            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-line-strong pt-3.5">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-line-strong pt-3">
               <Button
                 type="button"
                 variant="outline"
@@ -699,7 +699,7 @@ export function OrderForm({
         <button
           type="button"
           onClick={addBlock}
-          className="flex h-[52px] w-full items-center justify-center gap-2 rounded-field border border-dashed border-line-strong bg-surface-2 text-[14px] font-medium text-ink transition-[color,background-color,border-color] hover:border-accent hover:bg-accent-soft hover:text-accent active:scale-[.99]"
+          className="flex h-[46px] w-full items-center justify-center gap-2 rounded-field border border-dashed border-line-strong bg-surface-2 text-[14px] font-medium text-ink transition-[color,background-color,border-color] hover:border-accent hover:bg-accent-soft hover:text-accent active:scale-[.99]"
         >
           <PlusIcon className="size-4" /> Add fabric block
         </button>

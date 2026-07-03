@@ -1,8 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 
-import { jsonData, jsonError, requireRole } from "@/lib/api";
+import { jsonData, jsonError, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
-import { ROLES } from "@/lib/rbac";
 import { computeStages } from "@/lib/order-status";
 import {
   customerOrders,
@@ -15,7 +14,7 @@ type Params = { params: Promise<{ id: string }> };
 
 // GET /api/order-status/:lineId — detail for one design line (read-only).
 export async function GET(_req: Request, { params }: Params) {
-  const guard = await requireRole(ROLES);
+  const guard = await requireCapability("orders.view");
   if (!guard.ok) return guard.response;
   const { id } = await params;
 

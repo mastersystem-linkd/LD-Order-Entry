@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { visibleNav, type Role } from "@/lib/rbac";
+import { visibleNav, type Capability, type Role } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
 // Visual-only icon mapping per nav href.
@@ -29,15 +29,17 @@ const NAV_ICONS: Record<string, LucideIcon> = {
 
 export function Sidebar({
   role,
+  caps,
   collapsed,
   onToggle,
 }: {
   role: Role;
+  caps: Capability[];
   collapsed: boolean;
   onToggle: () => void;
 }) {
   const pathname = usePathname();
-  const items = visibleNav(role);
+  const items = visibleNav(role, caps);
 
   // Active = the nav item whose href is the longest prefix of the current path.
   const activeHref = items

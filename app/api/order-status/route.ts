@@ -1,8 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or } from "drizzle-orm";
 
-import { jsonData, requireRole } from "@/lib/api";
+import { jsonData, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
-import { ROLES } from "@/lib/rbac";
 import {
   computeStages,
   type OrderStatusRow,
@@ -22,7 +21,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // GET /api/order-status — one row per (non-cancelled) design line with derived
 // per-stage status, progress, and overall. Filters + summary + pagination.
 export async function GET(req: Request) {
-  const guard = await requireRole(ROLES);
+  const guard = await requireCapability("orders.view");
   if (!guard.ok) return guard.response;
 
   const url = new URL(req.url);

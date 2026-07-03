@@ -25,7 +25,7 @@ import {
   type OverallStatus,
   type StageCell,
 } from "@/lib/order-status";
-import type { Role } from "@/lib/rbac";
+import type { Capability } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,7 +54,7 @@ const selectCls =
 // Orders per page (the board is now grouped by order, not by line).
 const ORDERS_PER_PAGE = 20;
 
-export function OrderStatusBoard({ role }: { role: Role }) {
+export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
   const [searchInput, setSearchInput] = React.useState("");
   const search = useDebouncedValue(searchInput, 300);
   const [party, setParty] = React.useState("");
@@ -642,7 +642,7 @@ export function OrderStatusBoard({ role }: { role: Role }) {
       {selectedIdx >= 0 && flatLines[selectedIdx] ? (
         <StatusDrawer
           lineId={flatLines[selectedIdx].lineId}
-          role={role}
+          caps={caps}
           onClose={() => setSelectedLineId(null)}
           onPrev={() =>
             setSelectedLineId(

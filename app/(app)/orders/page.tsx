@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
-import type { Role } from "@/lib/rbac";
+import type { Capability } from "@/lib/rbac";
 import { OrdersDashboard } from "@/components/orders/orders-dashboard";
 
 export default async function OrdersPage() {
   const session = await auth();
-  const role = (session?.user?.role as Role) ?? "VIEWER";
-  return <OrdersDashboard role={role} />;
+  const caps = (session?.user?.caps as Capability[] | undefined) ?? [];
+  return <OrdersDashboard caps={caps} />;
 }

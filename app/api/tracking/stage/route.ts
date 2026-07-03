@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { jsonData, jsonError, requireRole } from "@/lib/api";
+import { jsonData, jsonError, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
 import { firstZodError, stageToggleSchema } from "@/lib/validation";
 import { applyStageProgress, WorkflowError } from "@/lib/workflow";
@@ -11,7 +11,7 @@ import { orderLineItems } from "@/db/schema";
 // inside lib/workflow.ts: stamps actual + delay, advances the next stage's
 // planned_at, and recomputes the line's operations status.
 export async function PATCH(req: Request) {
-  const guard = await requireRole(["ADMIN", "OPS"]);
+  const guard = await requireCapability("operations.edit");
   if (!guard.ok) return guard.response;
 
   const body = await req.json().catch(() => null);

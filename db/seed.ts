@@ -8,7 +8,13 @@ import { count, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { normalizeEmail } from "@/lib/email";
 import {
+  CAPABILITY_KEYS,
+  DEFAULT_ROLE_CAPS,
+  EDITABLE_ROLES,
+} from "@/lib/rbac";
+import {
   lookupValues,
+  rolePermissions,
   users,
   workflowStages,
   type LookupCategory,
@@ -93,11 +99,27 @@ async function seedAdmin() {
   }
 }
 
+// Default access matrix (Settings → Access). ADMIN is always full and is not
+// stored. On-conflict-do-nothing preserves any admin edits on re-run.
+async function seedRolePermissions() {
+  const rows = EDITABLE_ROLES.flatMap((role) =>
+    CAPABILITY_KEYS.map((capability) => ({
+      role,
+      capability,
+      allowed: DEFAULT_ROLE_CAPS[role].includes(capability),
+    })),
+  );
+  await db.insert(rolePermissions).values(rows).onConflictDoNothing();
+  const [{ value }] = await db.select({ value: count() }).from(rolePermissions);
+  console.log(`  role_permissions: ${value} rows`);
+}
+
 async function main() {
   console.log("Seeding database…");
   await seedStages();
   await seedLookups();
   await seedAdmin();
+  await seedRolePermissions();
   console.log("Seed complete.");
 }
 

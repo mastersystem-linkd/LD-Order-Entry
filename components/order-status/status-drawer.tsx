@@ -23,7 +23,7 @@ import type {
   OrderStatusDetailStage,
   StageState,
 } from "@/lib/order-status";
-import type { Role } from "@/lib/rbac";
+import { hasCap, type Capability } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -46,7 +46,7 @@ const STATE_PILL: Record<StageState, string> = {
 
 export function StatusDrawer({
   lineId,
-  role,
+  caps,
   onClose,
   onPrev,
   onNext,
@@ -54,7 +54,7 @@ export function StatusDrawer({
   hasNext,
 }: {
   lineId: string;
-  role: Role;
+  caps: Capability[];
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -104,7 +104,7 @@ export function StatusDrawer({
     queryFn: () => apiGet<OrderStatusDetail>(`/api/order-status/${lineId}`),
   });
   const d = q.data;
-  const canUpdate = role === "ADMIN" || role === "OPS";
+  const canUpdate = hasCap(caps, "operations.edit");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

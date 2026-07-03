@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import type { Role } from "@/lib/rbac";
+import type { Capability } from "@/lib/rbac";
 import { OrderDetailView } from "@/components/orders/order-detail";
 
 export default async function OrderDetailPage({
@@ -9,6 +9,6 @@ export default async function OrderDetailPage({
 }) {
   const { id } = await params;
   const session = await auth();
-  const role = (session?.user?.role as Role) ?? "VIEWER";
-  return <OrderDetailView orderId={id} role={role} />;
+  const caps = (session?.user?.caps as Capability[] | undefined) ?? [];
+  return <OrderDetailView orderId={id} caps={caps} />;
 }

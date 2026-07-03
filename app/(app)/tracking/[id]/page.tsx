@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import type { Role } from "@/lib/rbac";
+import type { Capability } from "@/lib/rbac";
 import { TrackingBoard } from "@/components/tracking/tracking-board";
 
 export default async function TrackingOrderPage({
@@ -9,6 +9,6 @@ export default async function TrackingOrderPage({
 }) {
   const { id } = await params;
   const session = await auth();
-  const role = (session?.user?.role as Role) ?? "VIEWER";
-  return <TrackingBoard orderId={id} role={role} />;
+  const caps = (session?.user?.caps as Capability[] | undefined) ?? [];
+  return <TrackingBoard orderId={id} caps={caps} />;
 }

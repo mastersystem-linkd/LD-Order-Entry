@@ -4,10 +4,10 @@ import {
   isUniqueViolation,
   jsonData,
   jsonError,
-  requireRole,
+  requireAnyCapability,
+  requireCapability,
 } from "@/lib/api";
 import { db, dbx } from "@/lib/db";
-import { ROLES } from "@/lib/rbac";
 import { firstZodError, orderPayloadSchema } from "@/lib/validation";
 import {
   buildInitialStageRows,
@@ -27,7 +27,7 @@ type Params = { params: Promise<{ id: string }> };
 
 // GET /api/orders/:id — header + reconstructed fabric blocks + lines with status.
 export async function GET(_req: Request, { params }: Params) {
-  const guard = await requireRole(ROLES);
+  const guard = await requireAnyCapability(["orders.view", "orders.edit"]);
   if (!guard.ok) return guard.response;
   const { id } = await params;
 
@@ -121,7 +121,7 @@ export async function GET(_req: Request, { params }: Params) {
 // PUT /api/orders/:id — replace lines, preserving stage progress for lines that
 // still match on (fabric + design + qty); fresh stage rows only for new lines.
 export async function PUT(req: Request, { params }: Params) {
-  const guard = await requireRole(["ADMIN", "SALES"]);
+  const guard = await requireCapability("orders.edit");
   if (!guard.ok) return guard.response;
   const { id } = await params;
 
@@ -292,7 +292,7 @@ export async function PUT(req: Request, { params }: Params) {
 
 // DELETE /api/orders/:id — cascade removes lines + stage progress.
 export async function DELETE(_req: Request, { params }: Params) {
-  const guard = await requireRole(["ADMIN", "SALES"]);
+  const guard = await requireCapability("orders.edit");
   if (!guard.ok) return guard.response;
   const { id } = await params;
 

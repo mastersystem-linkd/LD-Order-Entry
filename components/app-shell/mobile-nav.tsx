@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { visibleNav, type Role } from "@/lib/rbac";
+import { visibleNav, type Capability, type Role } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
 // Visual-only icon mapping per nav href (mirrors sidebar.tsx).
@@ -31,15 +31,17 @@ const NAV_ICONS: Record<string, LucideIcon> = {
 // visual language. Closes on backdrop click, Escape, and link tap.
 export function MobileNav({
   role,
+  caps,
   open,
   onClose,
 }: {
   role: Role;
+  caps: Capability[];
   open: boolean;
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  const items = visibleNav(role);
+  const items = visibleNav(role, caps);
 
   // Active = the nav item whose href is the longest prefix of the current path.
   const activeHref = items

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import type { Role } from "@/lib/rbac";
+import type { Capability, Role } from "@/lib/rbac";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { Header } from "@/components/app-shell/header";
@@ -12,11 +12,13 @@ import { Footer } from "@/components/app-shell/footer";
 // area can take the full screen when the sidebar is collapsed.
 export function AppShell({
   role,
+  caps,
   user,
   signOutAction,
   children,
 }: {
   role: Role;
+  caps: Capability[];
   user: { name: string; role: Role };
   signOutAction: () => Promise<void>;
   children: React.ReactNode;
@@ -42,9 +44,10 @@ export function AppShell({
 
   return (
     <div className="relative z-[1] flex min-h-svh">
-      <Sidebar role={role} collapsed={collapsed} onToggle={toggle} />
+      <Sidebar role={role} caps={caps} collapsed={collapsed} onToggle={toggle} />
       <MobileNav
         role={role}
+        caps={caps}
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
       />

@@ -24,9 +24,10 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated but role not permitted for this path.
+  // Authenticated but not permitted for this path (by role + capabilities).
   const role = session.user.role as Role;
-  if (!canAccessPath(role, path)) {
+  const caps = session.user.caps ?? [];
+  if (!canAccessPath(role, caps, path)) {
     if (isApi) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

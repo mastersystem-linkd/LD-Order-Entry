@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import type { Role } from "@/lib/rbac";
+import type { Capability, Role } from "@/lib/rbac";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { signOutAction } from "./actions";
 
@@ -16,13 +16,14 @@ export default async function AppLayout({
   if (!session?.user) redirect("/login");
 
   const role = session.user.role as Role;
+  const caps = (session.user.caps as Capability[] | undefined) ?? [];
   const user = {
     name: session.user.name ?? session.user.email ?? "User",
     role,
   };
 
   return (
-    <AppShell role={role} user={user} signOutAction={signOutAction}>
+    <AppShell role={role} caps={caps} user={user} signOutAction={signOutAction}>
       {children}
     </AppShell>
   );

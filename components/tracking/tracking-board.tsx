@@ -18,7 +18,7 @@ import {
   type TrackingLine,
   type TrackingStage,
 } from "@/lib/orders";
-import type { Role } from "@/lib/rbac";
+import { hasCap, type Capability } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -202,13 +202,13 @@ const LEGEND: { state: CellState; label: string; hint: string }[] = [
 
 export function TrackingBoard({
   orderId,
-  role,
+  caps,
 }: {
   orderId: string;
-  role: Role;
+  caps: Capability[];
 }) {
   const queryClient = useQueryClient();
-  const canEdit = role === "ADMIN" || role === "OPS";
+  const canEdit = hasCap(caps, "operations.edit");
   // Cells with an in-flight toggle (each shows its own spinner). A ref counts
   // total in-flight toggles so we only reconcile after the LAST one settles.
   const [pending, setPending] = React.useState<Set<string>>(() => new Set());

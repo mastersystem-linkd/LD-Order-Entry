@@ -6,6 +6,10 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
+// How many suggestions to render at once. Beyond this the user narrows by typing
+// (filtering is instant); a footer notes how many more match.
+const MAX_SUGGESTIONS = 50;
+
 // Free-text input with a suggestion dropdown (CLAUDE.md §4): suggestions help,
 // but any value is allowed — an unknown fabric/party/design is never blocked.
 // The suggestion list is rendered in a portal (document.body) so it can never be
@@ -32,14 +36,30 @@ export function Autocomplete({
     width: number;
   } | null>(null);
 
-  const matches = React.useMemo(() => {
+  const { matches, more } = React.useMemo(() => {
     const v = value.trim().toLowerCase();
-    const list = v
-      ? suggestions.filter(
-          (s) => s.toLowerCase().includes(v) && s.toLowerCase() !== v,
-        )
-      : suggestions;
-    return list.slice(0, 8);
+    if (!v) {
+      // Nothing typed → browse the whole list (scrollable), first page of it.
+      return {
+        matches: suggestions.slice(0, MAX_SUGGESTIONS),
+        more: Math.max(0, suggestions.length - MAX_SUGGESTIONS),
+      };
+    }
+    // Rank: values that START with the typed text first, then ones that merely
+    // contain it — so typing "mil" surfaces "Milano" at the top.
+    const starts: string[] = [];
+    const contains: string[] = [];
+    for (const s of suggestions) {
+      const l = s.toLowerCase();
+      if (l === v) continue; // already fully typed — nothing to suggest
+      if (l.startsWith(v)) starts.push(s);
+      else if (l.includes(v)) contains.push(s);
+    }
+    const list = [...starts, ...contains];
+    return {
+      matches: list.slice(0, MAX_SUGGESTIONS),
+      more: Math.max(0, list.length - MAX_SUGGESTIONS),
+    };
   }, [value, suggestions]);
 
   const showList = open && matches.length > 0;
@@ -119,7 +139,7 @@ export function Autocomplete({
                 left: rect.left,
                 width: rect.width,
               }}
-              className="z-50 max-h-56 max-w-[calc(100vw-1rem)] overflow-auto rounded-[10px] border border-line bg-surface py-1 text-sm shadow-lg"
+              className="z-50 max-h-72 max-w-[calc(100vw-1rem)] overflow-auto rounded-[10px] border border-line bg-surface py-1 text-sm shadow-lg"
             >
               {matches.map((s, i) => (
                 <li key={s}>
@@ -144,6 +164,14 @@ export function Autocomplete({
                   </button>
                 </li>
               ))}
+              {more > 0 ? (
+                <li
+                  aria-hidden
+                  className="border-t border-line px-3 py-1.5 text-[12px] text-ink-muted"
+                >
+                  +{more} more — keep typing to filter
+                </li>
+              ) : null}
             </ul>,
             document.body,
           )

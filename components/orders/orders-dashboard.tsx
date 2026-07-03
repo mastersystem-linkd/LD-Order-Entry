@@ -25,7 +25,7 @@ import { apiGet, apiSend } from "@/lib/api-client";
 import { formatNumber, type OrderRow, type OrdersList } from "@/lib/orders";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
-import type { Role } from "@/lib/rbac";
+import { hasCap, type Capability } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Reveal } from "@/components/ui/reveal";
@@ -49,10 +49,11 @@ import {
   type OrderFilterState,
 } from "@/components/orders/order-filters";
 
-export function OrdersDashboard({ role }: { role: Role }) {
+export function OrdersDashboard({ caps }: { caps: Capability[] }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const canEdit = role === "ADMIN" || role === "SALES";
+  const canEdit = hasCap(caps, "orders.edit");
+  const canTrack = hasCap(caps, "operations.view");
 
   const [searchInput, setSearchInput] = React.useState("");
   const [search, setSearch] = React.useState("");
@@ -356,7 +357,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
                               icon={<PencilIcon />}
                             />
                           ) : null}
-                          {role !== "SALES" ? (
+                          {canTrack ? (
                             <IconLink
                               href={`/tracking/${o.id}`}
                               label="Track"
@@ -539,7 +540,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
                 <PencilIcon /> Edit
               </Button>
             ) : null}
-            {selected && role !== "SALES" ? (
+            {selected && canTrack ? (
               <Button
                 variant="outline"
                 size="sm"

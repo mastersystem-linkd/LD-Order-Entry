@@ -97,7 +97,7 @@ export const stageUpdateSchema = z.object({
 });
 
 // ---- User access management (admin) ----
-const USER_ROLES = ["ADMIN", "SALES", "OPS", "VIEWER"] as const;
+const USER_ROLES = ["ADMIN", "MANAGER", "SALES", "OPS", "VIEWER"] as const;
 
 export const userCreateSchema = z.object({
   email: z.string().trim().email("A valid email is required").max(255),
