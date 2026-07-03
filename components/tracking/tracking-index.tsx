@@ -99,7 +99,7 @@ export function TrackingIndex() {
         "Fabrics",
         "Designs",
         "Total Qty",
-        "Total",
+        "Total Amount",
         "Challan no",
         "Lot no",
         "Status",
@@ -209,7 +209,7 @@ export function TrackingIndex() {
                       <Th>Fabrics</Th>
                       <Th className="text-right">Designs</Th>
                       <Th className="text-right">Total Qty</Th>
-                      <Th className="text-right">Total</Th>
+                      <Th className="text-right">Total Amount</Th>
                       <Th>Challan no</Th>
                       <Th>Lot no</Th>
                       <Th>Status</Th>

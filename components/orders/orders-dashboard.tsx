@@ -122,7 +122,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
         "Fabrics",
         "Designs",
         "Qty",
-        "Total",
+        "Total Amount",
         "Challan",
         "Lot",
         "Status",
@@ -300,7 +300,7 @@ export function OrdersDashboard({ role }: { role: Role }) {
                     <Th>Fabrics</Th>
                     <Th className="text-right">Designs</Th>
                     <Th className="text-right">Total Qty</Th>
-                    <Th className="text-right">Total</Th>
+                    <Th className="text-right">Total Amount</Th>
                     <Th>Challan</Th>
                     <Th>Lot</Th>
                     <Th>Status</Th>

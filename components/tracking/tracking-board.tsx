@@ -801,16 +801,25 @@ function StageCell({
     stage.stock_status ?? (done ? "in_stock" : null);
   // Dates hidden from the cell — surfaced on hover instead.
   const tip = `${stage.label} — ${STATE_LABEL[state]} · Plan: ${formatDate(stage.planned_at)} · Actual: ${formatDateTime(stage.actual_at)}`;
+  // Every cell is one fixed-height row of the same width, so the grid stays
+  // uniform whether or not a cell carries a delay pill (the pill sits inline
+  // next to the label, never on a second line).
   const boxCls = cn(
-    "flex min-w-[112px] flex-col gap-1.5 rounded-[10px] border p-2 transition-colors",
+    "flex h-10 w-full min-w-[164px] items-center gap-1.5 rounded-[10px] border px-2 transition-colors",
     CELL_TONE[state],
     disabled && !done && state !== "out_of_stock" && "opacity-70",
   );
+  const pendingDot = isPending ? (
+    <span
+      aria-hidden
+      className="size-1.5 shrink-0 rounded-full bg-accent/50 motion-safe:animate-pulse"
+    />
+  ) : null;
   const pill =
     done && (stage.delay_minutes ?? 0) > 0 ? (
       <DelayPill minutes={stage.delay_minutes} />
     ) : state === "out_of_stock" ? (
-      <span className="inline-flex w-fit rounded-pill bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+      <span className="inline-flex shrink-0 rounded-pill bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
         Blocked
       </span>
     ) : null;
@@ -818,30 +827,23 @@ function StageCell({
   // Stock checking stays a 3-way dropdown (can't be a single toggle).
   if (isStock) {
     return (
-      <td className="px-2 py-2.5 align-top">
+      <td className="px-2 py-1.5 align-middle">
         <div title={tip} className={boxCls}>
-          <div className="flex items-center justify-between gap-1.5">
-            <select
-              value={value ?? ""}
-              disabled={disabled}
-              onChange={(e) =>
-                onStock((e.target.value || null) as StockStatus | null)
-              }
-              aria-label="Stock status"
-              className="h-6 w-full rounded-md border border-line-strong bg-surface px-1 text-[11px] font-medium text-ink outline-none focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-80"
-            >
-              <option value="">Pending</option>
-              <option value="in_stock">In stock</option>
-              <option value="out_of_stock">Out of stock</option>
-            </select>
-            {isPending ? (
-            <span
-              aria-hidden
-              className="size-1.5 shrink-0 rounded-full bg-accent/50 motion-safe:animate-pulse"
-            />
-          ) : null}
-          </div>
+          <select
+            value={value ?? ""}
+            disabled={disabled}
+            onChange={(e) =>
+              onStock((e.target.value || null) as StockStatus | null)
+            }
+            aria-label="Stock status"
+            className="h-6 w-[92px] shrink-0 rounded-md border border-line-strong bg-surface px-1 text-[11px] font-medium text-ink outline-none focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-80"
+          >
+            <option value="">Pending</option>
+            <option value="in_stock">In stock</option>
+            <option value="out_of_stock">Out of stock</option>
+          </select>
           {pill}
+          {pendingDot ? <span className="ml-auto">{pendingDot}</span> : null}
         </div>
       </td>
     );
@@ -849,7 +851,7 @@ function StageCell({
 
   // Non-stock: the whole cell is the toggle — click anywhere to mark done / undo.
   return (
-    <td className="px-2 py-2.5 align-top">
+    <td className="px-2 py-1.5 align-middle">
       <button
         type="button"
         title={tip}
@@ -859,28 +861,21 @@ function StageCell({
         onClick={() => onToggle(!done)}
         className={cn(
           boxCls,
-          "w-full text-left",
+          "text-left",
           disabled ? "cursor-not-allowed" : "cursor-pointer",
         )}
       >
-        <div className="flex items-center justify-between gap-1.5">
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink">
-            <CheckBox checked={done} />
-            {STATE_LABEL[state]}
-          </span>
-          <span className="flex items-center gap-1">
-            {isPending ? (
-              <span
-                aria-hidden
-                className="size-1.5 shrink-0 rounded-full bg-accent/50 motion-safe:animate-pulse"
-              />
-            ) : null}
-            {locked && !done ? (
-              <LockIcon className="size-3 shrink-0 text-ink-muted" />
-            ) : null}
-          </span>
-        </div>
+        <CheckBox checked={done} />
+        <span className="shrink-0 text-[11px] font-medium text-ink">
+          {STATE_LABEL[state]}
+        </span>
         {pill}
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {pendingDot}
+          {locked && !done ? (
+            <LockIcon className="size-3 text-ink-muted" />
+          ) : null}
+        </span>
       </button>
     </td>
   );
