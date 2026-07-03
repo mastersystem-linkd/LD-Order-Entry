@@ -407,7 +407,7 @@ export function OrderForm({
 
   return (
     <form
-      className="flex flex-col gap-3 pb-[104px]"
+      className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 pb-[104px]"
       onSubmit={(e) => {
         e.preventDefault();
         openPreview();
@@ -715,36 +715,38 @@ export function OrderForm({
       ) : null}
 
       {/* Sticky totals bar */}
-      <div className="glass fixed inset-x-0 bottom-0 z-30 flex flex-col gap-3 border-t border-line px-4 py-3 shadow-[0_-4px_20px_rgba(16,24,40,0.06)] sm:px-[34px] sm:py-4 sm:flex-row sm:items-center sm:justify-between md:left-[264px]">
+      <div className="glass fixed inset-x-0 bottom-0 z-30 border-t border-line px-4 py-3 shadow-[0_-4px_20px_rgba(16,24,40,0.06)] sm:px-[34px] sm:py-4 md:left-[264px]">
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent"
         />
-        <div className="flex items-baseline gap-3.5">
-          <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-accent">
-            Grand total
-          </span>
-          <span className="num font-display text-2xl font-semibold tracking-[-0.02em] text-ink sm:text-[30px]">
-            <Money value={grandTotal} />
-          </span>
-        </div>
-        <div className="hidden text-[13px] text-ink-soft md:block">
-          {blocks.length} fabric · {designCount} design
-          {designCount === 1 ? "" : "s"} · {formatNumber(grandQty)} mtr
-        </div>
-        <div className="flex gap-3 [&>*]:flex-1 sm:[&>*]:flex-none">
-          <Button
-            type="button"
-            variant="ghost"
-            size="lg"
-            className="border border-line-strong"
-            onClick={() => router.push("/orders")}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" size="lg">
-            <CheckIcon /> {mode === "create" ? "Create order" : "Save changes"}
-          </Button>
+        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-baseline gap-3.5">
+            <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-accent">
+              Grand total
+            </span>
+            <span className="num font-display text-2xl font-semibold tracking-[-0.02em] text-ink sm:text-[30px]">
+              <Money value={grandTotal} />
+            </span>
+          </div>
+          <div className="hidden text-[13px] text-ink-soft md:block">
+            {blocks.length} fabric · {designCount} design
+            {designCount === 1 ? "" : "s"} · {formatNumber(grandQty)} mtr
+          </div>
+          <div className="flex gap-3 [&>*]:flex-1 sm:[&>*]:flex-none">
+            <Button
+              type="button"
+              variant="ghost"
+              size="lg"
+              className="border border-line-strong"
+              onClick={() => router.push("/orders")}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" size="lg">
+              <CheckIcon /> {mode === "create" ? "Create order" : "Save changes"}
+            </Button>
+          </div>
         </div>
       </div>
 

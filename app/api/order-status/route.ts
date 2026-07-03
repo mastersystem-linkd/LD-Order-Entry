@@ -96,8 +96,15 @@ export async function GET(req: Request) {
     .from(orderLineItems)
     .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
     .where(and(...conds))
-    // Deterministic window so the cap (and JS sort/paginate over it) is stable.
-    .orderBy(desc(customerOrders.orderDate), asc(orderLineItems.id))
+    // Newest orders first; within an order, the user's entry order — fabric
+    // block created_at, then design no (A1 before A2 in a same-batch block),
+    // then a stable id fallback (UUIDs are random, so never order by id alone).
+    .orderBy(
+      desc(customerOrders.orderDate),
+      asc(orderLineItems.createdAt),
+      asc(orderLineItems.designNo),
+      asc(orderLineItems.id),
+    )
     .limit(MAX_LINES);
 
   const lineIds = lines.map((l) => l.lineId);
@@ -110,6 +117,7 @@ export async function GET(req: Request) {
           plannedAt: lineStageProgress.plannedAt,
           actualAt: lineStageProgress.actualAt,
           delayMinutes: lineStageProgress.delayMinutes,
+          stockStatus: lineStageProgress.stockStatus,
         })
         .from(lineStageProgress)
         .where(inArray(lineStageProgress.orderLineItemId, lineIds))
@@ -139,6 +147,7 @@ export async function GET(req: Request) {
       haste: l.haste,
       challanNo: l.challanNo,
       lotNo: l.lotNo,
+      createdAt: new Date(l.createdAt).toISOString(),
       stages: c.cells,
       doneCount: c.doneCount,
       currentStageKey: c.currentStageKey,
@@ -159,7 +168,11 @@ export async function GET(req: Request) {
     filtered = filtered.filter((r) => r.overall === overall);
   if (stage) filtered = filtered.filter((r) => r.currentStageKey === stage);
 
+  // Ties (e.g. two lines of the same order) keep the user's entry order:
+  // block created_at, then design no (numeric-aware so A2 < A10), then id.
   const tie = (a: OrderStatusRow, b: OrderStatusRow) =>
+    (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0) ||
+    a.design.localeCompare(b.design, undefined, { numeric: true }) ||
     a.lineId.localeCompare(b.lineId);
   filtered.sort((a, b) => {
     switch (sort) {

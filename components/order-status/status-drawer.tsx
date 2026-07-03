@@ -283,7 +283,9 @@ function TimelineStep({
             )}
           >
             {STATE_LABEL[step.state]}
-            {step.state === "overdue" ? ` · ${step.daysOverdue}d` : ""}
+            {step.state === "overdue" && step.daysOverdue > 0
+              ? ` · ${step.daysOverdue}d`
+              : ""}
           </span>
         </div>
         <div className="mt-1 text-xs text-ink-soft">

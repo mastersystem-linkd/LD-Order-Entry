@@ -119,16 +119,17 @@ export async function GET(req: Request) {
     ? await db
         .select({
           lineId: lineStageProgress.orderLineItemId,
+          stageKey: lineStageProgress.stageKey,
           isDone: lineStageProgress.isDone,
         })
         .from(lineStageProgress)
         .where(inArray(lineStageProgress.orderLineItemId, lineIds))
     : [];
 
-  const stagesByLine = new Map<string, { isDone: boolean }[]>();
+  const stagesByLine = new Map<string, { stageKey: string; isDone: boolean }[]>();
   for (const s of stages) {
     const arr = stagesByLine.get(s.lineId) ?? [];
-    arr.push({ isDone: s.isDone });
+    arr.push({ stageKey: s.stageKey, isDone: s.isDone });
     stagesByLine.set(s.lineId, arr);
   }
   const linesByOrder = new Map<string, typeof lines>();

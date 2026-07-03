@@ -115,8 +115,8 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
         `/api/orders?${buildParams({ all: "1" })}`,
       );
       const header = [
-        "Date",
         "Order no",
+        "Date",
         "Party",
         "Haste",
         "Agent",
@@ -129,8 +129,8 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
         "Status",
       ];
       const body = all.orders.map((o) => [
-        o.order_date,
         o.order_no,
+        o.order_date,
         o.party_name,
         o.haste ?? "",
         o.agent ?? "",
@@ -293,8 +293,8 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                   <table className="w-full text-left text-sm text-ink">
                     <THead>
                   <tr>
-                    <Th>Date</Th>
                     <Th>Order no</Th>
+                    <Th>Date</Th>
                     <Th>Party</Th>
                     <Th>Haste</Th>
                     <Th>Agent</Th>
@@ -314,9 +314,6 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                       key={o.id}
                       className="border-b border-line transition-colors last:border-0 hover:bg-surface-2"
                     >
-                      <Td className="num whitespace-nowrap text-ink">
-                        {o.order_date}
-                      </Td>
                       <Td className="font-medium">
                         <Link
                           href={`/orders/${o.id}`}
@@ -324,6 +321,9 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                         >
                           {o.order_no}
                         </Link>
+                      </Td>
+                      <Td className="num whitespace-nowrap text-ink">
+                        {o.order_date}
                       </Td>
                       <Td>{o.party_name}</Td>
                       <Td>{o.haste ?? "—"}</Td>

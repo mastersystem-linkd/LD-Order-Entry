@@ -72,15 +72,29 @@ export function buildInitialStageRows(
   }));
 }
 
-// Per-line operations status (§6): all done → COMPLETED, some → PARTIALLY, none → PENDING.
+// Stages whose completion means fulfilment work has actually started. Order
+// entry + stock checking are preliminary — finishing them alone does NOT make a
+// line "partially completed" (§6).
+const PROGRESS_STAGE_KEYS = new Set<string>([
+  "rolling_checking",
+  "challan",
+  "bill",
+  "dispatch",
+  "received_lr",
+]);
+
+// Per-line operations status (§6): all 7 done → COMPLETED; at least one of the 5
+// post-stock stages done → PARTIALLY COMPLETED; otherwise (nothing, or only
+// order entry / stock checking) → PENDING.
 export function computeLineStatus(
-  stages: { isDone: boolean }[],
+  stages: { stageKey: string; isDone: boolean }[],
 ): OperationsStatus {
   if (stages.length === 0) return "PENDING";
-  const done = stages.filter((s) => s.isDone).length;
-  if (done === 0) return "PENDING";
-  if (done === stages.length) return "COMPLETED";
-  return "PARTIALLY COMPLETED";
+  if (stages.every((s) => s.isDone)) return "COMPLETED";
+  const started = stages.some(
+    (s) => s.isDone && PROGRESS_STAGE_KEYS.has(s.stageKey),
+  );
+  return started ? "PARTIALLY COMPLETED" : "PENDING";
 }
 
 // Order-level status = roll-up of its (non-cancelled) lines.
@@ -167,10 +181,14 @@ export async function applyStageProgress(params: {
     }
     const byKey = new Map(rows.map((r) => [r.stageKey, r]));
 
-    // --- Gating rule (stock-only) ---
-    // The only prerequisite in the workflow is stock: a stage AFTER stock
-    // checking can be completed only once stock is 'in_stock'. Order entry and
-    // stock checking have none, and un-completing is always allowed.
+    // --- Gating rules ---
+    // Order entry is the initial step: stock checking is locked (no change of
+    // any kind) until order entry is done.
+    if (isStock && !byKey.get("order_entry")?.isDone) {
+      throw new WorkflowError(`Complete "${STAGE_LABELS.order_entry}" first.`);
+    }
+    // Stock gate: a stage AFTER stock checking can be completed only once stock
+    // is 'in_stock'. Order entry has no prerequisite; un-completing is allowed.
     if (becomingDone && idx > STAGE_INDEX.stock_checking) {
       if (!byKey.get("stock_checking")?.isDone) {
         throw new WorkflowError(
@@ -201,7 +219,10 @@ export async function applyStageProgress(params: {
       .where(eq(lineStageProgress.id, target.id));
 
     const updated = await tx
-      .select({ isDone: lineStageProgress.isDone })
+      .select({
+        stageKey: lineStageProgress.stageKey,
+        isDone: lineStageProgress.isDone,
+      })
       .from(lineStageProgress)
       .where(eq(lineStageProgress.orderLineItemId, orderLineItemId));
 

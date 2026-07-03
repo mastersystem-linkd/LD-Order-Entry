@@ -32,10 +32,17 @@ export type StageCell = {
   state: StageState;
   date: string | null; // actual_at ISO, when done
   daysOverdue: number;
+  // Only meaningful on the stock_checking cell (null elsewhere): the stock gate
+  // outcome. Per line it's the stored value; for an order aggregate it's folded
+  // (any line out_of_stock → out_of_stock; all in stock → in_stock; else null).
+  stockStatus?: "in_stock" | "out_of_stock" | null;
   // Order-level aggregate only (undefined for a single line): how many of the
   // order's lines have finished this stage, out of how many total.
   doneOf?: number;
   totalLines?: number;
+  // Order aggregate only, stock_checking only: how many lines are out of stock —
+  // lets the board tell an all-out order from a mixed one.
+  outOf?: number;
 };
 
 export type OrderStatusRow = {
@@ -52,6 +59,9 @@ export type OrderStatusRow = {
   haste: string | null;
   challanNo: string | null;
   lotNo: string | null;
+  // Line item created_at (ISO) — used to keep a line in the user's entry order
+  // within its order (blocks are ordered by when they were added).
+  createdAt: string;
   stages: StageCell[];
   doneCount: number;
   currentStageKey: string | null;
@@ -133,6 +143,7 @@ type RawStage = {
   plannedAt: Date | string | null;
   actualAt: Date | string | null;
   delayMinutes: number | null;
+  stockStatus?: string | null;
 };
 
 const iso = (v: Date | string | null): string | null => {
@@ -191,6 +202,10 @@ export function computeStages(
       state,
       date: isDone ? iso(actual) : null,
       daysOverdue,
+      stockStatus:
+        r?.stockStatus === "in_stock" || r?.stockStatus === "out_of_stock"
+          ? r.stockStatus
+          : null,
     });
     detailStages.push({
       stageKey: s.key,
@@ -267,14 +282,27 @@ export function aggregateOrderGroups(
         state = "not_started";
       }
 
+      // Fold the stock gate across the order's lines (stock_checking only):
+      // any line out of stock flags the order; all in stock = in_stock.
+      const stockStatus: "in_stock" | "out_of_stock" | null =
+        base.stageKey === "stock_checking"
+          ? cells.some((c) => c.stockStatus === "out_of_stock")
+            ? "out_of_stock"
+            : doneN === total
+              ? "in_stock"
+              : null
+          : null;
+
       stages.push({
         stageKey: base.stageKey,
         label: base.label,
         state,
         date,
         daysOverdue,
+        stockStatus,
         doneOf: doneN,
         totalLines: total,
+        outOf: cells.filter((c) => c.stockStatus === "out_of_stock").length,
       });
     }
 

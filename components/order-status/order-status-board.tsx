@@ -36,6 +36,11 @@ import { useLookup } from "@/components/orders/use-lookups";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { StatusDrawer } from "@/components/order-status/status-drawer";
 import {
+  ColumnPicker,
+  useColumnPrefs,
+  type ColumnOption,
+} from "@/components/order-status/column-picker";
+import {
   appendOrderFilterParams,
   EMPTY_ORDER_FILTERS,
   hasActiveOrderFilters,
@@ -54,7 +59,44 @@ const selectCls =
 // Orders per page (the board is now grouped by order, not by line).
 const ORDERS_PER_PAGE = 20;
 
-export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
+// The desktop table's toggleable columns. `order` is the identity column and is
+// locked on. Ids here are the single source of truth used by both the column
+// picker and the header/body `isVisible()` guards, so they can never drift.
+const STATUS_COLUMNS: ColumnOption[] = [
+  { id: "order", label: "Order no", locked: true },
+  { id: "date", label: "Date" },
+  { id: "party", label: "Party" },
+  { id: "haste", label: "Haste" },
+  { id: "fabric", label: "Fabric" },
+  { id: "designs", label: "Designs" },
+  { id: "qty", label: "Total qty" },
+  { id: "total", label: "Total" },
+  { id: "challan", label: "Challan" },
+  { id: "lot", label: "Lot" },
+  { id: "sales", label: "Sales" },
+  { id: "stages", label: "Stages (7)" },
+  { id: "overall", label: "Overall" },
+];
+
+// Short labels for the 7 compact per-stage column headers (the full stage names
+// are long; the column header just needs to name the stage).
+const STAGE_SHORT: Record<string, string> = {
+  order_entry: "Entry",
+  stock_checking: "Stock",
+  rolling_checking: "Rolling",
+  challan: "Challan",
+  bill: "Bill",
+  dispatch: "Dispatch",
+  received_lr: "LR",
+};
+
+export function OrderStatusBoard({
+  caps,
+  userKey,
+}: {
+  caps: Capability[];
+  userKey?: string;
+}) {
   const [searchInput, setSearchInput] = React.useState("");
   const search = useDebouncedValue(searchInput, 300);
   const [party, setParty] = React.useState("");
@@ -71,6 +113,12 @@ export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
     null,
   );
   const [exporting, setExporting] = React.useState(false);
+
+  // Per-user column visibility (persisted in localStorage, keyed by user).
+  const { hidden, isVisible, toggle, reset } = useColumnPrefs(
+    `oe:order-status:cols:${userKey ?? "anon"}`,
+    STATUS_COLUMNS,
+  );
 
   const parties = useLookup("PARTY").data ?? [];
   const fabrics = useLookup("FABRIC").data ?? [];
@@ -196,9 +244,15 @@ export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
         r.salesPerson ?? "",
         r.odDate,
         ...r.stages.map((st) =>
-          st.state === "done"
-            ? `Done ${st.date ? formatDate(st.date) : ""}`.trim()
-            : st.state,
+          st.stageKey === "stock_checking"
+            ? st.state === "done"
+              ? "In stock"
+              : st.stockStatus === "out_of_stock"
+                ? "Out of stock"
+                : "Pending"
+            : st.state === "done"
+              ? `Done ${st.date ? formatDate(st.date) : ""}`.trim()
+              : st.state,
         ),
         `${r.doneCount}/7`,
         r.overall,
@@ -276,6 +330,14 @@ export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
               <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-accent ring-2 ring-surface" />
             ) : null}
           </Button>
+          <div className="hidden shrink-0 lg:block">
+            <ColumnPicker
+              columns={STATUS_COLUMNS}
+              hidden={hidden}
+              onToggle={toggle}
+              onReset={reset}
+            />
+          </div>
           <Button
             variant="outline"
             size="icon"
@@ -415,33 +477,35 @@ export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
                 <thead className="sticky top-0 z-20 bg-surface">
                   <tr className="border-b border-line">
                     <Th className="sticky left-0 z-30 bg-surface shadow-[1px_1px_0_var(--line)]">
-                      Date
+                      Order no
                     </Th>
-                    <Th>Order no</Th>
-                    <Th>Party</Th>
-                    <Th>Haste</Th>
-                    <Th>Fabric</Th>
-                    <Th className="text-right">Designs</Th>
-                    <Th className="text-right">Total Qty</Th>
-                    <Th className="text-right">Total</Th>
-                    <Th>Challan</Th>
-                    <Th>Lot</Th>
-                    <Th>Sales</Th>
-                    {STAGE_OPTIONS.map((s) => (
-                      <Th key={s.key} className="min-w-[104px]">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "size-2 shrink-0 rounded-full",
-                              STAGE_DOT[s.key] ?? "bg-ink-muted",
-                            )}
-                          />
-                          {s.label}
-                        </span>
-                      </Th>
-                    ))}
-                    <Th className="min-w-[96px]">Progress</Th>
-                    <Th>Overall</Th>
+                    {isVisible("date") && <Th>Date</Th>}
+                    {isVisible("party") && <Th>Party</Th>}
+                    {isVisible("haste") && <Th>Haste</Th>}
+                    {isVisible("fabric") && <Th>Fabric</Th>}
+                    {isVisible("designs") && (
+                      <Th className="text-right">Designs</Th>
+                    )}
+                    {isVisible("qty") && <Th className="text-right">Total qty</Th>}
+                    {isVisible("total") && <Th className="text-right">Total</Th>}
+                    {isVisible("challan") && <Th>Challan</Th>}
+                    {isVisible("lot") && <Th>Lot</Th>}
+                    {isVisible("sales") && <Th>Sales</Th>}
+                    {isVisible("stages") &&
+                      STAGE_OPTIONS.map((s) => (
+                        <Th key={s.key} className="text-center">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                            <span
+                              className={cn(
+                                "size-1.5 shrink-0 rounded-full",
+                                STAGE_DOT[s.key] ?? "bg-ink-muted",
+                              )}
+                            />
+                            {STAGE_SHORT[s.key] ?? s.label}
+                          </span>
+                        </Th>
+                      ))}
+                    {isVisible("overall") && <Th>Overall</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -468,8 +532,8 @@ export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
                           }}
                           className="group cursor-pointer border-b border-line transition-colors outline-none last:border-0 hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent-ring)]"
                         >
-                          <Td className="num sticky left-0 z-10 bg-surface font-medium whitespace-nowrap text-ink shadow-[1px_0_0_var(--line)] group-hover:bg-surface-2 group-focus-visible:bg-surface-2">
-                            <span className="inline-flex items-center gap-1.5">
+                          <Td className="sticky left-0 z-10 bg-surface shadow-[1px_0_0_var(--line)] group-hover:bg-surface-2 group-focus-visible:bg-surface-2">
+                            <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -491,51 +555,76 @@ export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
                                   )}
                                 />
                               </button>
-                              {g.odDate}
-                            </span>
+                              <span className="num font-semibold whitespace-nowrap text-ink">
+                                {g.orderNo}
+                              </span>
+                            </div>
                           </Td>
-                          <Td className="num font-semibold whitespace-nowrap text-ink">
-                            {g.orderNo}
-                          </Td>
-                          <Td className="whitespace-nowrap text-ink">{g.party}</Td>
-                          <Td className="whitespace-nowrap text-ink">
-                            {g.haste ?? "—"}
-                          </Td>
-                          <Td className="max-w-[220px] truncate text-ink">
-                            {g.fabrics.join(", ")}
-                          </Td>
-                          <Td className="num text-right text-ink">
-                            {g.designCount}
-                          </Td>
-                          <Td className="num whitespace-nowrap text-right text-ink">
-                            {formatNumber(g.qtyTotal)}
-                          </Td>
-                          <Td className="num whitespace-nowrap text-right text-ink">
-                            ₹{formatNumber(g.grandTotal)}
-                          </Td>
-                          <Td className="whitespace-nowrap text-ink">
-                            {g.challanNo ?? "—"}
-                          </Td>
-                          <Td className="whitespace-nowrap text-ink">
-                            {g.lotNo ?? "—"}
-                          </Td>
-                          <Td className="whitespace-nowrap text-ink">
-                            {g.salesPerson ?? "—"}
-                          </Td>
-                          {g.stages.map((c) => (
-                            <Td key={c.stageKey}>
-                              <StageChip cell={c} />
+                          {isVisible("date") && (
+                            <Td className="num whitespace-nowrap text-ink-soft">
+                              {formatDate(g.odDate)}
                             </Td>
-                          ))}
-                          <Td>
-                            <ProgressBar
-                              stages={g.stages}
-                              currentStageKey={g.currentStageKey}
-                            />
-                          </Td>
-                          <Td>
-                            <OverallBadge overall={g.overall} />
-                          </Td>
+                          )}
+                          {isVisible("party") && (
+                            <Td className="max-w-[180px] truncate text-ink">
+                              <span title={g.party}>{g.party}</span>
+                            </Td>
+                          )}
+                          {isVisible("haste") && (
+                            <Td className="whitespace-nowrap text-ink-soft">
+                              {g.haste ?? "—"}
+                            </Td>
+                          )}
+                          {isVisible("fabric") && (
+                            <Td className="max-w-[200px] truncate text-ink">
+                              <span title={g.fabrics.join(", ")}>
+                                {g.fabrics.length === 1
+                                  ? g.fabrics[0]
+                                  : `${g.fabrics.length} fabrics`}
+                              </span>
+                            </Td>
+                          )}
+                          {isVisible("designs") && (
+                            <Td className="num whitespace-nowrap text-right text-ink">
+                              {g.designCount}
+                            </Td>
+                          )}
+                          {isVisible("qty") && (
+                            <Td className="num whitespace-nowrap text-right text-ink">
+                              {formatNumber(g.qtyTotal)}
+                            </Td>
+                          )}
+                          {isVisible("total") && (
+                            <Td className="num whitespace-nowrap text-right text-ink">
+                              ₹{formatNumber(g.grandTotal)}
+                            </Td>
+                          )}
+                          {isVisible("challan") && (
+                            <Td className="whitespace-nowrap text-ink-soft">
+                              {g.challanNo ?? "—"}
+                            </Td>
+                          )}
+                          {isVisible("lot") && (
+                            <Td className="whitespace-nowrap text-ink-soft">
+                              {g.lotNo ?? "—"}
+                            </Td>
+                          )}
+                          {isVisible("sales") && (
+                            <Td className="whitespace-nowrap text-ink-soft">
+                              {g.salesPerson ?? "—"}
+                            </Td>
+                          )}
+                          {isVisible("stages") &&
+                            g.stages.map((c) => (
+                              <Td key={c.stageKey} className="text-center">
+                                <StageChip cell={c} />
+                              </Td>
+                            ))}
+                          {isVisible("overall") && (
+                            <Td>
+                              <OverallBadge overall={g.overall} />
+                            </Td>
+                          )}
                         </tr>
 
                         {/* Expanded design lines */}
@@ -553,47 +642,51 @@ export function OrderStatusBoard({ caps }: { caps: Capability[] }) {
                                     setSelectedLineId(line.lineId);
                                   }
                                 }}
-                                className="group cursor-pointer border-b border-line bg-surface-2/40 text-[13px] transition-colors outline-none last:border-0 hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent-ring)]"
+                                className="group cursor-pointer border-b border-line bg-surface text-[13px] transition-colors outline-none last:border-0 hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent-ring)]"
                               >
-                                <Td className="sticky left-0 z-10 bg-surface pl-8 text-ink-muted shadow-[1px_0_0_var(--line)] group-hover:bg-surface-2 group-focus-visible:bg-surface-2">
-                                  <ChevronRightIcon className="size-3.5 -rotate-45 text-ink-muted" />
+                                <Td className="sticky left-0 z-10 bg-surface pl-8 shadow-[1px_0_0_var(--line)] group-hover:bg-surface-2 group-focus-visible:bg-surface-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <ChevronRightIcon className="size-3.5 shrink-0 -rotate-45 text-ink-muted" />
+                                    <span className="num font-medium text-ink">
+                                      {line.design}
+                                    </span>
+                                  </div>
                                 </Td>
-                                <Td />
-                                <Td />
-                                <Td />
-                                <Td className="whitespace-nowrap text-ink">
-                                  {line.fabric}
-                                </Td>
-                                <Td className="num text-right text-ink">
-                                  {line.design}
-                                </Td>
-                                <Td className="num whitespace-nowrap text-right text-ink">
-                                  {formatNumber(Number(line.qtyMtr))}
-                                </Td>
-                                <Td className="num whitespace-nowrap text-right text-ink">
-                                  {line.lineTotal == null
-                                    ? "—"
-                                    : `₹${formatNumber(Number(line.lineTotal))}`}
-                                </Td>
-                                <Td />
-                                <Td />
-                                <Td className="whitespace-nowrap text-ink">
-                                  {line.salesPerson ?? "—"}
-                                </Td>
-                                {line.stages.map((c) => (
-                                  <Td key={c.stageKey}>
-                                    <StageChip cell={c} />
+                                {isVisible("date") && <Td />}
+                                {isVisible("party") && <Td />}
+                                {isVisible("haste") && <Td />}
+                                {isVisible("fabric") && (
+                                  <Td className="max-w-[200px] truncate text-ink">
+                                    <span title={line.fabric}>{line.fabric}</span>
                                   </Td>
-                                ))}
-                                <Td>
-                                  <ProgressBar
-                                    stages={line.stages}
-                                    currentStageKey={line.currentStageKey}
-                                  />
-                                </Td>
-                                <Td>
-                                  <OverallBadge overall={line.overall} />
-                                </Td>
+                                )}
+                                {isVisible("designs") && <Td />}
+                                {isVisible("qty") && (
+                                  <Td className="num whitespace-nowrap text-right text-ink">
+                                    {formatNumber(Number(line.qtyMtr))}
+                                  </Td>
+                                )}
+                                {isVisible("total") && (
+                                  <Td className="num whitespace-nowrap text-right text-ink">
+                                    {line.lineTotal == null
+                                      ? "—"
+                                      : `₹${formatNumber(Number(line.lineTotal))}`}
+                                  </Td>
+                                )}
+                                {isVisible("challan") && <Td />}
+                                {isVisible("lot") && <Td />}
+                                {isVisible("sales") && <Td />}
+                                {isVisible("stages") &&
+                                  line.stages.map((c) => (
+                                    <Td key={c.stageKey} className="text-center">
+                                      <StageChip cell={c} />
+                                    </Td>
+                                  ))}
+                                {isVisible("overall") && (
+                                  <Td>
+                                    <OverallBadge overall={line.overall} />
+                                  </Td>
+                                )}
                               </tr>
                             ))
                           : null}
@@ -738,69 +831,186 @@ function FilterSelect({
   );
 }
 
-function StageChip({ cell }: { cell: StageCell }) {
-  if (cell.state === "done") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-1.5 py-1 text-[11px] font-medium text-success">
-        <CheckIcon className="size-3 shrink-0" />
-        <span className="num">{cell.date ? formatDate(cell.date) : "done"}</span>
-      </span>
-    );
-  }
-  if (cell.state === "in_progress") {
-    // Order-level partial: show how many lines finished (e.g. 3/6).
-    if (cell.totalLines && cell.doneOf != null && cell.doneOf > 0) {
-      return (
-        <span className="num inline-flex rounded-md bg-warning/10 px-1.5 py-1 text-[11px] font-medium text-warning">
-          {cell.doneOf}/{cell.totalLines}
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex rounded-md bg-warning/10 px-1.5 py-1 text-[11px] font-medium text-warning">
-        In progress
-      </span>
-    );
-  }
-  if (cell.state === "overdue") {
-    return (
-      <span className="num inline-flex rounded-md bg-danger/10 px-1.5 py-1 text-[11px] font-medium text-danger">
-        {cell.daysOverdue}d late
-      </span>
-    );
-  }
-  return <span className="text-ink-muted">–</span>;
-}
-
-function ProgressBar({
+// The order's current (bottleneck) stage as a compact badge: a stage-colour dot
+// + stage name, tinted by urgency, with a muted sub-label for the detail. The
+// stock-checking gate wins over the generic overdue/in-progress branches so it
+// always reads "Out of stock" / "Pending", never a date or "In progress".
+function CurrentStageBadge({
   stages,
   currentStageKey,
+  aggregate,
 }: {
   stages: StageCell[];
   currentStageKey: string | null;
+  aggregate?: boolean;
 }) {
-  const doneCount = stages.filter((s) => s.state === "done").length;
+  if (!currentStageKey) {
+    return (
+      <span className="inline-flex rounded-pill bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+        Completed
+      </span>
+    );
+  }
+  const cur = stages.find((s) => s.stageKey === currentStageKey);
+  if (!cur) return <span className="text-ink-muted">—</span>;
+  const label =
+    STAGE_OPTIONS.find((o) => o.key === cur.stageKey)?.label ?? cur.label;
+
+  let tone = "bg-warning/10 text-warning";
+  let sub: string | null = null;
+  if (cur.stageKey === "stock_checking") {
+    // Stock gate wins: never a date / "In progress" (mirrors the drawer + CSV).
+    if (cur.stockStatus === "out_of_stock") {
+      tone = "bg-danger/10 text-danger";
+      sub =
+        aggregate && cur.outOf
+          ? `${cur.outOf} of ${cur.totalLines} out of stock`
+          : "Out of stock";
+    } else {
+      tone = "bg-inset text-ink-muted";
+      sub =
+        aggregate && cur.doneOf
+          ? `${cur.doneOf} of ${cur.totalLines} in stock`
+          : "Pending";
+    }
+  } else if (cur.state === "overdue") {
+    tone = "bg-danger/10 text-danger";
+    sub = cur.daysOverdue > 0 ? `${cur.daysOverdue}d late` : "Overdue";
+  } else if (
+    aggregate &&
+    cur.doneOf != null &&
+    cur.totalLines &&
+    cur.doneOf > 0 &&
+    cur.doneOf < cur.totalLines
+  ) {
+    sub = `${cur.doneOf} of ${cur.totalLines} lines`;
+  }
+
   return (
-    <div
-      role="img"
-      aria-label={`${doneCount} of ${stages.length} stages done`}
-      className="flex min-w-[84px] gap-0.5"
-    >
-      {stages.map((s) => (
+    <div className="min-w-0">
+      <span
+        className={cn(
+          "inline-flex max-w-full items-center gap-1.5 rounded-pill px-2 py-0.5 text-[11px] font-medium",
+          tone,
+        )}
+      >
         <span
-          key={s.stageKey}
-          title={s.label}
           className={cn(
-            "h-1.5 flex-1 rounded-full",
-            s.state === "done"
-              ? "bg-success"
-              : s.stageKey === currentStageKey
-                ? "bg-accent"
-                : "bg-inset",
+            "size-1.5 shrink-0 rounded-full",
+            STAGE_DOT[cur.stageKey] ?? "bg-ink-muted",
           )}
         />
-      ))}
+        <span className="truncate">{label}</span>
+      </span>
+      {sub ? (
+        <div className="mt-0.5 truncate text-[11px] text-ink-muted">{sub}</div>
+      ) : null}
     </div>
+  );
+}
+
+// One stage's status as a compact, colour-coded cell for the 7 per-stage
+// columns. The column header names the stage, so the cell carries only the
+// status; hover shows the date/detail. On a parent (aggregate) row it folds the
+// order's lines (n/m done, or a mixed stock count); on a child row it's that
+// one line. Stock checking follows the In / Out / Pending gate.
+function StageChip({ cell }: { cell: StageCell }) {
+  const tip = cell.date ? ` · ${formatDate(cell.date)}` : "";
+  const total = cell.totalLines ?? 0;
+
+  if (cell.stageKey === "stock_checking") {
+    if (cell.state === "done")
+      return (
+        <StageDot tone="success" title={`In stock${tip}`}>
+          <CheckIcon className="size-3" />
+        </StageDot>
+      );
+    const outOf = cell.outOf ?? 0;
+    const inOf = cell.doneOf ?? 0;
+    const pendOf = Math.max(0, total - inOf - outOf);
+    // Mixed order: compact colour-coded counts (green in · red out · grey pend).
+    if (total > 1 && inOf > 0 && (outOf > 0 || pendOf > 0))
+      return (
+        <span
+          title={`${inOf} in stock · ${outOf} out of stock · ${pendOf} pending`}
+          className="num inline-flex items-center gap-1 text-[11px] font-medium"
+        >
+          {inOf ? <span className="text-success">{inOf}✓</span> : null}
+          {outOf ? <span className="text-danger">{outOf}✕</span> : null}
+          {pendOf ? <span className="text-ink-muted">{pendOf}·</span> : null}
+        </span>
+      );
+    if (outOf > 0 || cell.stockStatus === "out_of_stock")
+      return (
+        <StageDot tone="danger" title="Out of stock">
+          Out
+        </StageDot>
+      );
+    return (
+      <StageDot tone="muted" title="Pending">
+        –
+      </StageDot>
+    );
+  }
+
+  if (cell.state === "done")
+    return (
+      <StageDot tone="success" title={`Done${tip}`}>
+        <CheckIcon className="size-3" />
+      </StageDot>
+    );
+  if (cell.state === "overdue")
+    return (
+      <StageDot tone="danger" title="Overdue">
+        {cell.daysOverdue > 0 ? `${cell.daysOverdue}d` : "!"}
+      </StageDot>
+    );
+  if (cell.state === "in_progress") {
+    if (total > 1 && cell.doneOf)
+      return (
+        <StageDot tone="warning" title={`${cell.doneOf} of ${total} done`}>
+          {cell.doneOf}/{total}
+        </StageDot>
+      );
+    return (
+      <StageDot tone="warning" title="In progress">
+        •
+      </StageDot>
+    );
+  }
+  return (
+    <span className="text-ink-muted" title="Not started">
+      –
+    </span>
+  );
+}
+
+// The little pill used by each per-stage status cell.
+function StageDot({
+  tone,
+  title,
+  children,
+}: {
+  tone: "success" | "danger" | "warning" | "muted";
+  title: string;
+  children: React.ReactNode;
+}) {
+  const cls = {
+    success: "bg-success/10 text-success",
+    danger: "bg-danger/10 text-danger",
+    warning: "bg-warning/10 text-warning",
+    muted: "bg-inset text-ink-muted",
+  }[tone];
+  return (
+    <span
+      title={title}
+      className={cn(
+        "num inline-flex min-w-[26px] items-center justify-center rounded-md px-1 py-0.5 text-[11px] font-medium whitespace-nowrap",
+        cls,
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -826,19 +1036,20 @@ function OrderStatusCard({
         <OverallBadge overall={g.overall} />
       </div>
       <div className="mt-1.5 truncate text-[12px] text-ink-muted">
-        {g.fabrics.join(", ")}
+        {g.fabrics.length} {g.fabrics.length === 1 ? "fabric" : "fabrics"}
       </div>
       <div className="mt-2 flex items-center gap-x-3 text-[12px] text-ink-muted">
         <span className="num">
           {g.designCount} design{g.designCount === 1 ? "" : "s"}
         </span>
         <span className="num">{formatNumber(g.qtyTotal)} mtr</span>
-        <span className="num ml-auto font-medium text-ink-soft">
-          {g.doneCount}/7
-        </span>
       </div>
       <div className="mt-2.5">
-        <ProgressBar stages={g.stages} currentStageKey={g.currentStageKey} />
+        <CurrentStageBadge
+          stages={g.stages}
+          currentStageKey={g.currentStageKey}
+          aggregate
+        />
       </div>
     </button>
   );

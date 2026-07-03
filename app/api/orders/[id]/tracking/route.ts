@@ -66,7 +66,9 @@ export async function GET(_req: Request, { params }: Params) {
       rate: l.rate,
       line_total: l.lineTotal,
       is_cancelled: l.isCancelled,
-      operations_status: computeLineStatus(rows.map((s) => ({ isDone: s.isDone }))),
+      operations_status: computeLineStatus(
+        rows.map((s) => ({ stageKey: s.stageKey, isDone: s.isDone })),
+      ),
       stages: rows.map((s) => ({
         stage_key: s.stageKey,
         label: STAGE_LABELS[s.stageKey as keyof typeof STAGE_LABELS] ?? s.stageKey,

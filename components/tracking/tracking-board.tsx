@@ -62,13 +62,17 @@ type CellState =
 function cellState(
   stage: TrackingStage,
   key: string,
+  orderEntryDone: boolean,
   stockInStock: boolean,
 ): CellState {
   if (stage.is_done)
     return (stage.delay_minutes ?? 0) > 0 ? "done_late" : "done_ontime";
   const isStock = key === "stock_checking";
   if (isStock && stage.stock_status === "out_of_stock") return "out_of_stock";
-  const editable = key === "order_entry" || isStock || stockInStock;
+  // Order entry is the initial step; stock checking unlocks once it's done; the
+  // post-stock stages unlock once stock is In stock.
+  const editable =
+    key === "order_entry" ? true : isStock ? orderEntryDone : stockInStock;
   if (!editable) return "locked";
   const p = stage.planned_at ? new Date(stage.planned_at).getTime() : 0;
   return p && p < Date.now() ? "overdue" : "live";
@@ -83,11 +87,22 @@ type ToggleVars = {
 
 // Client mirrors of computeLineStatus / computeOrderStatus (lib/workflow.ts is
 // server-only — it pulls in the DB pool — so we can't import it here).
-function lineStatusOf(stages: { is_done: boolean }[]): OperationsStatus {
-  const done = stages.filter((s) => s.is_done).length;
-  if (done === 0) return "PENDING";
-  if (done === stages.length) return "COMPLETED";
-  return "PARTIALLY COMPLETED";
+const PROGRESS_STAGE_KEYS = new Set<string>([
+  "rolling_checking",
+  "challan",
+  "bill",
+  "dispatch",
+  "received_lr",
+]);
+function lineStatusOf(
+  stages: { stage_key: string; is_done: boolean }[],
+): OperationsStatus {
+  if (stages.length === 0) return "PENDING";
+  if (stages.every((s) => s.is_done)) return "COMPLETED";
+  const started = stages.some(
+    (s) => s.is_done && PROGRESS_STAGE_KEYS.has(s.stage_key),
+  );
+  return started ? "PARTIALLY COMPLETED" : "PENDING";
 }
 function orderStatusOf(statuses: OperationsStatus[]): OperationsStatus {
   if (statuses.length === 0) return "PENDING";
@@ -200,6 +215,18 @@ const LEGEND: { state: CellState; label: string; hint: string }[] = [
   },
 ];
 
+// Resulting-status label + tone for the un-check confirm dialog.
+const STATUS_LABEL: Record<OperationsStatus, string> = {
+  PENDING: "Pending",
+  "PARTIALLY COMPLETED": "Partially completed",
+  COMPLETED: "Completed",
+};
+const STATUS_TONE: Record<OperationsStatus, string> = {
+  PENDING: "text-ink-soft",
+  "PARTIALLY COMPLETED": "text-warning",
+  COMPLETED: "text-success",
+};
+
 export function TrackingBoard({
   orderId,
   caps,
@@ -224,6 +251,17 @@ export function TrackingBoard({
     lineId: string;
     stockStatus: StockStatus | null;
     label: string;
+  } | null>(null);
+  // Un-checking a stage while LATER stages are still done → confirm + flag which
+  // ones. Those stages stay done (no cascade); the line stays Partially completed.
+  const [stageWarn, setStageWarn] = React.useState<{
+    lineId: string;
+    stageKey: string;
+    checked: boolean;
+    label: string;
+    stageLabel: string;
+    laterLabels: string[];
+    resultStatus: OperationsStatus;
   } | null>(null);
 
   const tracking = useQuery({
@@ -363,10 +401,10 @@ export function TrackingBoard({
       const isDone = byKey.get(stageKey)?.is_done ?? false;
       if (isDone) anyDone += 1;
       const stockInStock = byKey.get("stock_checking")?.is_done ?? false;
+      const orderEntryDone = byKey.get("order_entry")?.is_done ?? false;
       const canComplete =
         stageKey === "order_entry" ||
-        stageKey === "stock_checking" ||
-        stockInStock;
+        (stageKey === "stock_checking" ? orderEntryDone : stockInStock);
       if (canComplete || isDone) {
         inPlay += 1;
         if (isDone) inPlayDone += 1;
@@ -389,10 +427,10 @@ export function TrackingBoard({
       if (checked) {
         if (isDoneNow) continue;
         const stockInStock = byKey.get("stock_checking")?.is_done ?? false;
+        const orderEntryDone = byKey.get("order_entry")?.is_done ?? false;
         const editable =
           stageKey === "order_entry" ||
-          stageKey === "stock_checking" ||
-          stockInStock;
+          (stageKey === "stock_checking" ? orderEntryDone : stockInStock);
         if (editable) targets.push(line);
         else skipped += 1;
       } else {
@@ -460,6 +498,47 @@ export function TrackingBoard({
       return;
     }
     applyStock(line.id, stockStatus);
+  }
+
+  function applyToggle(lineId: string, stageKey: string, checked: boolean) {
+    lastToggledLineId.current = lineId;
+    toggle.mutate({ lineId, stageKey, checked });
+  }
+  // Un-checking (checked=false) a stage that still has LATER stages marked done
+  // → confirm first, flagging which ones. Completing (checked=true) is direct.
+  function requestToggle(
+    line: TrackingLine,
+    stageKey: string,
+    checked: boolean,
+  ) {
+    if (!checked) {
+      const idx = t.stage_keys.indexOf(stageKey);
+      const laterDone = line.stages.filter(
+        (s) => t.stage_keys.indexOf(s.stage_key) > idx && s.is_done,
+      );
+      if (laterDone.length > 0) {
+        setStageWarn({
+          lineId: line.id,
+          stageKey,
+          checked,
+          label: `${line.quality} · ${line.design_no}`,
+          stageLabel:
+            line.stages.find((s) => s.stage_key === stageKey)?.label ??
+            stageKey,
+          laterLabels: laterDone.map((s) => s.label),
+          // The real resulting status: un-checking this stage leaves the later
+          // ones done, so it's PARTIALLY only if a post-stock stage is done —
+          // else (only stock done) it drops to PENDING.
+          resultStatus: lineStatusOf(
+            line.stages.map((s) =>
+              s.stage_key === stageKey ? { ...s, is_done: checked } : s,
+            ),
+          ),
+        });
+        return;
+      }
+    }
+    applyToggle(line.id, stageKey, checked);
   }
 
   return (
@@ -558,14 +637,9 @@ export function TrackingBoard({
                 stageKeys={t.stage_keys}
                 canEdit={canEdit}
                 pending={pending}
-                onToggle={(stageKey, checked) => {
-                  lastToggledLineId.current = selectedMobileLine.id;
-                  toggle.mutate({
-                    lineId: selectedMobileLine.id,
-                    stageKey,
-                    checked,
-                  });
-                }}
+                onToggle={(stageKey, checked) =>
+                  requestToggle(selectedMobileLine, stageKey, checked)
+                }
                 onStock={(stockStatus) =>
                   requestStock(selectedMobileLine, stockStatus)
                 }
@@ -645,7 +719,7 @@ export function TrackingBoard({
                         canEdit={canEdit}
                         pending={pending}
                         onToggle={(stageKey, checked) =>
-                          toggle.mutate({ lineId: line.id, stageKey, checked })
+                          requestToggle(line, stageKey, checked)
                         }
                         onStock={(stockStatus) =>
                           requestStock(line, stockStatus)
@@ -702,6 +776,65 @@ export function TrackingBoard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Un-check a stage that still has later stages done → confirm + flag. */}
+      <Dialog
+        open={!!stageWarn}
+        onOpenChange={(open) => {
+          if (!open) setStageWarn(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Un-check {stageWarn?.stageLabel}?</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-ink">{stageWarn?.label}</span>{" "}
+              still has{" "}
+              {stageWarn && stageWarn.laterLabels.length > 1
+                ? "later stages"
+                : "a later stage"}{" "}
+              marked done —{" "}
+              <span className="font-medium text-ink">
+                {stageWarn?.laterLabels.join(", ")}
+              </span>
+              . Un-checking{" "}
+              <span className="font-medium text-ink">
+                {stageWarn?.stageLabel}
+              </span>{" "}
+              leaves{" "}
+              {stageWarn && stageWarn.laterLabels.length > 1 ? "those" : "that"}{" "}
+              done, so this line stays{" "}
+              <span
+                className={cn(
+                  "font-medium",
+                  STATUS_TONE[stageWarn?.resultStatus ?? "PENDING"],
+                )}
+              >
+                {STATUS_LABEL[stageWarn?.resultStatus ?? "PENDING"]}
+              </span>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStageWarn(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (stageWarn)
+                  applyToggle(
+                    stageWarn.lineId,
+                    stageWarn.stageKey,
+                    stageWarn.checked,
+                  );
+                setStageWarn(null);
+              }}
+            >
+              Un-check anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -722,8 +855,8 @@ function LineRow({
   onStock: (status: StockStatus | null) => void;
 }) {
   const stageByKey = new Map(line.stages.map((s) => [s.stage_key, s]));
-  // Stock-only gating: stages after stock checking unlock once stock is In stock.
   const stockInStock = stageByKey.get("stock_checking")?.is_done ?? false;
+  const orderEntryDone = stageByKey.get("order_entry")?.is_done ?? false;
   const doneCount = line.stages.filter((s) => s.is_done).length;
 
   return (
@@ -750,14 +883,15 @@ function LineRow({
       {stageKeys.map((key) => {
         const stage = stageByKey.get(key);
         if (!stage) return <td key={key} className="px-2.5 py-3" />;
-        const state = cellState(stage, key, stockInStock);
-        // Editable: order entry + stock always; stages after stock once In
-        // stock; plus any already-done cell so it can be un-checked.
+        const state = cellState(stage, key, orderEntryDone, stockInStock);
+        // Editable: order entry always; stock checking once order entry is done;
+        // post-stock stages once stock is In stock; plus any done cell to un-tick.
         const editable =
-          key === "order_entry" ||
-          key === "stock_checking" ||
-          stockInStock ||
-          stage.is_done;
+          key === "order_entry"
+            ? true
+            : key === "stock_checking"
+              ? orderEntryDone
+              : stockInStock || stage.is_done;
         return (
           <StageCell
             key={key}
@@ -953,8 +1087,8 @@ function MobileLineCard({
   onStock: (status: StockStatus | null) => void;
 }) {
   const stageByKey = new Map(line.stages.map((s) => [s.stage_key, s]));
-  // Same stock-only gating as the desktop row.
   const stockInStock = stageByKey.get("stock_checking")?.is_done ?? false;
+  const orderEntryDone = stageByKey.get("order_entry")?.is_done ?? false;
   const doneCount = line.stages.filter((s) => s.is_done).length;
 
   return (
@@ -978,12 +1112,13 @@ function MobileLineCard({
         {stageKeys.map((key) => {
           const stage = stageByKey.get(key);
           if (!stage) return null;
-          const state = cellState(stage, key, stockInStock);
+          const state = cellState(stage, key, orderEntryDone, stockInStock);
           const editable =
-            key === "order_entry" ||
-            key === "stock_checking" ||
-            stockInStock ||
-            stage.is_done;
+            key === "order_entry"
+              ? true
+              : key === "stock_checking"
+                ? orderEntryDone
+                : stockInStock || stage.is_done;
           return (
             <MobileStageRow
               key={key}

@@ -91,8 +91,8 @@ export function TrackingIndex() {
     try {
       const all = await apiGet<OrdersList>(`/api/orders?${buildParams({ all: "1" })}`);
       const header = [
-        "Date",
         "Order no",
+        "Date",
         "Party",
         "Haste",
         "Agent",
@@ -105,8 +105,8 @@ export function TrackingIndex() {
         "Status",
       ];
       const body = all.orders.map((o) => [
-        o.order_date,
         o.order_no,
+        o.order_date,
         o.party_name,
         o.haste ?? "",
         o.agent ?? "",
@@ -201,8 +201,8 @@ export function TrackingIndex() {
                 <table className="w-full text-left text-sm text-ink">
                   <THead>
                     <tr>
-                      <Th>Date</Th>
                       <Th>Order no</Th>
+                      <Th>Date</Th>
                       <Th>Party</Th>
                       <Th>Haste</Th>
                       <Th>Agent</Th>
@@ -223,11 +223,11 @@ export function TrackingIndex() {
                         onClick={() => router.push(`/tracking/${o.id}`)}
                         className="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-2"
                       >
-                        <td className="num px-3 py-2 whitespace-nowrap">
-                          {o.order_date}
-                        </td>
                         <td className="px-3 py-2 font-medium whitespace-nowrap">
                           {o.order_no}
+                        </td>
+                        <td className="num px-3 py-2 whitespace-nowrap">
+                          {o.order_date}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {o.party_name}
