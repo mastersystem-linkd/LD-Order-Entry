@@ -13,6 +13,7 @@ import {
   buildInitialStageRows,
   computeLineStatus,
   computeOrderStatus,
+  isOrderCancelled,
   lineMatchKey,
 } from "@/lib/workflow";
 import {
@@ -90,8 +91,13 @@ export async function GET(_req: Request, { params }: Params) {
   }
 
   const active = lineOut.filter((l) => !l.is_cancelled);
-  const qty_total = active.reduce((s, l) => s + Number(l.qty_mtr), 0);
-  const grand_total = active.reduce((s, l) => s + Number(l.line_total ?? 0), 0);
+  const cancelledLines = lineOut.length - active.length;
+  const orderCancelled = isOrderCancelled(lineOut.length, cancelledLines);
+  // Fully cancelled → no active lines; show all lines' totals so the header
+  // isn't ₹0. Otherwise totals are over active lines only.
+  const shown = orderCancelled ? lineOut : active;
+  const qty_total = shown.reduce((s, l) => s + Number(l.qty_mtr), 0);
+  const grand_total = shown.reduce((s, l) => s + Number(l.line_total ?? 0), 0);
 
   return jsonData({
     order: {
@@ -115,7 +121,12 @@ export async function GET(_req: Request, { params }: Params) {
     lines: lineOut,
     qty_total: Number(qty_total.toFixed(2)),
     grand_total: Number(grand_total.toFixed(2)),
-    operations_status: computeOrderStatus(active.map((l) => l.operations_status)),
+    operations_status: orderCancelled
+      ? ("CANCELLED" as const)
+      : computeOrderStatus(active.map((l) => l.operations_status)),
+    is_order_cancelled: orderCancelled,
+    total_line_count: lineOut.length,
+    cancelled_line_count: cancelledLines,
   });
 }
 

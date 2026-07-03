@@ -62,6 +62,15 @@ export const stageToggleSchema = z.object({
 
 export type StageTogglePayload = z.infer<typeof stageToggleSchema>;
 
+// PATCH /api/orders/:id/cancel — cancel/restore one design (line_id) or the
+// whole order (line_id omitted). Reversible via `cancelled`.
+export const cancelOrderSchema = z.object({
+  line_id: z.string().uuid("line_id must be a UUID").optional().nullable(),
+  cancelled: z.boolean(),
+});
+
+export type CancelOrderPayload = z.infer<typeof cancelOrderSchema>;
+
 // ---- OE-P5 Settings / master data ----
 
 export const lookupCreateSchema = z.object({

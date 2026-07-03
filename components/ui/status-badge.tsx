@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 export type OperationsStatus =
   | "COMPLETED"
   | "PARTIALLY COMPLETED"
-  | "PENDING";
+  | "PENDING"
+  | "CANCELLED";
 
 // Reference style (SOS / FlowMail): a soft tinted pill with a colored status dot.
 const STATUS: Record<
@@ -25,6 +26,11 @@ const STATUS: Record<
     label: "Pending",
     pill: "bg-inset text-ink-soft",
     dot: "bg-ink-muted",
+  },
+  CANCELLED: {
+    label: "Cancelled",
+    pill: "bg-danger/10 text-danger",
+    dot: "bg-danger",
   },
 };
 

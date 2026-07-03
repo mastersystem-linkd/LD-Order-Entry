@@ -35,6 +35,7 @@ export async function GET(_req: Request, { params }: Params) {
       fabric: orderLineItems.quality,
       design: orderLineItems.designNo,
       qtyMtr: orderLineItems.qtyMtr,
+      isCancelled: orderLineItems.isCancelled,
     })
     .from(orderLineItems)
     .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
@@ -82,7 +83,12 @@ export async function GET(_req: Request, { params }: Params) {
       department: line.department,
       remarks: line.remarks,
     },
-    line: { fabric: line.fabric, design: line.design, qtyMtr: line.qtyMtr },
+    line: {
+      fabric: line.fabric,
+      design: line.design,
+      qtyMtr: line.qtyMtr,
+      isCancelled: line.isCancelled,
+    },
     stages: c.detailStages,
     doneCount: c.doneCount,
     currentStageKey: c.currentStageKey,

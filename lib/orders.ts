@@ -18,11 +18,19 @@ export type OrderRow = {
   lot_no: string | null;
   department: string | null;
   fabrics: string[];
-  line_count: number;
+  line_count: number; // active (non-cancelled) designs
+  total_line_count: number; // all designs incl cancelled
+  cancelled_line_count: number;
   qty_total: number;
   grand_total: number;
   operations_status: OperationsStatus;
   created_at: string;
+};
+
+export type OrdersCancelSummary = {
+  fully_cancelled_orders: number;
+  orders_with_any_cancelled: number;
+  cancelled_designs: number;
 };
 
 export type OrdersList = {
@@ -31,6 +39,8 @@ export type OrdersList = {
   page_size: number;
   total: number;
   total_pages: number;
+  // All-pages cancellation counts (for the "Cancelled" KPI).
+  summary?: OrdersCancelSummary;
 };
 
 // Fabric block as reconstructed by GET /api/orders/:id and posted back on save.
@@ -74,6 +84,9 @@ export type OrderDetail = {
   qty_total: number;
   grand_total: number;
   operations_status: OperationsStatus;
+  is_order_cancelled: boolean;
+  total_line_count: number;
+  cancelled_line_count: number;
 };
 
 // ---- OE-P3 operations tracking ----

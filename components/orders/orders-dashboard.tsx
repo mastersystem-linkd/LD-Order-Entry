@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BanIcon,
   CheckIcon,
   ClipboardListIcon,
   ClockIcon,
@@ -14,10 +15,12 @@ import {
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
+  RotateCcwIcon,
   RouteIcon,
   SearchIcon,
   SlidersHorizontalIcon,
   Trash2Icon,
+  XCircleIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +28,7 @@ import { apiGet, apiSend } from "@/lib/api-client";
 import { formatNumber, type OrderRow, type OrdersList } from "@/lib/orders";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { cn } from "@/lib/utils";
 import { hasCap, type Capability } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +67,7 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
     React.useState<OrderFilterState>(EMPTY_ORDER_FILTERS);
   const [exporting, setExporting] = React.useState(false);
   const [toDelete, setToDelete] = React.useState<OrderRow | null>(null);
+  const [toCancel, setToCancel] = React.useState<OrderRow | null>(null);
   const [selected, setSelected] = React.useState<OrderRow | null>(null);
   const debouncedFilters = useDebouncedValue(filters, 300);
 
@@ -102,6 +107,29 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
     },
   });
 
+  // Whole-order cancel/restore (toggles every design line). Restore is immediate;
+  // cancel goes through a confirm dialog (setToCancel).
+  const cancelOrder = useMutation({
+    mutationFn: (vars: { id: string; cancelled: boolean }) =>
+      apiSend(`/api/orders/${vars.id}/cancel`, "PATCH", {
+        line_id: null,
+        cancelled: vars.cancelled,
+      }),
+    onSuccess: (_res, vars) => {
+      toast.success(vars.cancelled ? "Order cancelled." : "Order restored.");
+      setToCancel(null);
+      setSelected(null);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order", vars.id] });
+      queryClient.invalidateQueries({ queryKey: ["order-status"] });
+      queryClient.invalidateQueries({ queryKey: ["tracking", vars.id] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setToCancel(null);
+    },
+  });
+
   function applySearch(e: React.FormEvent) {
     e.preventDefault();
     setPage(1);
@@ -122,6 +150,7 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
         "Agent",
         "Fabrics",
         "Designs",
+        "Cancelled",
         "Qty",
         "Total Amount",
         "Challan",
@@ -135,7 +164,10 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
         o.haste ?? "",
         o.agent ?? "",
         o.fabrics.join(" | "),
-        o.line_count,
+        o.operations_status === "CANCELLED"
+          ? o.total_line_count
+          : o.line_count,
+        o.cancelled_line_count,
         o.qty_total,
         o.grand_total,
         o.challan_no ?? "",
@@ -168,9 +200,9 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* KPIs — 2 per row on mobile, 4 across on desktop */}
+      {/* KPIs — 2 per row on mobile, 5 across on desktop */}
       <Reveal index={0}>
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
           <MiniStat
             tone="indigo"
             icon={<ClipboardListIcon />}
@@ -198,6 +230,19 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
             label="Pending"
             value={data ? String(pendingOnPage) : "—"}
             sub="This page"
+          />
+          <MiniStat
+            tone="rose"
+            icon={<XCircleIcon />}
+            label="Cancelled"
+            value={
+              data ? String(data.summary?.fully_cancelled_orders ?? 0) : "—"
+            }
+            sub={
+              data
+                ? `${data.summary?.cancelled_designs ?? 0} designs · all pages`
+                : undefined
+            }
           />
         </div>
       </Reveal>
@@ -309,12 +354,17 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                   </tr>
                 </THead>
                 <tbody>
-                  {rows.map((o) => (
+                  {rows.map((o) => {
+                    const cancelled = o.operations_status === "CANCELLED";
+                    const struck = cancelled
+                      ? "text-ink-muted line-through"
+                      : "";
+                    return (
                     <tr
                       key={o.id}
                       className="border-b border-line transition-colors last:border-0 hover:bg-surface-2"
                     >
-                      <Td className="font-medium">
+                      <Td className={cn("font-medium", struck)}>
                         <Link
                           href={`/orders/${o.id}`}
                           className="hover:text-accent hover:underline"
@@ -322,24 +372,39 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                           {o.order_no}
                         </Link>
                       </Td>
-                      <Td className="num whitespace-nowrap text-ink">
+                      <Td className={cn("num whitespace-nowrap text-ink", struck)}>
                         {o.order_date}
                       </Td>
-                      <Td>{o.party_name}</Td>
-                      <Td>{o.haste ?? "—"}</Td>
-                      <Td>{o.agent ?? "—"}</Td>
-                      <Td className="min-w-[160px] whitespace-normal text-ink">
+                      <Td className={struck}>{o.party_name}</Td>
+                      <Td className={struck}>{o.haste ?? "—"}</Td>
+                      <Td className={struck}>{o.agent ?? "—"}</Td>
+                      <Td
+                        className={cn(
+                          "min-w-[160px] whitespace-normal text-ink",
+                          struck,
+                        )}
+                      >
                         {o.fabrics.length ? o.fabrics.join(", ") : "—"}
                       </Td>
-                      <Td className="num text-right">{o.line_count}</Td>
-                      <Td className="num text-right">
+                      <Td className={cn("num text-right", struck)}>
+                        {cancelled ? o.total_line_count : o.line_count}
+                        {!cancelled && o.cancelled_line_count > 0 ? (
+                          <span
+                            className="ml-1 text-[11px] font-medium text-danger"
+                            title={`${o.cancelled_line_count} cancelled`}
+                          >
+                            +{o.cancelled_line_count}
+                          </span>
+                        ) : null}
+                      </Td>
+                      <Td className={cn("num text-right", struck)}>
                         {formatNumber(o.qty_total)}
                       </Td>
-                      <Td className="num text-right">
+                      <Td className={cn("num text-right", struck)}>
                         ₹{formatNumber(o.grand_total)}
                       </Td>
-                      <Td>{o.challan_no ?? "—"}</Td>
-                      <Td>{o.lot_no ?? "—"}</Td>
+                      <Td className={struck}>{o.challan_no ?? "—"}</Td>
+                      <Td className={struck}>{o.lot_no ?? "—"}</Td>
                       <Td>
                         <StatusBadge status={o.operations_status} />
                       </Td>
@@ -365,6 +430,36 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                             />
                           ) : null}
                           {canEdit ? (
+                            cancelled ? (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Restore order"
+                                title="Restore order"
+                                disabled={cancelOrder.isPending}
+                                onClick={() =>
+                                  cancelOrder.mutate({
+                                    id: o.id,
+                                    cancelled: false,
+                                  })
+                                }
+                              >
+                                <RotateCcwIcon />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Cancel order"
+                                title="Cancel order"
+                                className="text-danger hover:bg-danger/10 hover:text-danger"
+                                onClick={() => setToCancel(o)}
+                              >
+                                <BanIcon />
+                              </Button>
+                            )
+                          ) : null}
+                          {canEdit ? (
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -378,7 +473,8 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                         </div>
                       </Td>
                     </tr>
-                  ))}
+                    );
+                  })}
                     </tbody>
                   </table>
                 </div>
@@ -461,6 +557,55 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
         </DialogContent>
       </Dialog>
 
+      {/* Cancel-order confirmation (restore is immediate) */}
+      <Dialog
+        open={!!toCancel}
+        onOpenChange={(open) => {
+          if (!open) setToCancel(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel order?</DialogTitle>
+            <DialogDescription>
+              Cancel order{" "}
+              <span className="font-medium text-ink">
+                {toCancel?.order_no}
+              </span>{" "}
+              and all its designs? They stay on record (struck through) and are
+              excluded from totals and operations. You can restore later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setToCancel(null)}
+              disabled={cancelOrder.isPending}
+            >
+              Keep
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                toCancel &&
+                cancelOrder.mutate({ id: toCancel.id, cancelled: true })
+              }
+              disabled={cancelOrder.isPending}
+            >
+              {cancelOrder.isPending ? (
+                <>
+                  <Spinner /> Cancelling…
+                </>
+              ) : (
+                <>
+                  <BanIcon /> Cancel order
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Order detail — mobile quick-view popup */}
       <Dialog
         open={!!selected}
@@ -499,9 +644,20 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
               <DetailItem term="Lot no" value={selected.lot_no ?? "—"} mono />
               <DetailItem
                 term="Designs"
-                value={String(selected.line_count)}
+                value={String(
+                  selected.operations_status === "CANCELLED"
+                    ? selected.total_line_count
+                    : selected.line_count,
+                )}
                 mono
               />
+              {selected.cancelled_line_count > 0 ? (
+                <DetailItem
+                  term="Cancelled designs"
+                  value={String(selected.cancelled_line_count)}
+                  mono
+                />
+              ) : null}
               <DetailItem
                 term="Total qty"
                 value={`${formatNumber(selected.qty_total)} mtr`}
@@ -548,6 +704,33 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
               >
                 <RouteIcon /> Track
               </Button>
+            ) : null}
+            {selected && canEdit ? (
+              selected.operations_status === "CANCELLED" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={cancelOrder.isPending}
+                  onClick={() =>
+                    cancelOrder.mutate({ id: selected.id, cancelled: false })
+                  }
+                >
+                  <RotateCcwIcon /> Restore
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-danger hover:bg-danger/10 hover:text-danger"
+                  onClick={() => {
+                    const o = selected;
+                    setSelected(null);
+                    setToCancel(o);
+                  }}
+                >
+                  <BanIcon /> Cancel
+                </Button>
+              )
             ) : null}
             {selected && canEdit ? (
               <Button
@@ -611,16 +794,18 @@ function MiniStat({
   label: string;
   value: React.ReactNode;
   sub?: string;
-  tone: "indigo" | "green" | "amber" | "slate";
+  tone: "indigo" | "green" | "amber" | "slate" | "rose";
 }) {
   const tile =
     tone === "green"
       ? "bg-success/10 text-success"
       : tone === "amber"
         ? "bg-warning/10 text-warning"
-        : tone === "slate"
-          ? "bg-inset text-ink-soft"
-          : "bg-accent/10 text-accent";
+        : tone === "rose"
+          ? "bg-danger/10 text-danger"
+          : tone === "slate"
+            ? "bg-inset text-ink-soft"
+            : "bg-accent/10 text-accent";
   return (
     <div className="flex items-center gap-2.5 rounded-card border border-line bg-surface p-2.5 shadow-sm">
       <span
@@ -644,6 +829,8 @@ function MiniStat({
 }
 
 function OrderCard({ o, onOpen }: { o: OrderRow; onOpen: () => void }) {
+  const cancelled = o.operations_status === "CANCELLED";
+  const designs = cancelled ? o.total_line_count : o.line_count;
   return (
     <button
       type="button"
@@ -652,8 +839,20 @@ function OrderCard({ o, onOpen }: { o: OrderRow; onOpen: () => void }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="num font-semibold text-ink">{o.order_no}</div>
-          <div className="truncate text-[13px] text-ink-soft">
+          <div
+            className={cn(
+              "num font-semibold text-ink",
+              cancelled && "text-ink-muted line-through",
+            )}
+          >
+            {o.order_no}
+          </div>
+          <div
+            className={cn(
+              "truncate text-[13px] text-ink-soft",
+              cancelled && "line-through",
+            )}
+          >
             {o.party_name}
           </div>
         </div>
@@ -662,8 +861,13 @@ function OrderCard({ o, onOpen }: { o: OrderRow; onOpen: () => void }) {
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
         <span className="num">{o.order_date}</span>
         <span className="num">
-          {o.line_count} design{o.line_count === 1 ? "" : "s"}
+          {designs} design{designs === 1 ? "" : "s"}
         </span>
+        {!cancelled && o.cancelled_line_count > 0 ? (
+          <span className="num text-danger">
+            {o.cancelled_line_count} cancelled
+          </span>
+        ) : null}
         <span className="num">{formatNumber(o.qty_total)} mtr</span>
         <span className="num ml-auto text-[14px] font-semibold text-ink">
           ₹{formatNumber(o.grand_total)}

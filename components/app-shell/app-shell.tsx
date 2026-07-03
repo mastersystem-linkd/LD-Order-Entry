@@ -58,7 +58,7 @@ export function AppShell({
           onToggleSidebar={toggle}
           onOpenMobileNav={() => setMobileNavOpen(true)}
         />
-        <main className="w-full flex-1 px-4 py-4 sm:px-5 sm:py-5 lg:px-7">
+        <main className="w-full flex-1 px-4 py-3 sm:px-5 sm:py-4 lg:px-7">
           {children}
         </main>
         <Footer />

@@ -220,11 +220,13 @@ const STATUS_LABEL: Record<OperationsStatus, string> = {
   PENDING: "Pending",
   "PARTIALLY COMPLETED": "Partially completed",
   COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
 };
 const STATUS_TONE: Record<OperationsStatus, string> = {
   PENDING: "text-ink-soft",
   "PARTIALLY COMPLETED": "text-warning",
   COMPLETED: "text-success",
+  CANCELLED: "text-danger",
 };
 
 export function TrackingBoard({
@@ -500,6 +502,32 @@ export function TrackingBoard({
     applyStock(line.id, stockStatus);
   }
 
+  // Carry-forward: setting the FIRST row's stock to In stock fills every other
+  // still-pending line (order entry done, not yet decided) with In stock too —
+  // the common "all fabrics in stock" case. Out-of-stock lines are left as-is,
+  // and later per-row changes only affect their own row.
+  function carryStockInStock() {
+    const targets = active.filter((l) => {
+      const stock = l.stages.find((s) => s.stage_key === "stock_checking");
+      if (!stock || stock.is_done) return false; // already In stock
+      if (stock.stock_status === "out_of_stock") return false; // keep explicit Out
+      return (
+        l.stages.find((s) => s.stage_key === "order_entry")?.is_done ?? false
+      );
+    });
+    targets.forEach((l) =>
+      toggle.mutate({
+        lineId: l.id,
+        stageKey: "stock_checking",
+        checked: true,
+        stockStatus: "in_stock",
+      }),
+    );
+    if (targets.length > 1) {
+      toast.success(`In stock applied to ${targets.length} lines.`);
+    }
+  }
+
   function applyToggle(lineId: string, stageKey: string, checked: boolean) {
     lastToggledLineId.current = lineId;
     toggle.mutate({ lineId, stageKey, checked });
@@ -711,7 +739,7 @@ export function TrackingBoard({
                     </tr>
                   </thead>
                   <tbody>
-                    {active.map((line) => (
+                    {active.map((line, i) => (
                       <LineRow
                         key={line.id}
                         line={line}
@@ -722,7 +750,9 @@ export function TrackingBoard({
                           requestToggle(line, stageKey, checked)
                         }
                         onStock={(stockStatus) =>
-                          requestStock(line, stockStatus)
+                          i === 0 && stockStatus === "in_stock"
+                            ? carryStockInStock()
+                            : requestStock(line, stockStatus)
                         }
                       />
                     ))}

@@ -143,8 +143,20 @@ export function StatusDrawer({
           <div className="min-w-0 flex-1">
             {d ? (
               <>
-                <div className="truncate font-display text-[15px] font-semibold text-ink">
-                  {d.order.party} · {d.line.fabric}
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "truncate font-display text-[15px] font-semibold text-ink",
+                      d.line.isCancelled && "text-ink-muted line-through",
+                    )}
+                  >
+                    {d.order.party} · {d.line.fabric}
+                  </div>
+                  {d.line.isCancelled ? (
+                    <span className="inline-flex shrink-0 rounded-pill bg-danger/10 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-danger">
+                      Cancelled
+                    </span>
+                  ) : null}
                 </div>
                 <div className="num truncate text-xs text-ink-soft">
                   {d.order.orderNo} · {d.line.design}

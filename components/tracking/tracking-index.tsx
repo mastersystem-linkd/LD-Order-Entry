@@ -53,13 +53,12 @@ export function TrackingIndex() {
   const debouncedFilters = useDebouncedValue(filters, 300);
   const debouncedSearch = useDebouncedValue(searchInput, 300);
 
-  // Shared /api/orders query string for the operations view (only orders that
-  // already have a challan + lot are trackable).
+  // Shared /api/orders query string for the operations view. Every order is
+  // trackable as soon as it's entered — challan + lot are optional.
   const buildParams = React.useCallback(
     (extra?: Record<string, string>) => {
       const p = new URLSearchParams();
       if (search) p.set("search", search);
-      p.set("require_challan_lot", "1");
       appendOrderFilterParams(p, debouncedFilters);
       for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v);
       return p;

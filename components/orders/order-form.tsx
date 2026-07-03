@@ -8,6 +8,7 @@ import { CheckIcon, ClipboardListIcon, PlusIcon, Trash2Icon } from "lucide-react
 import { toast } from "sonner";
 
 import { apiGet, apiSend } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { formatNumber, type OrderDetail } from "@/lib/orders";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,19 @@ const blankHeader = (): HeaderState => ({
 
 type DupStatus = "idle" | "checking" | "available" | "taken" | "error";
 
+// Column template shared by the design-row header and the rows so the two can
+// never drift apart. The action column is narrow on mobile (remove only) and
+// widens on sm+ where the per-row add (+) button also shows — keeping the
+// design input from getting squeezed on small screens.
+const DESIGN_ROW_COLS =
+  "grid-cols-[minmax(0,1fr)_4rem_5.5rem_2.5rem] sm:grid-cols-[minmax(0,1fr)_4rem_5.5rem_4.5rem]";
+// Guard-rail so a fat-fingered bulk count can't spawn thousands of rows.
+const MAX_BULK_DESIGNS = 100;
+// localStorage key for the in-progress "new order" draft, so a refresh (or an
+// accidental tab close) never loses typed-in data. Bump the suffix if the
+// draft shape ever changes. Create mode only — edit mode reloads from the DB.
+const NEW_ORDER_DRAFT_KEY = "oe:new-order-draft:v1";
+
 // Live money / qty figures — signature effect #4 (NumberFlow), mono tabular.
 function Money({ value }: { value: number }) {
   return (
@@ -100,6 +114,62 @@ export function OrderForm({
   const [originalOrderNo, setOriginalOrderNo] = React.useState<string>("");
   const [formError, setFormError] = React.useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = React.useState(false);
+
+  // After adding design rows we focus the first new row's Design-no input so the
+  // user can keep typing without reaching for the mouse. The input is located by
+  // its block-scoped aria-label once the new row has rendered.
+  const [pendingFocus, setPendingFocus] = React.useState<{
+    bi: number;
+    di: number;
+  } | null>(null);
+  React.useEffect(() => {
+    if (!pendingFocus) return;
+    const { bi, di } = pendingFocus;
+    const el = document.querySelector<HTMLInputElement>(
+      `[data-fabric-block="${bi}"] [aria-label="Design no, row ${di + 1}"]`,
+    );
+    el?.focus();
+    setPendingFocus(null);
+  }, [pendingFocus, blocks]);
+
+  // ---- Draft autosave (create mode) ----
+  // Restore any saved draft on mount, then persist every change so a hard
+  // refresh keeps the typed-in data. `draftReady` gates persistence until the
+  // restore pass has run, so we never overwrite the saved draft with the blank
+  // initial state. (It's a state, not a ref, so the persist effect sees `false`
+  // on its first pass in the same commit as the restore.)
+  const [draftReady, setDraftReady] = React.useState(false);
+  React.useEffect(() => {
+    if (mode !== "create") {
+      setDraftReady(true);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(NEW_ORDER_DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw) as {
+          header?: HeaderState;
+          blocks?: FabricBlockState[];
+        };
+        if (d?.header) setHeader(d.header);
+        if (Array.isArray(d?.blocks) && d.blocks.length) setBlocks(d.blocks);
+      }
+    } catch {
+      // Corrupt/unavailable draft → start fresh.
+    }
+    setDraftReady(true);
+  }, [mode]);
+  React.useEffect(() => {
+    if (!draftReady || mode !== "create") return;
+    try {
+      localStorage.setItem(
+        NEW_ORDER_DRAFT_KEY,
+        JSON.stringify({ header, blocks }),
+      );
+    } catch {
+      // Ignore quota/privacy-mode failures — the draft just won't persist.
+    }
+  }, [draftReady, mode, header, blocks]);
 
   // Autocomplete sources.
   const parties = useLookup("PARTY").data ?? [];
@@ -182,22 +252,64 @@ export function OrderForm({
       ),
     );
   }
+  // New designs inherit the block's qty (the first row's value) so the common
+  // case — all designs share a qty — needs no re-typing.
+  const inheritedQty = (b: FabricBlockState) => b.designs[0]?.qty_mtr ?? "";
+
   function addDesign(bi: number) {
+    const last = blocks[bi]?.designs.length ?? 0;
     setBlocks((bs) =>
       bs.map((b, idx) =>
         idx === bi
           ? {
               ...b,
-              // New design inherits the block's qty (the first row's value) so
-              // the common case — all designs same qty — needs no re-typing.
               designs: [
                 ...b.designs,
-                { design_no: "", qty_mtr: b.designs[0]?.qty_mtr ?? "" },
+                { design_no: "", qty_mtr: inheritedQty(b) },
               ],
             }
           : b,
       ),
     );
+    setPendingFocus({ bi, di: last });
+  }
+  // Insert a blank design directly below row `di` and focus it — used by the
+  // per-row + button and by pressing Enter inside a design row.
+  function insertDesignAfter(bi: number, di: number) {
+    setBlocks((bs) =>
+      bs.map((b, idx) => {
+        if (idx !== bi) return b;
+        const designs = [...b.designs];
+        designs.splice(di + 1, 0, {
+          design_no: "",
+          qty_mtr: inheritedQty(b),
+        });
+        return { ...b, designs };
+      }),
+    );
+    setPendingFocus({ bi, di: di + 1 });
+  }
+  // Append `count` blank designs at once (the "add 5 rows" shortcut).
+  function addManyDesigns(bi: number, count: number) {
+    const n = Math.min(Math.max(Math.floor(count), 1), MAX_BULK_DESIGNS);
+    const start = blocks[bi]?.designs.length ?? 0;
+    setBlocks((bs) =>
+      bs.map((b, idx) =>
+        idx === bi
+          ? {
+              ...b,
+              designs: [
+                ...b.designs,
+                ...Array.from({ length: n }, () => ({
+                  design_no: "",
+                  qty_mtr: inheritedQty(b),
+                })),
+              ],
+            }
+          : b,
+      ),
+    );
+    setPendingFocus({ bi, di: start });
   }
   // Editing the FIRST design's qty carries forward to the block's other rows,
   // but only those still holding the previous common value (or empty) — manual
@@ -367,6 +479,12 @@ export function OrderForm({
     },
     onSuccess: (res) => {
       setPreviewOpen(false);
+      // Order saved — discard the local draft so the next New order starts blank.
+      if (mode === "create") {
+        try {
+          localStorage.removeItem(NEW_ORDER_DRAFT_KEY);
+        } catch {}
+      }
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["designs"] });
       if (orderId)
@@ -415,15 +533,15 @@ export function OrderForm({
     >
       {/* Header */}
       <Reveal index={0}>
-        <Card data-size="sm">
-          <CardHeader className="flex-row items-center justify-between">
+        <Card data-size="sm" className="gap-3">
+          <CardHeader className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-accent-soft text-accent ring-1 ring-inset ring-accent/15">
-                <ClipboardListIcon className="size-[18px]" />
+              <span className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-accent-soft text-accent ring-1 ring-inset ring-accent/15">
+                <ClipboardListIcon className="size-4" />
               </span>
               <CardTitle>Order details</CardTitle>
             </div>
-            <Eyebrow>{mode === "create" ? "Draft" : "Editing"}</Eyebrow>
+            {mode === "edit" ? <Eyebrow>Editing</Eyebrow> : null}
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-x-4 lg:grid-cols-3 [&_input]:h-9">
             <Field label="Order date" htmlFor="order_date" required>
@@ -557,7 +675,10 @@ export function OrderForm({
       {/* Fabric blocks */}
       {blocks.map((block, bi) => (
         <Reveal key={bi} index={bi + 1}>
-          <div className="glass relative overflow-hidden rounded-card border border-line-strong p-3 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-[2px] hover:shadow-md motion-reduce:hover:translate-y-0 sm:p-4">
+          <div
+            data-fabric-block={bi}
+            className="glass relative overflow-hidden rounded-card border border-line-strong p-3 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-[2px] hover:shadow-md motion-reduce:hover:translate-y-0 sm:p-4"
+          >
             <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-accent to-[var(--a3)]" />
             <span
               aria-hidden
@@ -615,7 +736,12 @@ export function OrderForm({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-[minmax(0,1fr)_4rem_5.5rem_2rem] gap-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted">
+                <div
+                  className={cn(
+                    "grid gap-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted",
+                    DESIGN_ROW_COLS,
+                  )}
+                >
                   <span>
                     Design no<span className="text-danger"> *</span>
                   </span>
@@ -627,7 +753,19 @@ export function OrderForm({
                 {block.designs.map((d, di) => (
                   <div
                     key={di}
-                    className="grid grid-cols-[minmax(0,1fr)_4rem_5.5rem_2rem] items-center gap-2"
+                    // Enter anywhere in the row adds the next design and focuses
+                    // it — unless the design autocomplete already consumed Enter
+                    // to pick a suggestion (then defaultPrevented is set).
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.defaultPrevented) {
+                        e.preventDefault();
+                        insertDesignAfter(bi, di);
+                      }
+                    }}
+                    className={cn(
+                      "grid items-center gap-2",
+                      DESIGN_ROW_COLS,
+                    )}
                   >
                     <DesignAutocomplete
                       fabric={block.fabric}
@@ -655,7 +793,16 @@ export function OrderForm({
                     <div className="num flex h-9 items-center justify-end pr-0.5 text-[13px] font-medium text-ink">
                       <Money value={blockTotals[bi].rows[di]?.lineTotal ?? 0} />
                     </div>
-                    <div className="flex h-9 items-center justify-center">
+                    <div className="flex h-9 items-center justify-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => insertDesignAfter(bi, di)}
+                        aria-label="Add design below"
+                        title="Add design (or press Enter)"
+                        className="hidden size-8 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-accent-soft hover:text-accent sm:grid"
+                      >
+                        <PlusIcon className="size-[16px]" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => removeDesign(bi, di)}
@@ -672,14 +819,17 @@ export function OrderForm({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-line-strong pt-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => addDesign(bi)}
-              >
-                <PlusIcon /> Add design
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addDesign(bi)}
+                >
+                  <PlusIcon /> Add design
+                </Button>
+                <BulkAddDesigns onAdd={(n) => addManyDesigns(bi, n)} />
+              </div>
               <div className="text-[13px] text-ink-soft">
                 Block qty{" "}
                 <b className="num text-[14px] font-semibold text-ink">
@@ -875,6 +1025,51 @@ function DesignAutocomplete({
       aria-label={ariaLabel ?? "Design no"}
       className={className}
     />
+  );
+}
+
+// Compact "add N rows at once" control: type a count and press Enter (or click
+// Add) to append that many blank design rows. Self-contained local state so the
+// big form component doesn't carry a per-block draft value.
+function BulkAddDesigns({ onAdd }: { onAdd: (count: number) => void }) {
+  const [count, setCount] = React.useState("");
+  function submit() {
+    const n = Math.floor(Number(count));
+    if (!Number.isFinite(n) || n < 1) return;
+    onAdd(n);
+    setCount("");
+  }
+  return (
+    <div className="flex items-center gap-1.5 text-[13px] text-ink-soft">
+      <span className="hidden sm:inline">Add</span>
+      <Input
+        type="number"
+        min="1"
+        max={MAX_BULK_DESIGNS}
+        inputMode="numeric"
+        value={count}
+        onChange={(e) => setCount(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="5"
+        aria-label="Number of design rows to add"
+        className="num h-8 w-16 px-2 text-center text-[13px]"
+      />
+      <span>rows</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={submit}
+        disabled={Math.floor(Number(count)) < 1}
+      >
+        Add
+      </Button>
+    </div>
   );
 }
 

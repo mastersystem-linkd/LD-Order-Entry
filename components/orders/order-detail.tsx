@@ -1,14 +1,25 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { PencilIcon, RouteIcon } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BanIcon, PencilIcon, RotateCcwIcon, RouteIcon } from "lucide-react";
+import { toast } from "sonner";
 
-import { apiGet } from "@/lib/api-client";
+import { apiGet, apiSend } from "@/lib/api-client";
 import { formatNumber, type OrderDetail } from "@/lib/orders";
 import { hasCap, type Capability } from "@/lib/rbac";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Th, THead } from "@/components/ui/table";
@@ -22,9 +33,44 @@ export function OrderDetailView({
 }) {
   const canEdit = hasCap(caps, "orders.edit");
   const canTrack = hasCap(caps, "operations.view");
+  const queryClient = useQueryClient();
+  // Pending cancel confirmation — a single design (lineId) or the whole order.
+  const [confirmCancel, setConfirmCancel] = React.useState<{
+    lineId?: string;
+    label: string;
+  } | null>(null);
+
   const detail = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => apiGet<OrderDetail>(`/api/orders/${orderId}`),
+  });
+
+  const cancel = useMutation({
+    mutationFn: (vars: { lineId?: string; cancelled: boolean }) =>
+      apiSend(`/api/orders/${orderId}/cancel`, "PATCH", {
+        line_id: vars.lineId ?? null,
+        cancelled: vars.cancelled,
+      }),
+    onSuccess: (_res, vars) => {
+      toast.success(
+        vars.lineId
+          ? vars.cancelled
+            ? "Design cancelled."
+            : "Design restored."
+          : vars.cancelled
+            ? "Order cancelled."
+            : "Order restored.",
+      );
+      setConfirmCancel(null);
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order-status"] });
+      queryClient.invalidateQueries({ queryKey: ["tracking", orderId] });
+    },
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setConfirmCancel(null);
+    },
   });
 
   if (detail.isLoading) {
@@ -45,6 +91,7 @@ export function OrderDetailView({
   }
 
   const d = detail.data;
+  const orderCancelled = d.is_order_cancelled;
 
   return (
     <div className="flex flex-col gap-5">
@@ -57,7 +104,10 @@ export function OrderDetailView({
         </div>
         <div className="flex flex-wrap gap-2">
           {canTrack ? (
-            <Button variant="outline" render={<Link href={`/tracking/${orderId}`} />}>
+            <Button
+              variant="outline"
+              render={<Link href={`/tracking/${orderId}`} />}
+            >
               <RouteIcon /> Track
             </Button>
           ) : null}
@@ -65,6 +115,28 @@ export function OrderDetailView({
             <Button render={<Link href={`/orders/${orderId}/edit`} />}>
               <PencilIcon /> Edit
             </Button>
+          ) : null}
+          {canEdit ? (
+            orderCancelled ? (
+              <Button
+                variant="outline"
+                disabled={cancel.isPending}
+                onClick={() => cancel.mutate({ cancelled: false })}
+              >
+                <RotateCcwIcon /> Restore order
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="text-danger hover:bg-danger/10 hover:text-danger"
+                disabled={cancel.isPending}
+                onClick={() =>
+                  setConfirmCancel({ label: `order ${d.order.order_no}` })
+                }
+              >
+                <BanIcon /> Cancel order
+              </Button>
+            )
           ) : null}
         </div>
       </div>
@@ -108,32 +180,82 @@ export function OrderDetailView({
                   <Th className="text-right">Rate</Th>
                   <Th className="text-right">Line total</Th>
                   <Th>Status</Th>
+                  {canEdit ? <Th className="text-right" /> : null}
                 </tr>
               </THead>
               <tbody>
-                {d.lines.map((l) => (
-                  <tr
-                    key={l.id}
-                    className="border-b border-line last:border-0"
-                  >
-                    <td className="px-3 py-2 min-w-[160px]">{l.quality}</td>
-                    <td className="px-3 py-2">{l.design_no}</td>
-                    <td className="num px-3 py-2 text-right">
-                      {formatNumber(Number(l.qty_mtr))}
-                    </td>
-                    <td className="num px-3 py-2 text-right">
-                      {l.rate == null ? "—" : formatNumber(Number(l.rate))}
-                    </td>
-                    <td className="num px-3 py-2 text-right">
-                      {l.line_total == null
-                        ? "—"
-                        : `₹${formatNumber(Number(l.line_total))}`}
-                    </td>
-                    <td className="px-3 py-2">
-                      <StatusBadge status={l.operations_status} />
-                    </td>
-                  </tr>
-                ))}
+                {d.lines.map((l) => {
+                  const struck = l.is_cancelled
+                    ? "text-ink-muted line-through"
+                    : "";
+                  return (
+                    <tr
+                      key={l.id}
+                      className="border-b border-line last:border-0"
+                    >
+                      <td className={cn("px-3 py-2 min-w-[160px]", struck)}>
+                        {l.quality}
+                      </td>
+                      <td className={cn("px-3 py-2", struck)}>{l.design_no}</td>
+                      <td className={cn("num px-3 py-2 text-right", struck)}>
+                        {formatNumber(Number(l.qty_mtr))}
+                      </td>
+                      <td className={cn("num px-3 py-2 text-right", struck)}>
+                        {l.rate == null ? "—" : formatNumber(Number(l.rate))}
+                      </td>
+                      <td className={cn("num px-3 py-2 text-right", struck)}>
+                        {l.line_total == null
+                          ? "—"
+                          : `₹${formatNumber(Number(l.line_total))}`}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge
+                          status={
+                            l.is_cancelled ? "CANCELLED" : l.operations_status
+                          }
+                        />
+                      </td>
+                      {canEdit ? (
+                        <td className="px-3 py-2 text-right">
+                          {l.is_cancelled ? (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Restore design"
+                              title="Restore design"
+                              disabled={cancel.isPending}
+                              onClick={() =>
+                                cancel.mutate({
+                                  lineId: l.id,
+                                  cancelled: false,
+                                })
+                              }
+                            >
+                              <RotateCcwIcon />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Cancel design"
+                              title="Cancel design"
+                              className="text-danger hover:bg-danger/10 hover:text-danger"
+                              disabled={cancel.isPending}
+                              onClick={() =>
+                                setConfirmCancel({
+                                  lineId: l.id,
+                                  label: `${l.quality} · ${l.design_no}`,
+                                })
+                              }
+                            >
+                              <BanIcon />
+                            </Button>
+                          )}
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="bg-inset font-medium">
@@ -148,12 +270,60 @@ export function OrderDetailView({
                     ₹{formatNumber(d.grand_total)}
                   </td>
                   <td className="px-3 py-2" />
+                  {canEdit ? <td className="px-3 py-2" /> : null}
                 </tr>
               </tfoot>
             </table>
           </div>
         </CardContent>
       </Card>
+
+      {/* Cancel confirmation (restore is immediate). */}
+      <Dialog
+        open={!!confirmCancel}
+        onOpenChange={(open) => {
+          if (!open) setConfirmCancel(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmCancel?.lineId ? "Cancel design?" : "Cancel order?"}
+            </DialogTitle>
+            <DialogDescription>
+              Cancel{" "}
+              <span className="font-medium text-ink">
+                {confirmCancel?.label}
+              </span>
+              ? It stays on record (struck through) and is excluded from totals
+              and operations. You can restore it later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmCancel(null)}
+              disabled={cancel.isPending}
+            >
+              Keep
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={cancel.isPending}
+              onClick={() =>
+                confirmCancel &&
+                cancel.mutate({
+                  lineId: confirmCancel.lineId,
+                  cancelled: true,
+                })
+              }
+            >
+              {cancel.isPending ? <Spinner /> : <BanIcon />}{" "}
+              {confirmCancel?.lineId ? "Cancel design" : "Cancel order"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

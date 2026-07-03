@@ -62,6 +62,7 @@ export type OrderStatusRow = {
   // Line item created_at (ISO) — used to keep a line in the user's entry order
   // within its order (blocks are ordered by when they were added).
   createdAt: string;
+  isCancelled: boolean;
   stages: StageCell[];
   doneCount: number;
   currentStageKey: string | null;
@@ -87,6 +88,9 @@ export type OrderStatusGroup = {
   doneCount: number;
   currentStageKey: string | null;
   overall: OverallStatus;
+  // True when every design line is cancelled (the order is cancelled).
+  isCancelled: boolean;
+  cancelledCount: number;
   lines: OrderStatusRow[];
 };
 
@@ -101,6 +105,7 @@ export type OrderStatusList = {
     inProgress: number;
     completed: number;
     overdue: number;
+    cancelledDesigns: number;
   };
 };
 
@@ -130,7 +135,12 @@ export type OrderStatusDetail = {
     department: string | null;
     remarks: string | null;
   };
-  line: { fabric: string; design: string; qtyMtr: string };
+  line: {
+    fabric: string;
+    design: string;
+    qtyMtr: string;
+    isCancelled: boolean;
+  };
   stages: OrderStatusDetailStage[];
   doneCount: number;
   currentStageKey: string | null;
@@ -250,13 +260,32 @@ export function aggregateOrderGroups(
   const groups: OrderStatusGroup[] = [];
   for (const lines of byOrder.values()) {
     const first = lines[0];
-    const total = lines.length;
+    // Aggregate stages/status/totals over ACTIVE (non-cancelled) lines only;
+    // cancelled lines stay in `lines` for display (struck child rows).
+    const activeLines = lines.filter((l) => !l.isCancelled);
+    const isCancelled = activeLines.length === 0;
+    const total = activeLines.length;
     const stageCount = first.stages.length;
 
     const stages: StageCell[] = [];
     for (let i = 0; i < stageCount; i += 1) {
-      const cells = lines.map((l) => l.stages[i]);
-      const base = cells[0];
+      const base = first.stages[i]; // stageKey/label are identical across lines
+      if (isCancelled) {
+        // No active lines — trivial cells; the row renders as "Cancelled".
+        stages.push({
+          stageKey: base.stageKey,
+          label: base.label,
+          state: "not_started",
+          date: null,
+          daysOverdue: 0,
+          stockStatus: null,
+          doneOf: 0,
+          totalLines: 0,
+          outOf: 0,
+        });
+        continue;
+      }
+      const cells = activeLines.map((l) => l.stages[i]);
       const doneCells = cells.filter((c) => c.state === "done");
       const doneN = doneCells.length;
       const anyOverdue = cells.some((c) => c.state === "overdue");
@@ -282,7 +311,7 @@ export function aggregateOrderGroups(
         state = "not_started";
       }
 
-      // Fold the stock gate across the order's lines (stock_checking only):
+      // Fold the stock gate across the order's active lines (stock_checking only):
       // any line out of stock flags the order; all in stock = in_stock.
       const stockStatus: "in_stock" | "out_of_stock" | null =
         base.stageKey === "stock_checking"
@@ -308,16 +337,22 @@ export function aggregateOrderGroups(
 
     const doneCount = stages.filter((s) => s.state === "done").length;
     const currentIdx = stages.findIndex((s) => s.state !== "done");
+    // A cancelled group has no meaningful "current" stage (its cells are trivial
+    // not_started) — null keeps it out of the board's "At stage" filter buckets.
     const currentStageKey =
-      currentIdx === -1 ? null : stages[currentIdx].stageKey;
-    const overall: OverallStatus = lines.every(
+      isCancelled || currentIdx === -1 ? null : stages[currentIdx].stageKey;
+    // overall over active lines; a fully-cancelled group falls to "completed"
+    // (vacuous) but the UI shows "Cancelled" via `isCancelled`.
+    const overall: OverallStatus = activeLines.every(
       (l) => l.overall === "completed",
     )
       ? "completed"
-      : lines.some((l) => l.overall === "overdue")
+      : activeLines.some((l) => l.overall === "overdue")
         ? "overdue"
         : "in_progress";
 
+    // Fully cancelled → show all lines' fabrics/qty so the struck row isn't blank.
+    const shown = isCancelled ? lines : activeLines;
     groups.push({
       orderId: first.orderId,
       orderNo: first.orderNo,
@@ -327,14 +362,16 @@ export function aggregateOrderGroups(
       haste: first.haste,
       challanNo: first.challanNo,
       lotNo: first.lotNo,
-      fabrics: [...new Set(lines.map((l) => l.fabric))],
-      designCount: total,
-      qtyTotal: lines.reduce((s, l) => s + Number(l.qtyMtr), 0),
-      grandTotal: lines.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0),
+      fabrics: [...new Set(shown.map((l) => l.fabric))],
+      designCount: shown.length,
+      qtyTotal: shown.reduce((s, l) => s + Number(l.qtyMtr), 0),
+      grandTotal: shown.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0),
       stages,
       doneCount,
       currentStageKey,
       overall,
+      isCancelled,
+      cancelledCount: lines.length - activeLines.length,
       lines,
     });
   }

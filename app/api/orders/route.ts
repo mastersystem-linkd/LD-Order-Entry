@@ -24,6 +24,7 @@ import {
   buildInitialStageRows,
   computeLineStatus,
   computeOrderStatus,
+  isOrderCancelled,
 } from "@/lib/workflow";
 import {
   customerOrders,
@@ -49,9 +50,6 @@ export async function GET(req: Request) {
   const search = q.get("search")?.trim() ?? "";
   const page = Math.max(1, Number.parseInt(q.get("page") ?? "1", 10) || 1);
   const exportAll = q.get("all") === "1";
-  // Operations view opts into this: hide orders that don't yet have both a
-  // challan no and a lot no (they aren't ready to be tracked).
-  const requireChallanLot = q.get("require_challan_lot") === "1";
 
   // Column filters (case-insensitive contains for text; inclusive date range).
   const orderNo = q.get("order_no")?.trim() ?? "";
@@ -69,13 +67,9 @@ export async function GET(req: Request) {
         ilike(customerOrders.lotNo, `%${search}%`),
       )
     : undefined;
-  const challanLotFilter = requireChallanLot
-    ? sql`btrim(coalesce(${customerOrders.challanNo}, '')) <> '' and btrim(coalesce(${customerOrders.lotNo}, '')) <> ''`
-    : undefined;
   // and() drops undefined operands and returns undefined if none remain.
   const filter = and(
     searchFilter,
-    challanLotFilter,
     orderNo ? ilike(customerOrders.orderNo, `%${orderNo}%`) : undefined,
     challanNo ? ilike(customerOrders.challanNo, `%${challanNo}%`) : undefined,
     lotNo ? ilike(customerOrders.lotNo, `%${lotNo}%`) : undefined,
@@ -91,13 +85,35 @@ export async function GET(req: Request) {
     .orderBy(desc(customerOrders.orderDate), desc(customerOrders.createdAt));
 
   // count + page are independent — run them in one round trip.
-  const [totalRes, orders] = await Promise.all([
+  const [totalRes, orders, cancelAgg] = await Promise.all([
     db.select({ value: count() }).from(customerOrders).where(filter),
     exportAll
       ? listQuery.limit(EXPORT_MAX)
       : listQuery.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE),
+    // All-pages cancellation counts for the "Cancelled" KPI (per-order totals).
+    db
+      .select({
+        orderId: orderLineItems.orderId,
+        total: count(),
+        cancelled: sql<number>`count(*) filter (where ${orderLineItems.isCancelled})`,
+      })
+      .from(orderLineItems)
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .where(filter)
+      .groupBy(orderLineItems.orderId),
   ]);
   const total = totalRes[0].value;
+
+  let fullyCancelledOrders = 0;
+  let ordersWithAnyCancelled = 0;
+  let cancelledDesigns = 0;
+  for (const r of cancelAgg) {
+    const c = Number(r.cancelled);
+    const t = Number(r.total);
+    cancelledDesigns += c;
+    if (c > 0) ordersWithAnyCancelled += 1;
+    if (isOrderCancelled(t, c)) fullyCancelledOrders += 1;
+  }
 
   const orderIds = orders.map((o) => o.id);
   const lines = orderIds.length
@@ -140,10 +156,16 @@ export async function GET(req: Request) {
   }
 
   const rows = orders.map((o) => {
-    const active = (linesByOrder.get(o.id) ?? []).filter((l) => !l.isCancelled);
-    const qtyTotal = active.reduce((s, l) => s + Number(l.qtyMtr), 0);
-    const grandTotal = active.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0);
-    const fabrics = [...new Set(active.map((l) => l.quality))];
+    const all = linesByOrder.get(o.id) ?? [];
+    const active = all.filter((l) => !l.isCancelled);
+    const cancelledCount = all.length - active.length;
+    const orderCancelled = isOrderCancelled(all.length, cancelledCount);
+    // A fully-cancelled order has no active lines — show its (cancelled) lines'
+    // fabrics/qty/total so the struck row isn't blank.
+    const shown = orderCancelled ? all : active;
+    const qtyTotal = shown.reduce((s, l) => s + Number(l.qtyMtr), 0);
+    const grandTotal = shown.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0);
+    const fabrics = [...new Set(shown.map((l) => l.quality))];
     const lineStatuses = active.map((l) =>
       computeLineStatus(stagesByLine.get(l.id) ?? []),
     );
@@ -160,9 +182,13 @@ export async function GET(req: Request) {
       department: o.department,
       fabrics,
       line_count: active.length,
+      total_line_count: all.length,
+      cancelled_line_count: cancelledCount,
       qty_total: Number(qtyTotal.toFixed(2)),
       grand_total: Number(grandTotal.toFixed(2)),
-      operations_status: computeOrderStatus(lineStatuses),
+      operations_status: orderCancelled
+        ? ("CANCELLED" as const)
+        : computeOrderStatus(lineStatuses),
       created_at: o.createdAt,
     };
   });
@@ -173,6 +199,11 @@ export async function GET(req: Request) {
     page_size: PAGE_SIZE,
     total,
     total_pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    summary: {
+      fully_cancelled_orders: fullyCancelledOrders,
+      orders_with_any_cancelled: ordersWithAnyCancelled,
+      cancelled_designs: cancelledDesigns,
+    },
   });
 }
 

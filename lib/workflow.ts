@@ -43,7 +43,11 @@ export const STAGE_LABELS: Record<StageKey, string> = {
   received_lr: "Received LR",
 };
 
-export type OperationsStatus = "COMPLETED" | "PARTIALLY COMPLETED" | "PENDING";
+export type OperationsStatus =
+  | "COMPLETED"
+  | "PARTIALLY COMPLETED"
+  | "PENDING"
+  | "CANCELLED";
 
 // A stage's planned deadline (§6, SLA): the order's date at 00:00 (UTC) plus
 // that stage's planned_offset_days. Planned dates are config-driven — never the
@@ -105,6 +109,14 @@ export function computeOrderStatus(
   if (lineStatuses.every((s) => s === "COMPLETED")) return "COMPLETED";
   if (lineStatuses.every((s) => s === "PENDING")) return "PENDING";
   return "PARTIALLY COMPLETED";
+}
+
+// An order is CANCELLED when it has at least one line and every line is
+// cancelled. Callers pass total vs cancelled line counts (computeOrderStatus
+// only sees the active lines, so it can't tell an all-cancelled order from a
+// fresh one on its own).
+export function isOrderCancelled(total: number, cancelled: number): boolean {
+  return total > 0 && cancelled === total;
 }
 
 // Identity used to preserve stage progress across an edit (§6): fabric + design

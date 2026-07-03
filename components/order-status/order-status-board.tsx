@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  BanIcon,
   CheckIcon,
   ChevronRightIcon,
   DownloadIcon,
@@ -103,6 +104,9 @@ export function OrderStatusBoard({
   const [fabric, setFabric] = React.useState("");
   const [stage, setStage] = React.useState("");
   const [overall, setOverall] = React.useState<OverallStatus | "">("");
+  // Separate from `overall` because "cancelled" isn't an OverallStatus — a
+  // cancelled order's derived overall is a vacuous "completed" (§ aggregate).
+  const [cancelledOnly, setCancelledOnly] = React.useState(false);
   const [filters, setFilters] =
     React.useState<OrderFilterState>(EMPTY_ORDER_FILTERS);
   const debouncedFilters = useDebouncedValue(filters, 300);
@@ -126,7 +130,7 @@ export function OrderStatusBoard({
   // Reset to page 1 whenever a filter changes.
   React.useEffect(() => {
     setPage(1);
-  }, [search, party, fabric, stage, overall, debouncedFilters]);
+  }, [search, party, fabric, stage, overall, cancelledOnly, debouncedFilters]);
 
   // Server filters are line-attribute filters only. The derived bits
   // (overall / stage / pagination) are applied client-side after we roll lines
@@ -157,19 +161,27 @@ export function OrderStatusBoard({
   );
 
   // Order-level summary (over all groups, before overall/stage refinement).
-  const summary = React.useMemo(
-    () => ({
+  // Cancelled orders are counted on their own; the in-progress/completed/overdue
+  // tallies are over ACTIVE (non-cancelled) groups so a cancelled order's vacuous
+  // "completed" overall doesn't inflate the Completed card.
+  const summary = React.useMemo(() => {
+    const active = groups.filter((g) => !g.isCancelled);
+    return {
       total: groups.length,
-      inProgress: groups.filter((g) => g.overall === "in_progress").length,
-      completed: groups.filter((g) => g.overall === "completed").length,
-      overdue: groups.filter((g) => g.overall === "overdue").length,
-    }),
-    [groups],
-  );
+      inProgress: active.filter((g) => g.overall === "in_progress").length,
+      completed: active.filter((g) => g.overall === "completed").length,
+      overdue: active.filter((g) => g.overall === "overdue").length,
+      cancelled: groups.length - active.length,
+    };
+  }, [groups]);
 
   const visibleGroups = React.useMemo(() => {
     let gs = groups;
-    if (overall) gs = gs.filter((g) => g.overall === overall);
+    if (cancelledOnly) gs = gs.filter((g) => g.isCancelled);
+    // The overall cards refine over ACTIVE groups (a cancelled order's overall is
+    // a vacuous "completed" — it belongs only under the Cancelled card).
+    else if (overall)
+      gs = gs.filter((g) => !g.isCancelled && g.overall === overall);
     if (stage) gs = gs.filter((g) => g.currentStageKey === stage);
     // Sorted by order date, newest first (with an order-no tie-break).
     return [...gs].sort(
@@ -177,7 +189,7 @@ export function OrderStatusBoard({
         (a.odDate < b.odDate ? 1 : a.odDate > b.odDate ? -1 : 0) ||
         a.orderNo.localeCompare(b.orderNo),
     );
-  }, [groups, overall, stage]);
+  }, [groups, overall, cancelledOnly, stage]);
 
   const total = visibleGroups.length;
   const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
@@ -210,10 +222,12 @@ export function OrderStatusBoard({
     setFabric("");
     setStage("");
     setOverall("");
+    setCancelledOnly(false);
     setFilters(EMPTY_ORDER_FILTERS);
   }
   const hasActiveFilters =
-    !!(party || fabric || stage || overall) || hasActiveOrderFilters(filters);
+    !!(party || fabric || stage || overall || cancelledOnly) ||
+    hasActiveOrderFilters(filters);
 
   function exportCsv() {
     setExporting(true);
@@ -234,6 +248,7 @@ export function OrderStatusBoard({
         ...STAGE_OPTIONS.map((s) => s.label),
         "Done",
         "Overall",
+        "Cancelled",
       ];
       const body = lines.map((r) => [
         r.orderNo,
@@ -244,18 +259,21 @@ export function OrderStatusBoard({
         r.salesPerson ?? "",
         r.odDate,
         ...r.stages.map((st) =>
-          st.stageKey === "stock_checking"
-            ? st.state === "done"
-              ? "In stock"
-              : st.stockStatus === "out_of_stock"
-                ? "Out of stock"
-                : "Pending"
-            : st.state === "done"
-              ? `Done ${st.date ? formatDate(st.date) : ""}`.trim()
-              : st.state,
+          r.isCancelled
+            ? "cancelled"
+            : st.stageKey === "stock_checking"
+              ? st.state === "done"
+                ? "In stock"
+                : st.stockStatus === "out_of_stock"
+                  ? "Out of stock"
+                  : "Pending"
+              : st.state === "done"
+                ? `Done ${st.date ? formatDate(st.date) : ""}`.trim()
+                : st.state,
         ),
         `${r.doneCount}/7`,
-        r.overall,
+        r.isCancelled ? "cancelled" : r.overall,
+        r.isCancelled ? "Yes" : "No",
       ]);
       const csv = [header, ...body]
         .map((row) => row.map(csvCell).join(","))
@@ -272,35 +290,58 @@ export function OrderStatusBoard({
   return (
     <div className="flex flex-col gap-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
         <SummaryCard
           icon={<ListChecksIcon />}
           tone="slate"
           label="Total orders"
           value={summary.total}
-          active={overall === ""}
-          onClick={() => setOverall("")}
+          active={overall === "" && !cancelledOnly}
+          onClick={() => {
+            setOverall("");
+            setCancelledOnly(false);
+          }}
         />
         <SummaryCard
           tone="amber"
           label="In progress"
           value={summary.inProgress}
-          active={overall === "in_progress"}
-          onClick={() => setOverall("in_progress")}
+          active={overall === "in_progress" && !cancelledOnly}
+          onClick={() => {
+            setOverall("in_progress");
+            setCancelledOnly(false);
+          }}
         />
         <SummaryCard
           tone="green"
           label="Completed"
           value={summary.completed}
-          active={overall === "completed"}
-          onClick={() => setOverall("completed")}
+          active={overall === "completed" && !cancelledOnly}
+          onClick={() => {
+            setOverall("completed");
+            setCancelledOnly(false);
+          }}
         />
         <SummaryCard
           tone="red"
           label="Overdue"
           value={summary.overdue}
-          active={overall === "overdue"}
-          onClick={() => setOverall("overdue")}
+          active={overall === "overdue" && !cancelledOnly}
+          onClick={() => {
+            setOverall("overdue");
+            setCancelledOnly(false);
+          }}
+        />
+        <SummaryCard
+          icon={<BanIcon />}
+          tone="rose"
+          label="Cancelled"
+          value={summary.cancelled}
+          active={cancelledOnly}
+          onClick={() => {
+            setCancelledOnly(true);
+            setOverall("");
+          }}
         />
       </div>
 
@@ -511,6 +552,9 @@ export function OrderStatusBoard({
                 <tbody>
                   {pageGroups.map((g) => {
                     const isOpen = expanded.has(g.orderId);
+                    const struck = g.isCancelled
+                      ? "text-ink-muted line-through"
+                      : "";
                     return (
                       <React.Fragment key={g.orderId}>
                         {/* Order summary row */}
@@ -555,7 +599,12 @@ export function OrderStatusBoard({
                                   )}
                                 />
                               </button>
-                              <span className="num font-semibold whitespace-nowrap text-ink">
+                              <span
+                                className={cn(
+                                  "num font-semibold whitespace-nowrap text-ink",
+                                  struck,
+                                )}
+                              >
                                 {g.orderNo}
                               </span>
                             </div>
@@ -566,7 +615,12 @@ export function OrderStatusBoard({
                             </Td>
                           )}
                           {isVisible("party") && (
-                            <Td className="max-w-[180px] truncate text-ink">
+                            <Td
+                              className={cn(
+                                "max-w-[180px] truncate text-ink",
+                                struck,
+                              )}
+                            >
                               <span title={g.party}>{g.party}</span>
                             </Td>
                           )}
@@ -576,7 +630,12 @@ export function OrderStatusBoard({
                             </Td>
                           )}
                           {isVisible("fabric") && (
-                            <Td className="max-w-[200px] truncate text-ink">
+                            <Td
+                              className={cn(
+                                "max-w-[200px] truncate text-ink",
+                                struck,
+                              )}
+                            >
                               <span title={g.fabrics.join(", ")}>
                                 {g.fabrics.length === 1
                                   ? g.fabrics[0]
@@ -585,17 +644,40 @@ export function OrderStatusBoard({
                             </Td>
                           )}
                           {isVisible("designs") && (
-                            <Td className="num whitespace-nowrap text-right text-ink">
+                            <Td
+                              className={cn(
+                                "num whitespace-nowrap text-right text-ink",
+                                struck,
+                              )}
+                            >
                               {g.designCount}
+                              {!g.isCancelled && g.cancelledCount > 0 ? (
+                                <span
+                                  className="ml-1 text-[11px] font-medium text-danger"
+                                  title={`${g.cancelledCount} cancelled`}
+                                >
+                                  +{g.cancelledCount}
+                                </span>
+                              ) : null}
                             </Td>
                           )}
                           {isVisible("qty") && (
-                            <Td className="num whitespace-nowrap text-right text-ink">
+                            <Td
+                              className={cn(
+                                "num whitespace-nowrap text-right text-ink",
+                                struck,
+                              )}
+                            >
                               {formatNumber(g.qtyTotal)}
                             </Td>
                           )}
                           {isVisible("total") && (
-                            <Td className="num whitespace-nowrap text-right text-ink">
+                            <Td
+                              className={cn(
+                                "num whitespace-nowrap text-right text-ink",
+                                struck,
+                              )}
+                            >
                               ₹{formatNumber(g.grandTotal)}
                             </Td>
                           )}
@@ -617,19 +699,36 @@ export function OrderStatusBoard({
                           {isVisible("stages") &&
                             g.stages.map((c) => (
                               <Td key={c.stageKey} className="text-center">
-                                <StageChip cell={c} />
+                                {g.isCancelled ? (
+                                  <span
+                                    className="text-ink-muted"
+                                    title="Cancelled"
+                                  >
+                                    –
+                                  </span>
+                                ) : (
+                                  <StageChip cell={c} />
+                                )}
                               </Td>
                             ))}
                           {isVisible("overall") && (
                             <Td>
-                              <OverallBadge overall={g.overall} />
+                              {g.isCancelled ? (
+                                <CancelledTag />
+                              ) : (
+                                <OverallBadge overall={g.overall} />
+                              )}
                             </Td>
                           )}
                         </tr>
 
                         {/* Expanded design lines */}
                         {isOpen
-                          ? g.lines.map((line) => (
+                          ? g.lines.map((line) => {
+                              const lstruck = line.isCancelled
+                                ? "text-ink-muted line-through"
+                                : "";
+                              return (
                               <tr
                                 key={line.lineId}
                                 onClick={() => setSelectedLineId(line.lineId)}
@@ -647,7 +746,12 @@ export function OrderStatusBoard({
                                 <Td className="sticky left-0 z-10 bg-surface pl-8 shadow-[1px_0_0_var(--line)] group-hover:bg-surface-2 group-focus-visible:bg-surface-2">
                                   <div className="flex items-center gap-1.5">
                                     <ChevronRightIcon className="size-3.5 shrink-0 -rotate-45 text-ink-muted" />
-                                    <span className="num font-medium text-ink">
+                                    <span
+                                      className={cn(
+                                        "num font-medium text-ink",
+                                        lstruck,
+                                      )}
+                                    >
                                       {line.design}
                                     </span>
                                   </div>
@@ -656,18 +760,33 @@ export function OrderStatusBoard({
                                 {isVisible("party") && <Td />}
                                 {isVisible("haste") && <Td />}
                                 {isVisible("fabric") && (
-                                  <Td className="max-w-[200px] truncate text-ink">
+                                  <Td
+                                    className={cn(
+                                      "max-w-[200px] truncate text-ink",
+                                      lstruck,
+                                    )}
+                                  >
                                     <span title={line.fabric}>{line.fabric}</span>
                                   </Td>
                                 )}
                                 {isVisible("designs") && <Td />}
                                 {isVisible("qty") && (
-                                  <Td className="num whitespace-nowrap text-right text-ink">
+                                  <Td
+                                    className={cn(
+                                      "num whitespace-nowrap text-right text-ink",
+                                      lstruck,
+                                    )}
+                                  >
                                     {formatNumber(Number(line.qtyMtr))}
                                   </Td>
                                 )}
                                 {isVisible("total") && (
-                                  <Td className="num whitespace-nowrap text-right text-ink">
+                                  <Td
+                                    className={cn(
+                                      "num whitespace-nowrap text-right text-ink",
+                                      lstruck,
+                                    )}
+                                  >
                                     {line.lineTotal == null
                                       ? "—"
                                       : `₹${formatNumber(Number(line.lineTotal))}`}
@@ -679,16 +798,30 @@ export function OrderStatusBoard({
                                 {isVisible("stages") &&
                                   line.stages.map((c) => (
                                     <Td key={c.stageKey} className="text-center">
-                                      <StageChip cell={c} />
+                                      {line.isCancelled ? (
+                                        <span
+                                          className="text-ink-muted"
+                                          title="Cancelled"
+                                        >
+                                          –
+                                        </span>
+                                      ) : (
+                                        <StageChip cell={c} />
+                                      )}
                                     </Td>
                                   ))}
                                 {isVisible("overall") && (
                                   <Td>
-                                    <OverallBadge overall={line.overall} />
+                                    {line.isCancelled ? (
+                                      <CancelledTag />
+                                    ) : (
+                                      <OverallBadge overall={line.overall} />
+                                    )}
                                   </Td>
                                 )}
                               </tr>
-                            ))
+                              );
+                            })
                           : null}
                       </React.Fragment>
                     );
@@ -766,7 +899,7 @@ function SummaryCard({
   icon?: React.ReactNode;
   label: string;
   value: number | undefined;
-  tone: "slate" | "amber" | "green" | "red";
+  tone: "slate" | "amber" | "green" | "red" | "rose";
   active: boolean;
   onClick: () => void;
 }) {
@@ -775,7 +908,7 @@ function SummaryCard({
       ? "bg-success"
       : tone === "amber"
         ? "bg-warning"
-        : tone === "red"
+        : tone === "red" || tone === "rose"
           ? "bg-danger"
           : "bg-ink-muted";
   return (
@@ -1030,10 +1163,24 @@ function OrderStatusCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="num font-semibold text-ink">{g.orderNo}</div>
-          <div className="truncate text-[13px] text-ink-soft">{g.party}</div>
+          <div
+            className={cn(
+              "num font-semibold text-ink",
+              g.isCancelled && "text-ink-muted line-through",
+            )}
+          >
+            {g.orderNo}
+          </div>
+          <div
+            className={cn(
+              "truncate text-[13px] text-ink-soft",
+              g.isCancelled && "line-through",
+            )}
+          >
+            {g.party}
+          </div>
         </div>
-        <OverallBadge overall={g.overall} />
+        {g.isCancelled ? <CancelledTag /> : <OverallBadge overall={g.overall} />}
       </div>
       <div className="mt-1.5 truncate text-[12px] text-ink-muted">
         {g.fabrics.length} {g.fabrics.length === 1 ? "fabric" : "fabrics"}
@@ -1043,14 +1190,19 @@ function OrderStatusCard({
           {g.designCount} design{g.designCount === 1 ? "" : "s"}
         </span>
         <span className="num">{formatNumber(g.qtyTotal)} mtr</span>
+        {g.cancelledCount > 0 ? (
+          <span className="num text-danger">{g.cancelledCount} cancelled</span>
+        ) : null}
       </div>
-      <div className="mt-2.5">
-        <CurrentStageBadge
-          stages={g.stages}
-          currentStageKey={g.currentStageKey}
-          aggregate
-        />
-      </div>
+      {g.isCancelled ? null : (
+        <div className="mt-2.5">
+          <CurrentStageBadge
+            stages={g.stages}
+            currentStageKey={g.currentStageKey}
+            aggregate
+          />
+        </div>
+      )}
     </button>
   );
 }
@@ -1064,6 +1216,15 @@ function OverallBadge({ overall }: { overall: OverallStatus }) {
       )}
     >
       {OVERALL[overall].label}
+    </span>
+  );
+}
+
+// Shown in place of the overall badge on a cancelled order / design line.
+function CancelledTag() {
+  return (
+    <span className="inline-flex rounded-pill bg-danger/10 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-danger">
+      Cancelled
     </span>
   );
 }

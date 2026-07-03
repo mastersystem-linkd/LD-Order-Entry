@@ -1,4 +1,15 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  or,
+  type SQL,
+} from "drizzle-orm";
 
 import { jsonData, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
@@ -42,7 +53,9 @@ export async function GET(req: Request) {
   const sort = p.get("sort") ?? "od_date";
   const page = Math.max(1, Number.parseInt(p.get("page") ?? "1", 10) || 1);
 
-  const conds = [eq(orderLineItems.isCancelled, false)];
+  // Cancelled lines are INCLUDED here (shown struck on the board); they're
+  // excluded from the aggregation + summary in JS further down.
+  const conds: SQL[] = [];
   if (search) {
     conds.push(
       or(
@@ -92,6 +105,7 @@ export async function GET(req: Request) {
       challanNo: customerOrders.challanNo,
       lotNo: customerOrders.lotNo,
       createdAt: orderLineItems.createdAt,
+      isCancelled: orderLineItems.isCancelled,
     })
     .from(orderLineItems)
     .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
@@ -148,6 +162,7 @@ export async function GET(req: Request) {
       challanNo: l.challanNo,
       lotNo: l.lotNo,
       createdAt: new Date(l.createdAt).toISOString(),
+      isCancelled: l.isCancelled,
       stages: c.cells,
       doneCount: c.doneCount,
       currentStageKey: c.currentStageKey,
@@ -155,12 +170,15 @@ export async function GET(req: Request) {
     };
   });
 
-  // Summary over the DB-filtered set (before overall/stage refinement).
+  // Summary over the DB-filtered set (before overall/stage refinement), counting
+  // ACTIVE (non-cancelled) lines; cancelled tracked separately.
+  const activeRows = allRows.filter((r) => !r.isCancelled);
   const summary = {
-    total: allRows.length,
-    inProgress: allRows.filter((r) => r.overall === "in_progress").length,
-    completed: allRows.filter((r) => r.overall === "completed").length,
-    overdue: allRows.filter((r) => r.overall === "overdue").length,
+    total: activeRows.length,
+    inProgress: activeRows.filter((r) => r.overall === "in_progress").length,
+    completed: activeRows.filter((r) => r.overall === "completed").length,
+    overdue: activeRows.filter((r) => r.overall === "overdue").length,
+    cancelledDesigns: allRows.length - activeRows.length,
   };
 
   let filtered = allRows;
