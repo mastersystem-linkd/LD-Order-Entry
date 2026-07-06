@@ -9,6 +9,7 @@ import {
   ListChecksIcon,
   PlusIcon,
   SettingsIcon,
+  Trash2Icon,
   WorkflowIcon,
   XIcon,
   type LucideIcon,
@@ -24,6 +25,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "/orders": LayoutGridIcon,
   "/order-status": ListChecksIcon,
   "/tracking": WorkflowIcon,
+  "/trash": Trash2Icon,
   "/settings": SettingsIcon,
 };
 

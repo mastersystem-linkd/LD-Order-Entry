@@ -71,6 +71,16 @@ export const cancelOrderSchema = z.object({
 
 export type CancelOrderPayload = z.infer<typeof cancelOrderSchema>;
 
+// PATCH /api/orders/:id/delete — soft-delete/restore one design (line_id) or the
+// whole order (line_id omitted). Reversible via `deleted`; a deleted line is
+// hidden from every normal view and recoverable from Trash.
+export const deleteLineSchema = z.object({
+  line_id: z.string().uuid("line_id must be a UUID").optional().nullable(),
+  deleted: z.boolean(),
+});
+
+export type DeleteLinePayload = z.infer<typeof deleteLineSchema>;
+
 // ---- OE-P5 Settings / master data ----
 
 export const lookupCreateSchema = z.object({

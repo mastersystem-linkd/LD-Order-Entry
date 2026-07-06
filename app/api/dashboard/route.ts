@@ -1,10 +1,15 @@
-import { and, asc, count, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gte, lt, lte, sql } from "drizzle-orm";
 
 import { jsonData, requireRole } from "@/lib/api";
 import { db } from "@/lib/db";
 import { ROLES } from "@/lib/rbac";
 import { dayCount } from "@/lib/dashboard";
-import { computeOrderStatus, type OperationsStatus } from "@/lib/workflow";
+import {
+  computeOrderStatus,
+  isOrderCancelled,
+  isOrderDeleted,
+  type OperationsStatus,
+} from "@/lib/workflow";
 import {
   customerOrders,
   lineStageProgress,
@@ -47,12 +52,28 @@ export async function GET(req: Request) {
     and(gte(customerOrders.orderDate, f), lte(customerOrders.orderDate, t), deptCond);
   const orderWhere = rangeWhere(from, to);
 
+  // Soft-delete filters (analytics must ignore trashed data, mirroring
+  // /api/orders): line aggregates exclude deleted lines; order counts require an
+  // order to still have at least one non-deleted line (fully-trashed → hidden).
+  const notDeletedLine = eq(orderLineItems.isDeleted, false);
+  const hasVisibleLine = exists(
+    db
+      .select({ one: sql`1` })
+      .from(orderLineItems)
+      .where(
+        and(
+          eq(orderLineItems.orderId, customerOrders.id),
+          eq(orderLineItems.isDeleted, false),
+        ),
+      ),
+  );
+
   // Headline totals for any window (reused for the prior period). Its two
   // aggregates are independent, so fire them together.
   async function totals(f: string, t: string) {
     const w = rangeWhere(f, t);
     const [ocRes, aggRes] = await Promise.all([
-      db.select({ n: count() }).from(customerOrders).where(w),
+      db.select({ n: count() }).from(customerOrders).where(and(w, hasVisibleLine)),
       db
         .select({
           value: sql<string>`coalesce(sum(${orderLineItems.lineTotal}), 0)`,
@@ -60,7 +81,7 @@ export async function GET(req: Request) {
         })
         .from(orderLineItems)
         .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-        .where(and(w, eq(orderLineItems.isCancelled, false))),
+        .where(and(w, eq(orderLineItems.isCancelled, false), notDeletedLine)),
     ]);
     return {
       orders: Number(ocRes[0].n),
@@ -89,6 +110,8 @@ export async function GET(req: Request) {
     overdueRows,
     current,
     prev,
+    cancelAgg,
+    trashAgg,
   ] = await Promise.all([
     // Ordered stages (labels + sort) for the pipeline + status roll-up.
     db
@@ -123,7 +146,7 @@ export async function GET(req: Request) {
         workflowStages,
         eq(workflowStages.stageKey, lineStageProgress.stageKey),
       )
-      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false), notDeletedLine))
       .groupBy(orderLineItems.id, customerOrders.id),
 
     // On-time rate over completed stages.
@@ -139,14 +162,19 @@ export async function GET(req: Request) {
       )
       .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
       .where(
-        and(orderWhere, eq(orderLineItems.isCancelled, false), eq(lineStageProgress.isDone, true)),
+        and(
+          orderWhere,
+          eq(orderLineItems.isCancelled, false),
+          notDeletedLine,
+          eq(lineStageProgress.isDone, true),
+        ),
       ),
 
     // Trend: order count per day.
     db
       .select({ d: customerOrders.orderDate, n: count() })
       .from(customerOrders)
-      .where(orderWhere)
+      .where(and(orderWhere, hasVisibleLine))
       .groupBy(customerOrders.orderDate),
 
     // Trend: order value per day.
@@ -157,7 +185,7 @@ export async function GET(req: Request) {
       })
       .from(orderLineItems)
       .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false), notDeletedLine))
       .groupBy(customerOrders.orderDate),
 
     // Top parties by value.
@@ -169,7 +197,7 @@ export async function GET(req: Request) {
       })
       .from(orderLineItems)
       .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false), notDeletedLine))
       .groupBy(customerOrders.partyName)
       .orderBy(desc(sql`coalesce(sum(${orderLineItems.lineTotal}), 0)`))
       .limit(6),
@@ -182,7 +210,7 @@ export async function GET(req: Request) {
       })
       .from(orderLineItems)
       .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-      .where(and(orderWhere, eq(orderLineItems.isCancelled, false)))
+      .where(and(orderWhere, eq(orderLineItems.isCancelled, false), notDeletedLine))
       .groupBy(orderLineItems.quality)
       .orderBy(desc(sql`coalesce(sum(${orderLineItems.qtyMtr}), 0)`))
       .limit(6),
@@ -211,6 +239,7 @@ export async function GET(req: Request) {
         and(
           orderWhere,
           eq(orderLineItems.isCancelled, false),
+          notDeletedLine,
           eq(lineStageProgress.isDone, false),
           lt(lineStageProgress.plannedAt, now),
         ),
@@ -219,7 +248,55 @@ export async function GET(req: Request) {
     // KPI totals for the current and prior windows.
     totals(from, to),
     totals(prevFrom, prevTo),
+
+    // Cancellation aggregate (in range): per-order non-deleted line counts +
+    // how many are cancelled — drives the cancelled designs / orders metrics.
+    db
+      .select({
+        orderId: orderLineItems.orderId,
+        total: count(),
+        cancelled: sql<number>`count(*) filter (where ${orderLineItems.isCancelled})`,
+      })
+      .from(orderLineItems)
+      .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
+      .where(and(orderWhere, notDeletedLine))
+      .groupBy(orderLineItems.orderId),
+
+    // Trash aggregate (GLOBAL — Trash is not range-bound): per-order line counts
+    // + how many are soft-deleted, to split fully-deleted orders from designs.
+    db
+      .select({
+        orderId: orderLineItems.orderId,
+        total: count(),
+        deleted: sql<number>`count(*) filter (where ${orderLineItems.isDeleted})`,
+      })
+      .from(orderLineItems)
+      .groupBy(orderLineItems.orderId),
   ]);
+
+  // Cancellation roll-up (in range).
+  let cancelledDesigns = 0;
+  let ordersWithCancel = 0;
+  let cancelledOrders = 0;
+  for (const r of cancelAgg) {
+    const c = Number(r.cancelled);
+    const t = Number(r.total);
+    cancelledDesigns += c;
+    if (c > 0) ordersWithCancel += 1;
+    if (isOrderCancelled(t, c)) cancelledOrders += 1;
+  }
+
+  // Trash roll-up (global): fully-deleted orders vs individually-deleted designs
+  // (matches the Trash page's two lists).
+  let trashOrders = 0;
+  let trashDesigns = 0;
+  for (const r of trashAgg) {
+    const dl = Number(r.deleted);
+    const t = Number(r.total);
+    if (dl === 0) continue;
+    if (isOrderDeleted(t, dl)) trashOrders += 1;
+    else trashDesigns += dl;
+  }
 
   const stageCount = stages.length || 7;
   // Same predicate as overdueRows (the workflow_stages join is 1:1 via PK, so
@@ -289,6 +366,7 @@ export async function GET(req: Request) {
     completed: completedOrders,
     partially: orders.filter((o) => o.status === "PARTIALLY COMPLETED").length,
     pending: orders.filter((o) => o.status === "PENDING").length,
+    cancelled: cancelledOrders,
   };
   const recentOrders = [...orders]
     .sort((a, b) => (a.orderDate < b.orderDate ? 1 : a.orderDate > b.orderDate ? -1 : 0))
@@ -367,6 +445,8 @@ export async function GET(req: Request) {
     pipeline,
     statusBreakdown,
     delays: { onTime: onTimeStages, late: doneStages - onTimeStages },
+    cancellation: { cancelledDesigns, ordersWithCancel, cancelledOrders },
+    trash: { deletedDesigns: trashDesigns, deletedOrders: trashOrders },
     trend,
     topParties,
     topFabrics,

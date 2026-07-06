@@ -19,8 +19,21 @@ export type DashboardData = {
     sortOrder: number;
     count: number;
   }[];
-  statusBreakdown: { completed: number; partially: number; pending: number };
+  statusBreakdown: {
+    completed: number;
+    partially: number;
+    pending: number;
+    cancelled: number;
+  };
   delays: { onTime: number; late: number };
+  // Cancellations in the selected range.
+  cancellation: {
+    cancelledDesigns: number;
+    ordersWithCancel: number;
+    cancelledOrders: number;
+  };
+  // Soft-deleted items currently in Trash (global, not range-bound).
+  trash: { deletedDesigns: number; deletedOrders: number };
   trend: { date: string; orders: number; value: number }[];
   topParties: { party: string; orders: number; value: number }[];
   topFabrics: { fabric: string; meters: number }[];

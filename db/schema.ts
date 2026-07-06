@@ -118,6 +118,12 @@ export const orderLineItems = pgTable(
       sql`qty_mtr * rate`,
     ),
     isCancelled: boolean("is_cancelled").notNull().default(false),
+    // Soft-delete (§ order/design cancellation). A deleted line is hidden from
+    // every normal view (list, detail, tracking, order-status, export) and shown
+    // only in Trash, where it can be restored. Distinct from isCancelled, which
+    // stays visible (struck through). An order with zero non-deleted lines is
+    // itself "deleted" (derived — no separate flag on customer_orders).
+    isDeleted: boolean("is_deleted").notNull().default(false),
     remarks: text("remarks"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

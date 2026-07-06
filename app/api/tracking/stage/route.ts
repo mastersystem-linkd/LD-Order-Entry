@@ -23,11 +23,16 @@ export async function PATCH(req: Request) {
 
   // Guard against a stage_key on a line that doesn't exist → clean 404.
   const [line] = await db
-    .select({ id: orderLineItems.id, isCancelled: orderLineItems.isCancelled })
+    .select({
+      id: orderLineItems.id,
+      isCancelled: orderLineItems.isCancelled,
+      isDeleted: orderLineItems.isDeleted,
+    })
     .from(orderLineItems)
     .where(eq(orderLineItems.id, line_item_id))
     .limit(1);
   if (!line) return jsonError("Line item not found", 404);
+  if (line.isDeleted) return jsonError("This design has been deleted.", 409);
   if (line.isCancelled) return jsonError("This design is cancelled.", 409);
 
   try {

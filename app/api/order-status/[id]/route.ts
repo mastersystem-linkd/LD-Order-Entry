@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { jsonData, jsonError, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
@@ -39,7 +39,9 @@ export async function GET(_req: Request, { params }: Params) {
     })
     .from(orderLineItems)
     .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-    .where(eq(orderLineItems.id, id))
+    // Soft-deleted (trashed) lines are not readable here, like every other
+    // order-status read — a stale click on one 404s instead of showing detail.
+    .where(and(eq(orderLineItems.id, id), eq(orderLineItems.isDeleted, false)))
     .limit(1);
   if (!line) return jsonError("Line not found", 404);
 

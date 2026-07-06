@@ -102,6 +102,177 @@ export function UsersManage() {
 
   const users = list.data?.users ?? [];
   const selfId = list.data?.current_user_id;
+  type UserRow = (typeof users)[number];
+
+  // Shared per-user controls, so the desktop table and the mobile cards render
+  // the exact same role picker / status toggle / actions with one source of logic.
+  const roleSelect = (u: UserRow, isSelf: boolean) => (
+    <select
+      className={selectCls}
+      value={u.role}
+      disabled={isSelf || patch.isPending}
+      title={isSelf ? "You can't change your own role" : undefined}
+      onChange={(e) =>
+        patch.mutate({ id: u.id, body: { role: e.target.value } })
+      }
+    >
+      {ROLES.map((r) => (
+        <option key={r} value={r}>
+          {r}
+        </option>
+      ))}
+    </select>
+  );
+
+  const statusToggle = (u: UserRow, isSelf: boolean) => (
+    <button
+      type="button"
+      disabled={isSelf || patch.isPending}
+      onClick={() =>
+        patch.mutate({ id: u.id, body: { is_active: !u.is_active } })
+      }
+      className={cn(
+        "rounded-pill border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
+        u.is_active
+          ? "border-success/30 bg-success/15 text-success"
+          : "border-line-strong bg-inset text-ink-muted",
+      )}
+      title={
+        isSelf
+          ? "You can't deactivate yourself"
+          : u.is_active
+            ? "Click to deactivate"
+            : "Click to activate"
+      }
+    >
+      {u.is_active ? "Active" : "Inactive"}
+    </button>
+  );
+
+  const userActions = (u: UserRow, isSelf: boolean) =>
+    editId === u.id ? (
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          size="sm"
+          disabled={
+            patch.isPending || !editEmail.includes("@") || !editEmail.trim()
+          }
+          onClick={() =>
+            patch.mutate({
+              id: u.id,
+              body: { name: editName.trim() || null, email: editEmail.trim() },
+            })
+          }
+        >
+          Save
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>
+          <XIcon />
+        </Button>
+      </div>
+    ) : resetId === u.id ? (
+      <div className="flex items-center justify-end gap-2">
+        <Input
+          type="password"
+          value={resetPw}
+          onChange={(e) => setResetPw(e.target.value)}
+          placeholder="New password"
+          className="h-9 w-40"
+          autoFocus
+        />
+        <Button
+          size="sm"
+          disabled={patch.isPending || resetPw.length < 8}
+          onClick={() =>
+            patch.mutate({ id: u.id, body: { password: resetPw } })
+          }
+        >
+          Save
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setResetId(null);
+            setResetPw("");
+          }}
+        >
+          <XIcon />
+        </Button>
+      </div>
+    ) : confirmId === u.id ? (
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-danger">Delete user?</span>
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={del.isPending}
+          onClick={() => del.mutate(u.id)}
+        >
+          Delete
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setConfirmId(null)}>
+          Cancel
+        </Button>
+      </div>
+    ) : (
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label="Edit user"
+          title="Edit name & email"
+          onClick={() => {
+            setEditId(u.id);
+            setEditName(u.name ?? "");
+            setEditEmail(u.email);
+          }}
+        >
+          <PencilIcon />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label="Reset password"
+          title="Reset password"
+          onClick={() => {
+            setResetId(u.id);
+            setResetPw("");
+          }}
+        >
+          <KeyRoundIcon />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label="Delete user"
+          title={isSelf ? "You can't delete yourself" : "Delete user"}
+          disabled={isSelf}
+          className="text-danger hover:bg-danger/10 hover:text-danger"
+          onClick={() => setConfirmId(u.id)}
+        >
+          <Trash2Icon />
+        </Button>
+      </div>
+    );
+
+  const nameEditor = () => (
+    <div className="flex max-w-xs flex-col gap-1.5">
+      <Input
+        value={editName}
+        onChange={(e) => setEditName(e.target.value)}
+        placeholder="Full name"
+        className="h-9"
+      />
+      <Input
+        type="email"
+        value={editEmail}
+        onChange={(e) => setEditEmail(e.target.value)}
+        placeholder="Email"
+        className="h-9"
+      />
+    </div>
+  );
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
@@ -111,249 +282,102 @@ export function UsersManage() {
           <CardTitle>Users</CardTitle>
         </CardHeader>
         <CardContent className="px-0">
-          <div className="overflow-x-auto">
-            {list.isLoading ? (
-              <div className="flex items-center gap-2 px-6 py-8 text-sm text-ink-muted">
-                <Spinner /> Loading…
-              </div>
-            ) : (
-              <table className="w-full min-w-[620px] text-left text-sm">
-                <THead>
-                  <tr>
-                    <Th>User</Th>
-                    <Th>Role</Th>
-                    <Th>Status</Th>
-                    <Th className="text-right">Actions</Th>
-                  </tr>
-                </THead>
-                <tbody>
-                  {users.map((u) => {
-                    const isSelf = u.id === selfId;
-                    return (
-                      <tr
-                        key={u.id}
-                        className="border-b border-line align-middle last:border-0"
-                      >
-                        <td className="px-3 py-2.5 min-w-[180px]">
-                          {editId === u.id ? (
-                            <div className="flex max-w-xs flex-col gap-1.5">
-                              <Input
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                placeholder="Full name"
-                                className="h-9"
-                              />
-                              <Input
-                                type="email"
-                                value={editEmail}
-                                onChange={(e) => setEditEmail(e.target.value)}
-                                placeholder="Email"
-                                className="h-9"
-                              />
+          {list.isLoading ? (
+            <div className="flex items-center gap-2 px-6 py-8 text-sm text-ink-muted">
+              <Spinner /> Loading…
+            </div>
+          ) : (
+            <>
+              {/* Mobile: stacked user cards */}
+              <ul className="flex flex-col gap-2.5 px-3 pb-1 lg:hidden">
+                {users.map((u) => {
+                  const isSelf = u.id === selfId;
+                  return (
+                    <li
+                      key={u.id}
+                      className="rounded-field border border-line bg-surface-2 p-3"
+                    >
+                      {editId === u.id ? (
+                        nameEditor()
+                      ) : (
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 font-medium text-ink">
+                              {u.name || u.email.split("@")[0]}
+                              {isSelf ? (
+                                <span className="rounded-pill bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
+                                  you
+                                </span>
+                              ) : null}
                             </div>
-                          ) : (
-                            <>
-                              <div className="flex items-center gap-2 font-medium">
-                                {u.name || u.email.split("@")[0]}
-                                {isSelf ? (
-                                  <span className="rounded-pill bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
-                                    you
-                                  </span>
-                                ) : null}
-                              </div>
-                              <div className="text-xs text-ink-muted">
-                                {u.email}
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <select
-                            className={selectCls}
-                            value={u.role}
-                            disabled={isSelf || patch.isPending}
-                            title={
-                              isSelf
-                                ? "You can't change your own role"
-                                : undefined
-                            }
-                            onChange={(e) =>
-                              patch.mutate({
-                                id: u.id,
-                                body: { role: e.target.value },
-                              })
-                            }
-                          >
-                            {ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {r}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <button
-                            type="button"
-                            disabled={isSelf || patch.isPending}
-                            onClick={() =>
-                              patch.mutate({
-                                id: u.id,
-                                body: { is_active: !u.is_active },
-                              })
-                            }
-                            className={cn(
-                              "rounded-pill border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-                              u.is_active
-                                ? "border-success/30 bg-success/15 text-success"
-                                : "border-line-strong bg-inset text-ink-muted",
+                            <div className="truncate text-xs text-ink-muted">
+                              {u.email}
+                            </div>
+                          </div>
+                          {statusToggle(u, isSelf)}
+                        </div>
+                      )}
+                      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                        {roleSelect(u, isSelf)}
+                        {userActions(u, isSelf)}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {/* Desktop: table */}
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[620px] text-left text-sm">
+                  <THead>
+                    <tr>
+                      <Th>User</Th>
+                      <Th>Role</Th>
+                      <Th>Status</Th>
+                      <Th className="text-right">Actions</Th>
+                    </tr>
+                  </THead>
+                  <tbody>
+                    {users.map((u) => {
+                      const isSelf = u.id === selfId;
+                      return (
+                        <tr
+                          key={u.id}
+                          className="border-b border-line align-middle last:border-0"
+                        >
+                          <td className="px-3 py-2.5 min-w-[180px]">
+                            {editId === u.id ? (
+                              nameEditor()
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2 font-medium">
+                                  {u.name || u.email.split("@")[0]}
+                                  {isSelf ? (
+                                    <span className="rounded-pill bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
+                                      you
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="text-xs text-ink-muted">
+                                  {u.email}
+                                </div>
+                              </>
                             )}
-                            title={
-                              isSelf
-                                ? "You can't deactivate yourself"
-                                : u.is_active
-                                  ? "Click to deactivate"
-                                  : "Click to activate"
-                            }
-                          >
-                            {u.is_active ? "Active" : "Inactive"}
-                          </button>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {editId === u.id ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                size="sm"
-                                disabled={
-                                  patch.isPending ||
-                                  !editEmail.includes("@") ||
-                                  !editEmail.trim()
-                                }
-                                onClick={() =>
-                                  patch.mutate({
-                                    id: u.id,
-                                    body: {
-                                      name: editName.trim() || null,
-                                      email: editEmail.trim(),
-                                    },
-                                  })
-                                }
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setEditId(null)}
-                              >
-                                <XIcon />
-                              </Button>
-                            </div>
-                          ) : resetId === u.id ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <Input
-                                type="password"
-                                value={resetPw}
-                                onChange={(e) => setResetPw(e.target.value)}
-                                placeholder="New password"
-                                className="h-9 w-40"
-                                autoFocus
-                              />
-                              <Button
-                                size="sm"
-                                disabled={patch.isPending || resetPw.length < 8}
-                                onClick={() =>
-                                  patch.mutate({
-                                    id: u.id,
-                                    body: { password: resetPw },
-                                  })
-                                }
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setResetId(null);
-                                  setResetPw("");
-                                }}
-                              >
-                                <XIcon />
-                              </Button>
-                            </div>
-                          ) : confirmId === u.id ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="text-xs text-danger">
-                                Delete user?
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                disabled={del.isPending}
-                                onClick={() => del.mutate(u.id)}
-                              >
-                                Delete
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setConfirmId(null)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                aria-label="Edit user"
-                                title="Edit name & email"
-                                onClick={() => {
-                                  setEditId(u.id);
-                                  setEditName(u.name ?? "");
-                                  setEditEmail(u.email);
-                                }}
-                              >
-                                <PencilIcon />
-                              </Button>
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                aria-label="Reset password"
-                                title="Reset password"
-                                onClick={() => {
-                                  setResetId(u.id);
-                                  setResetPw("");
-                                }}
-                              >
-                                <KeyRoundIcon />
-                              </Button>
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                aria-label="Delete user"
-                                title={
-                                  isSelf
-                                    ? "You can't delete yourself"
-                                    : "Delete user"
-                                }
-                                disabled={isSelf}
-                                className="text-danger hover:bg-danger/10 hover:text-danger"
-                                onClick={() => setConfirmId(u.id)}
-                              >
-                                <Trash2Icon />
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+                          </td>
+                          <td className="px-3 py-2.5">{roleSelect(u, isSelf)}</td>
+                          <td className="px-3 py-2.5">
+                            {statusToggle(u, isSelf)}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {userActions(u, isSelf)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

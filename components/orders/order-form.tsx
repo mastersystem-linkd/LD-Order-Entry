@@ -525,7 +525,7 @@ export function OrderForm({
 
   return (
     <form
-      className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 pb-[104px]"
+      className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 pb-[124px] sm:pb-[104px]"
       onSubmit={(e) => {
         e.preventDefault();
         openPreview();
@@ -543,7 +543,7 @@ export function OrderForm({
             </div>
             {mode === "edit" ? <Eyebrow>Editing</Eyebrow> : null}
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-x-4 lg:grid-cols-3 [&_input]:h-9">
+          <CardContent className="grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-2 sm:gap-x-4 lg:grid-cols-3 [&_input]:h-9">
             <Field label="Order date" htmlFor="order_date" required>
               <Input
                 id="order_date"
@@ -659,7 +659,7 @@ export function OrderForm({
             <Field
               label="Remarks"
               htmlFor="remarks"
-              className="col-span-2 lg:col-span-3"
+              className="col-span-1 sm:col-span-2 lg:col-span-3"
             >
               <Input
                 id="remarks"

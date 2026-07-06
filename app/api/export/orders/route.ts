@@ -105,6 +105,7 @@ export async function GET(req: Request) {
           design_no: orderLineItems.designNo,
           qty_mtr: orderLineItems.qtyMtr,
           is_cancelled: orderLineItems.isCancelled,
+          is_deleted: orderLineItems.isDeleted,
         })
         .from(orderLineItems)
         .where(inArray(orderLineItems.orderId, orderIds))
@@ -151,6 +152,9 @@ export async function GET(req: Request) {
       design_no: l.design_no,
       qty_mtr: l.qty_mtr,
       is_cancelled: l.is_cancelled,
+      // Soft-deleted lines are still emitted (flagged) so the Embroidery System
+      // can remove them on its side — hiding them would leave a stale record.
+      is_deleted: l.is_deleted,
       operations_status: computeLineStatus(stagesByLine.get(l.id) ?? []),
     })),
   }));

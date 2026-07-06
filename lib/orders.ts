@@ -134,6 +134,37 @@ export type OrderTracking = {
   operations_status: OperationsStatus;
 };
 
+// ---- Trash (soft-deleted orders + designs) — GET /api/trash ----
+export type TrashOrder = {
+  id: string;
+  order_no: string;
+  party_name: string;
+  order_date: string;
+  design_count: number;
+  qty_total: number;
+  grand_total: number;
+  deleted_at: string;
+};
+
+export type TrashDesign = {
+  line_id: string;
+  order_id: string;
+  order_no: string;
+  party_name: string;
+  order_date: string;
+  quality: string;
+  design_no: string;
+  qty_mtr: number;
+  line_total: number | null;
+  deleted_at: string;
+};
+
+export type TrashList = {
+  orders: TrashOrder[];
+  designs: TrashDesign[];
+  summary: { deleted_orders: number; deleted_designs: number };
+};
+
 // Indian-style number formatting for money/qty display.
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-IN", {

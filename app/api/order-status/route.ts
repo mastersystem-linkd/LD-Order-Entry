@@ -54,8 +54,10 @@ export async function GET(req: Request) {
   const page = Math.max(1, Number.parseInt(p.get("page") ?? "1", 10) || 1);
 
   // Cancelled lines are INCLUDED here (shown struck on the board); they're
-  // excluded from the aggregation + summary in JS further down.
-  const conds: SQL[] = [];
+  // excluded from the aggregation + summary in JS further down. Soft-DELETED
+  // lines are excluded entirely (they live in Trash); an order with only deleted
+  // lines therefore produces no rows and drops off the board.
+  const conds: SQL[] = [eq(orderLineItems.isDeleted, false)];
   if (search) {
     conds.push(
       or(

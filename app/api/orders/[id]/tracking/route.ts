@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { jsonData, jsonError, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
@@ -32,10 +32,11 @@ export async function GET(_req: Request, { params }: Params) {
     .limit(1);
   if (!order) return jsonError("Order not found", 404);
 
+  // Soft-deleted lines are hidden from operations tracking too.
   const lines = await db
     .select()
     .from(orderLineItems)
-    .where(eq(orderLineItems.orderId, id))
+    .where(and(eq(orderLineItems.orderId, id), eq(orderLineItems.isDeleted, false)))
     .orderBy(asc(orderLineItems.createdAt));
 
   const lineIds = lines.map((l) => l.id);

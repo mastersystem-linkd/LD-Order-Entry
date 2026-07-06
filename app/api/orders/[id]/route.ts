@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 import {
   isUniqueViolation,
@@ -15,6 +15,7 @@ import {
   computeOrderStatus,
   isOrderCancelled,
   lineMatchKey,
+  plannedAtForOffset,
 } from "@/lib/workflow";
 import {
   customerOrders,
@@ -39,10 +40,12 @@ export async function GET(_req: Request, { params }: Params) {
     .limit(1);
   if (!order) return jsonError("Order not found", 404);
 
+  // Soft-deleted lines are hidden everywhere (Trash restores them); the edit
+  // form and expandable Orders rows both read this, so exclude them here.
   const lines = await db
     .select()
     .from(orderLineItems)
-    .where(eq(orderLineItems.orderId, id))
+    .where(and(eq(orderLineItems.orderId, id), eq(orderLineItems.isDeleted, false)))
     .orderBy(asc(orderLineItems.createdAt));
 
   const lineIds = lines.map((l) => l.id);
@@ -145,11 +148,20 @@ export async function PUT(req: Request, { params }: Params) {
   const orderNo = order.order_no.trim();
 
   const [existing] = await db
-    .select({ id: customerOrders.id, orderNo: customerOrders.orderNo })
+    .select({
+      id: customerOrders.id,
+      orderNo: customerOrders.orderNo,
+      orderDate: customerOrders.orderDate,
+    })
     .from(customerOrders)
     .where(eq(customerOrders.id, id))
     .limit(1);
   if (!existing) return jsonError("Order not found", 404);
+
+  // Stage SLA deadlines are order_date + offset. If the order date moved, the
+  // kept lines' planned dates must move with it (otherwise the order stays
+  // "overdue" against its old date even after you correct it).
+  const dateChanged = existing.orderDate !== order.order_date;
 
   if (orderNo !== existing.orderNo) {
     const [clash] = await db
@@ -163,10 +175,14 @@ export async function PUT(req: Request, { params }: Params) {
   const now = new Date();
   try {
     await dbx.transaction(async (tx) => {
+      // Only reconcile against non-deleted lines — soft-deleted (trashed) lines
+      // must survive an edit untouched (the form never showed them).
       const existingLines = await tx
         .select()
         .from(orderLineItems)
-        .where(eq(orderLineItems.orderId, id));
+        .where(
+          and(eq(orderLineItems.orderId, id), eq(orderLineItems.isDeleted, false)),
+        );
 
       const byKey = new Map<string, typeof existingLines>();
       for (const l of existingLines) {
@@ -224,6 +240,22 @@ export async function PUT(req: Request, { params }: Params) {
           .where(eq(orderLineItems.id, u.id));
       }
 
+      // SLA offsets (Time Tracking config) — needed both to seed new lines and
+      // to re-anchor kept lines when the order date changed. Fetched at most once.
+      let offsets: Record<string, number> | null = null;
+      const getOffsets = async () => {
+        if (!offsets) {
+          const offRows = await tx
+            .select({
+              stageKey: workflowStages.stageKey,
+              off: workflowStages.plannedOffsetDays,
+            })
+            .from(workflowStages);
+          offsets = Object.fromEntries(offRows.map((r) => [r.stageKey, r.off]));
+        }
+        return offsets;
+      };
+
       if (toInsert.length) {
         const inserted = await tx
           .insert(orderLineItems)
@@ -239,19 +271,40 @@ export async function PUT(req: Request, { params }: Params) {
           .returning({ id: orderLineItems.id });
 
         // SLA planned dates from the Time Tracking config — for new lines only.
-        const offRows = await tx
-          .select({
-            stageKey: workflowStages.stageKey,
-            off: workflowStages.plannedOffsetDays,
-          })
-          .from(workflowStages);
-        const offsets = Object.fromEntries(
-          offRows.map((r) => [r.stageKey, r.off]),
-        );
+        const off = await getOffsets();
         const stageValues = inserted.flatMap((l) =>
-          buildInitialStageRows(l.id, order.order_date, offsets),
+          buildInitialStageRows(l.id, order.order_date, off),
         );
         await tx.insert(lineStageProgress).values(stageValues);
+      }
+
+      // Re-anchor the kept lines' SLA deadlines to the new order date. planned_at
+      // is a pure function of (order_date + offset), so a date change must move
+      // every stage's planned_at; done stages also get their delay recomputed
+      // against the new deadline. is_done / actual_at / stock_status are kept.
+      if (dateChanged && keepIds.size) {
+        const off = await getOffsets();
+        const keptStages = await tx
+          .select({
+            id: lineStageProgress.id,
+            stageKey: lineStageProgress.stageKey,
+            actualAt: lineStageProgress.actualAt,
+          })
+          .from(lineStageProgress)
+          .where(inArray(lineStageProgress.orderLineItemId, [...keepIds]));
+        for (const s of keptStages) {
+          const planned = plannedAtForOffset(order.order_date, off[s.stageKey] ?? 1);
+          const delay =
+            s.actualAt != null
+              ? Math.round(
+                  (new Date(s.actualAt).getTime() - planned.getTime()) / 60000,
+                )
+              : null;
+          await tx
+            .update(lineStageProgress)
+            .set({ plannedAt: planned, delayMinutes: delay, updatedAt: now })
+            .where(eq(lineStageProgress.id, s.id));
+        }
       }
 
       // Design Database log for every current line (deduped; idempotent re-save).
@@ -302,7 +355,11 @@ export async function PUT(req: Request, { params }: Params) {
   }
 }
 
-// DELETE /api/orders/:id — cascade removes lines + stage progress.
+// DELETE /api/orders/:id — PERMANENT purge (cascade removes lines + stage
+// progress). Trash-only: refuses unless the order is already fully soft-deleted
+// (no live lines), mirroring the per-line purge guard so a stray/mis-wired
+// DELETE can't nuke a live order. To remove a live order, soft-delete it first
+// (PATCH /api/orders/:id/delete) — it lands in Trash — then purge from there.
 export async function DELETE(_req: Request, { params }: Params) {
   const guard = await requireCapability("orders.edit");
   if (!guard.ok) return guard.response;
@@ -314,6 +371,19 @@ export async function DELETE(_req: Request, { params }: Params) {
     .where(eq(customerOrders.id, id))
     .limit(1);
   if (!existing) return jsonError("Order not found", 404);
+
+  const [{ live }] = await db
+    .select({ live: count() })
+    .from(orderLineItems)
+    .where(
+      and(eq(orderLineItems.orderId, id), eq(orderLineItems.isDeleted, false)),
+    );
+  if (Number(live) > 0) {
+    return jsonError(
+      "Delete the order (move it to Trash) before permanently removing it.",
+      409,
+    );
+  }
 
   await db.delete(customerOrders).where(eq(customerOrders.id, id));
   return jsonData({ id });

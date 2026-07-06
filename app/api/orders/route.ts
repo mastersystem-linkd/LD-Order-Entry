@@ -3,6 +3,7 @@ import {
   count,
   desc,
   eq,
+  exists,
   gte,
   ilike,
   inArray,
@@ -78,19 +79,37 @@ export async function GET(req: Request) {
     ISO_DATE.test(to) ? lte(customerOrders.orderDate, to) : undefined,
   );
 
+  // Only orders with at least one non-deleted line are visible; a fully soft-
+  // deleted order lives in Trash and must drop out of the list AND its counts/
+  // pagination (else a page could render short).
+  const hasVisibleLine = exists(
+    db
+      .select({ one: sql`1` })
+      .from(orderLineItems)
+      .where(
+        and(
+          eq(orderLineItems.orderId, customerOrders.id),
+          eq(orderLineItems.isDeleted, false),
+        ),
+      ),
+  );
+  const visibleFilter = and(filter, hasVisibleLine);
+
   const listQuery = db
     .select()
     .from(customerOrders)
-    .where(filter)
+    .where(visibleFilter)
     .orderBy(desc(customerOrders.orderDate), desc(customerOrders.createdAt));
 
   // count + page are independent — run them in one round trip.
   const [totalRes, orders, cancelAgg] = await Promise.all([
-    db.select({ value: count() }).from(customerOrders).where(filter),
+    db.select({ value: count() }).from(customerOrders).where(visibleFilter),
     exportAll
       ? listQuery.limit(EXPORT_MAX)
       : listQuery.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE),
-    // All-pages cancellation counts for the "Cancelled" KPI (per-order totals).
+    // All-pages cancellation counts for the "Cancelled" KPI (per-order totals),
+    // over NON-deleted lines only (a deleted line isn't cancelled; a fully
+    // deleted order has no non-deleted lines so it drops out entirely).
     db
       .select({
         orderId: orderLineItems.orderId,
@@ -99,7 +118,7 @@ export async function GET(req: Request) {
       })
       .from(orderLineItems)
       .innerJoin(customerOrders, eq(customerOrders.id, orderLineItems.orderId))
-      .where(filter)
+      .where(and(filter, eq(orderLineItems.isDeleted, false)))
       .groupBy(orderLineItems.orderId),
   ]);
   const total = totalRes[0].value;
@@ -127,7 +146,12 @@ export async function GET(req: Request) {
           isCancelled: orderLineItems.isCancelled,
         })
         .from(orderLineItems)
-        .where(inArray(orderLineItems.orderId, orderIds))
+        .where(
+          and(
+            inArray(orderLineItems.orderId, orderIds),
+            eq(orderLineItems.isDeleted, false),
+          ),
+        )
     : [];
 
   const lineIds = lines.map((l) => l.id);

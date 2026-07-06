@@ -119,6 +119,13 @@ export function isOrderCancelled(total: number, cancelled: number): boolean {
   return total > 0 && cancelled === total;
 }
 
+// An order is "deleted" (hidden from normal views, recoverable from Trash) when
+// it has at least one line and every line is soft-deleted. Derived — there is no
+// is_deleted flag on customer_orders. `total` counts ALL lines (incl. deleted).
+export function isOrderDeleted(total: number, deleted: number): boolean {
+  return total > 0 && deleted === total;
+}
+
 // Identity used to preserve stage progress across an edit (§6): fabric + design
 // + qty. Normalized so "10" and "10.00" (and case/space) match.
 export function lineMatchKey(parts: {

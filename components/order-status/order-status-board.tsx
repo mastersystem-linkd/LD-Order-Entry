@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   BanIcon,
@@ -98,15 +99,23 @@ export function OrderStatusBoard({
   caps: Capability[];
   userKey?: string;
 }) {
+  // Initial filter can be deep-linked from the Dashboard KPI cards, e.g.
+  // /order-status?overall=overdue or ?cancelled=1 or ?stage=challan.
+  const params = useSearchParams();
   const [searchInput, setSearchInput] = React.useState("");
   const search = useDebouncedValue(searchInput, 300);
   const [party, setParty] = React.useState("");
   const [fabric, setFabric] = React.useState("");
-  const [stage, setStage] = React.useState("");
-  const [overall, setOverall] = React.useState<OverallStatus | "">("");
+  const [stage, setStage] = React.useState(() => params.get("stage") ?? "");
+  const [overall, setOverall] = React.useState<OverallStatus | "">(() => {
+    const o = params.get("overall");
+    return o === "in_progress" || o === "completed" || o === "overdue" ? o : "";
+  });
   // Separate from `overall` because "cancelled" isn't an OverallStatus — a
   // cancelled order's derived overall is a vacuous "completed" (§ aggregate).
-  const [cancelledOnly, setCancelledOnly] = React.useState(false);
+  const [cancelledOnly, setCancelledOnly] = React.useState(
+    () => params.get("cancelled") === "1",
+  );
   const [filters, setFilters] =
     React.useState<OrderFilterState>(EMPTY_ORDER_FILTERS);
   const debouncedFilters = useDebouncedValue(filters, 300);
@@ -171,15 +180,18 @@ export function OrderStatusBoard({
       inProgress: active.filter((g) => g.overall === "in_progress").length,
       completed: active.filter((g) => g.overall === "completed").length,
       overdue: active.filter((g) => g.overall === "overdue").length,
-      cancelled: groups.length - active.length,
+      // Count of cancelled DESIGNS (so a partially-cancelled order still shows).
+      cancelled: allLines.filter((l) => l.isCancelled).length,
     };
-  }, [groups]);
+  }, [groups, allLines]);
 
   const visibleGroups = React.useMemo(() => {
     let gs = groups;
-    if (cancelledOnly) gs = gs.filter((g) => g.isCancelled);
-    // The overall cards refine over ACTIVE groups (a cancelled order's overall is
-    // a vacuous "completed" — it belongs only under the Cancelled card).
+    // Cancelled = any order that has at least one cancelled design (fully- or
+    // partially-cancelled); its cancelled rows render struck through.
+    if (cancelledOnly) gs = gs.filter((g) => (g.cancelledCount ?? 0) > 0);
+    // The overall cards refine over ACTIVE groups (a fully-cancelled order's
+    // overall is a vacuous "completed" — it belongs only under the Cancelled card).
     else if (overall)
       gs = gs.filter((g) => !g.isCancelled && g.overall === overall);
     if (stage) gs = gs.filter((g) => g.currentStageKey === stage);

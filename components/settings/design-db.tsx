@@ -200,7 +200,50 @@ export function DesignDatabasePanel() {
               No designs found{search ? ` for “${search}”` : ""}.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile: stacked rows */}
+            <ul className="flex flex-col divide-y divide-line lg:hidden">
+              {rows.map((r) => {
+                const checked = selected.has(r.id);
+                return (
+                  <li
+                    key={r.id}
+                    className={
+                      "flex items-center gap-3 px-3 py-2.5 " +
+                      (checked ? "bg-accent-soft/60" : "")
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${r.design_no}`}
+                      checked={checked}
+                      onChange={() => toggle(r.id)}
+                      className="size-4 shrink-0 accent-[var(--accent)]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-ink">
+                        {r.fabric_name} ·{" "}
+                        <span className="num">{r.design_no}</span>
+                      </div>
+                      <div className="num truncate text-[12px] text-ink-soft">
+                        {r.order_no} · {formatDateTime(r.created_at)}
+                      </div>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Delete"
+                      className="shrink-0 text-danger hover:bg-danger/10 hover:text-danger"
+                      onClick={() => remove.mutate(r.id)}
+                    >
+                      <Trash2Icon />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+            {/* Desktop: table */}
+            <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[560px] text-left text-sm">
               <THead>
                 <tr>
@@ -263,6 +306,7 @@ export function DesignDatabasePanel() {
               </tbody>
             </table>
             </div>
+            </>
           )}
         </div>
 

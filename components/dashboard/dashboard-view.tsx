@@ -8,11 +8,14 @@ import NumberFlow from "@number-flow/react";
 import {
   ActivityIcon,
   AlertTriangleIcon,
+  ArrowRightIcon,
+  BanIcon,
   CheckCircle2Icon,
   ClipboardListIcon,
   IndianRupeeIcon,
   RefreshCwIcon,
   RulerIcon,
+  Trash2Icon,
 } from "lucide-react";
 
 import { apiGet } from "@/lib/api-client";
@@ -31,7 +34,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Input } from "@/components/ui/input";
 import {
-  DelaysBar,
+  OnTimeGauge,
   StatusDonut,
   TrendChart,
 } from "@/components/dashboard/dashboard-charts";
@@ -176,6 +179,7 @@ export function DashboardView() {
                       label="Total orders"
                       value={d.kpis.orders}
                       trend={delta(d.kpis.orders, d.kpis.prev.orders)}
+                      href="/orders"
                     />,
                     <Kpi
                       key="v"
@@ -185,6 +189,7 @@ export function DashboardView() {
                       value={d.kpis.value}
                       prefix="₹"
                       trend={delta(d.kpis.value, d.kpis.prev.value)}
+                      href="/orders"
                     />,
                     <Kpi
                       key="m"
@@ -194,6 +199,7 @@ export function DashboardView() {
                       value={d.kpis.meters}
                       suffix=" m"
                       trend={delta(d.kpis.meters, d.kpis.prev.meters)}
+                      href="/orders"
                     />,
                     <Kpi
                       key="a"
@@ -201,6 +207,7 @@ export function DashboardView() {
                       tone="slate"
                       label="Active orders"
                       value={d.kpis.activeOrders}
+                      href="/order-status?overall=in_progress"
                     />,
                     <Kpi
                       key="od"
@@ -208,6 +215,7 @@ export function DashboardView() {
                       tone="red"
                       label="Overdue stages"
                       value={d.kpis.overdueStages}
+                      href="/order-status?overall=overdue"
                     />,
                     <Kpi
                       key="ot"
@@ -216,37 +224,24 @@ export function DashboardView() {
                       label="On-time %"
                       value={d.kpis.onTimePct}
                       suffix="%"
+                      href="/order-status"
                     />,
                   ]}
             </div>
 
-            {/* Operations pipeline */}
-            <Section title="Operations pipeline">
+            {/* Operations pipeline — where work is sitting right now */}
+            <Section
+              title="Operations pipeline"
+              action={
+                <span className="text-[11px] text-ink-muted">
+                  lines awaiting each stage
+                </span>
+              }
+            >
               {loading || !d ? (
-                <Skel className="h-[88px]" />
+                <Skel className="h-[196px]" />
               ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                  {d.pipeline.map((s) => (
-                    <Link
-                      key={s.stageKey}
-                      href={`/tracking?stage=${s.stageKey}`}
-                      className="group rounded-[10px] border border-line bg-surface-2 p-3 transition-colors hover:border-accent hover:bg-accent-soft"
-                    >
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-ink-soft">
-                        <span
-                          className={cn(
-                            "size-2 shrink-0 rounded-full",
-                            STAGE_DOT[s.stageKey] ?? "bg-ink-muted",
-                          )}
-                        />
-                        <span className="truncate">{s.label}</span>
-                      </div>
-                      <div className="num mt-1 text-2xl font-semibold text-ink">
-                        {s.count}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+                <PipelineBars data={d.pipeline} />
               )}
             </Section>
 
@@ -283,7 +278,7 @@ export function DashboardView() {
                 )}
               </Section>
 
-              <Section title="Status split">
+              <Section title="Order status split">
                 {loading || !d ? (
                   <Skel className="h-[232px]" />
                 ) : (
@@ -291,11 +286,77 @@ export function DashboardView() {
                 )}
               </Section>
 
-              <Section title="Delays">
+              <Section title="On-time delivery">
                 {loading || !d ? (
                   <Skel className="h-[232px]" />
                 ) : (
-                  <DelaysBar onTime={d.delays.onTime} late={d.delays.late} />
+                  <div className="grid place-items-center py-2">
+                    <OnTimeGauge
+                      pct={d.kpis.onTimePct}
+                      onTime={d.delays.onTime}
+                      late={d.delays.late}
+                    />
+                  </div>
+                )}
+              </Section>
+            </div>
+
+            {/* Cancellations & Trash — the new order/design lifecycle metrics */}
+            <div className="grid gap-3 lg:grid-cols-2">
+              <Section
+                title="Cancellations"
+                action={
+                  <span className="text-[11px] text-ink-muted">this range</span>
+                }
+              >
+                {loading || !d ? (
+                  <Skel className="h-[96px]" />
+                ) : (
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <MiniFig
+                      icon={<BanIcon />}
+                      tone="rose"
+                      label="Cancelled designs"
+                      value={d.cancellation.cancelledDesigns}
+                    />
+                    <MiniFig
+                      label="Orders affected"
+                      value={d.cancellation.ordersWithCancel}
+                    />
+                    <MiniFig
+                      label="Fully cancelled"
+                      value={d.cancellation.cancelledOrders}
+                    />
+                  </div>
+                )}
+              </Section>
+
+              <Section
+                title="Trash"
+                action={
+                  <Link
+                    href="/trash"
+                    className="inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline"
+                  >
+                    Open Trash <ArrowRightIcon className="size-3.5" />
+                  </Link>
+                }
+              >
+                {loading || !d ? (
+                  <Skel className="h-[96px]" />
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <MiniFig
+                      icon={<Trash2Icon />}
+                      label="Deleted designs"
+                      value={d.trash.deletedDesigns}
+                    />
+                    <MiniFig
+                      icon={<Trash2Icon />}
+                      label="Deleted orders"
+                      value={d.trash.deletedOrders}
+                    />
+                  </div>
                 )}
               </Section>
             </div>
@@ -430,6 +491,7 @@ function Kpi({
   suffix,
   tone,
   trend,
+  href,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -438,8 +500,10 @@ function Kpi({
   suffix?: string;
   tone?: "indigo" | "green" | "amber" | "red" | "slate";
   trend?: { dir: "up" | "down"; text: string };
+  /** When set, the whole card links to a filtered list view. */
+  href?: string;
 }) {
-  return (
+  const card = (
     <StatCard
       icon={icon}
       label={label}
@@ -454,6 +518,16 @@ function Kpi({
         />
       }
     />
+  );
+  if (!href) return card;
+  return (
+    <Link
+      href={href}
+      className="block rounded-card transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+      title="View these orders"
+    >
+      {card}
+    </Link>
   );
 }
 
@@ -511,6 +585,84 @@ function TopBars({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Operations pipeline as horizontal, clickable bars — length ∝ lines currently
+// waiting at that stage. Each row deep-links to the tracking board filtered to
+// that stage. Stage name label is always present (colour is secondary).
+function PipelineBars({ data }: { data: DashboardData["pipeline"] }) {
+  const max = Math.max(...data.map((s) => s.count), 1);
+  const total = data.reduce((s, x) => s + x.count, 0);
+  if (total === 0) return <Empty text="No active lines in the pipeline." />;
+  return (
+    <div className="flex flex-col gap-1">
+      {data.map((s) => (
+        <Link
+          key={s.stageKey}
+          href={`/tracking?stage=${s.stageKey}`}
+          className="group flex items-center gap-3 rounded-[8px] px-2 py-1.5 transition-colors hover:bg-surface-2"
+        >
+          <span className="flex w-[104px] shrink-0 items-center gap-1.5 sm:w-[132px]">
+            <span
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                STAGE_DOT[s.stageKey] ?? "bg-ink-muted",
+              )}
+            />
+            <span className="truncate text-[13px] font-medium text-ink-soft group-hover:text-ink">
+              {s.label}
+            </span>
+          </span>
+          <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-inset">
+            <span
+              className={cn(
+                "block h-full rounded-full transition-[width] duration-500",
+                STAGE_DOT[s.stageKey] ?? "bg-ink-muted",
+              )}
+              style={{
+                width: s.count === 0 ? "0%" : `${Math.max(6, (s.count / max) * 100)}%`,
+              }}
+            />
+          </span>
+          <span className="num w-8 shrink-0 text-right text-sm font-semibold text-ink">
+            {s.count}
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// Compact figure tile for the Cancellations / Trash panels.
+function MiniFig({
+  icon,
+  label,
+  value,
+  tone = "slate",
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: number;
+  tone?: "rose" | "slate";
+}) {
+  return (
+    <div className="rounded-[10px] border border-line bg-surface-2 p-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium text-ink-soft">
+        {icon ? (
+          <span className="text-ink-muted [&_svg]:size-3.5">{icon}</span>
+        ) : null}
+        <span className="truncate">{label}</span>
+      </div>
+      <div
+        className={cn(
+          "num mt-1 font-display text-[26px] font-semibold leading-none",
+          tone === "rose" ? "text-danger" : "text-ink",
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }

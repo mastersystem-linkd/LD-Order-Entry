@@ -80,6 +80,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Orders", href: "/orders", cap: "orders.view" },
   { label: "Order status", href: "/order-status", cap: "orders.view" },
   { label: "Operations", href: "/tracking", cap: "operations.view" },
+  { label: "Trash", href: "/trash", cap: "orders.edit" },
   { label: "Settings", href: "/settings", adminOnly: true },
 ];
 
@@ -107,6 +108,10 @@ export function canAccessPath(
   }
   if (pathname === "/") return true;
 
+  // Trash (soft-deleted orders/designs — restore & permanent delete) → orders.edit.
+  if (pathname === "/trash" || pathname.startsWith("/trash/")) {
+    return hasCap(caps, "orders.edit");
+  }
   // New order + edit order → orders.edit (most specific, check first).
   if (pathname === "/orders/new" || /^\/orders\/[^/]+\/edit$/.test(pathname)) {
     return hasCap(caps, "orders.edit");

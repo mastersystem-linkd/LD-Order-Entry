@@ -1238,7 +1238,7 @@ function MobileStageRow({
                 onStock((e.target.value || null) as StockStatus | null)
               }
               aria-label="Stock status"
-              className="h-7 rounded-md border border-line-strong bg-surface px-1.5 text-[11px] font-medium text-ink outline-none focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-80"
+              className="h-9 rounded-md border border-line-strong bg-surface px-2 text-[12px] font-medium text-ink outline-none focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-80"
             >
               <option value="">Pending</option>
               <option value="in_stock">In stock</option>

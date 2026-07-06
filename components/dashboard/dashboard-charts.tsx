@@ -123,18 +123,25 @@ export function TrendChart({
   );
 }
 
-// Status split (donut).
+// Status split (donut) with a total in the hole. Cancelled orders are shown as
+// their own reserved-danger slice so the new cancellation flow is visible.
 export function StatusDonut({
   data,
 }: {
-  data: { completed: number; partially: number; pending: number };
+  data: {
+    completed: number;
+    partially: number;
+    pending: number;
+    cancelled: number;
+  };
 }) {
   const reduce = useReducedMotion();
   const items = [
     { name: "Completed", value: data.completed, color: "var(--success)" },
     { name: "Partially", value: data.partially, color: "var(--warning)" },
     { name: "Pending", value: data.pending, color: "var(--ink-soft)" },
-  ];
+    { name: "Cancelled", value: data.cancelled, color: "var(--danger)" },
+  ].filter((i) => i.value > 0);
   const total = items.reduce((s, i) => s + i.value, 0);
   if (total === 0) {
     return (
@@ -147,28 +154,36 @@ export function StatusDonut({
     <div className="flex flex-col items-center gap-3">
       <div
         role="img"
-        aria-label={`Order status split — completed ${data.completed}, partially completed ${data.partially}, pending ${data.pending}`}
-        className="w-full"
+        aria-label={`Order status split — completed ${data.completed}, partially completed ${data.partially}, pending ${data.pending}, cancelled ${data.cancelled}`}
+        className="relative w-full"
       >
-      <ResponsiveContainer width="100%" height={184}>
-        <PieChart>
-          <Pie
-            data={items}
-            dataKey="value"
-            nameKey="name"
-            innerRadius={56}
-            outerRadius={82}
-            paddingAngle={2}
-            strokeWidth={0}
-            isAnimationActive={!reduce}
-          >
-            {items.map((i) => (
-              <Cell key={i.name} fill={i.color} />
-            ))}
-          </Pie>
-          <Tooltip content={<ChartTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={184}>
+          <PieChart>
+            <Pie
+              data={items}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={58}
+              outerRadius={84}
+              paddingAngle={2}
+              cornerRadius={4}
+              strokeWidth={0}
+              isAnimationActive={!reduce}
+            >
+              {items.map((i) => (
+                <Cell key={i.name} fill={i.color} />
+              ))}
+            </Pie>
+            <Tooltip content={<ChartTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Total in the hole */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="num font-display text-2xl font-semibold leading-none text-ink">
+            {total}
+          </span>
+          <span className="mt-0.5 text-[11px] text-ink-muted">orders</span>
+        </div>
       </div>
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs">
         {items.map((i) => (
@@ -181,6 +196,74 @@ export function StatusDonut({
             <span className="num font-medium text-ink">{i.value}</span>
           </span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// On-time delivery as a semicircular gauge (reserved status colour by band).
+export function OnTimeGauge({
+  pct,
+  onTime,
+  late,
+}: {
+  pct: number;
+  onTime: number;
+  late: number;
+}) {
+  const done = onTime + late;
+  const R = 70;
+  const cx = 90;
+  const cy = 96;
+  const sw = 16;
+  const len = Math.PI * R; // semicircle arc length
+  const frac = Math.max(0, Math.min(100, pct)) / 100;
+  const color =
+    pct >= 90 ? "var(--success)" : pct >= 70 ? "var(--warning)" : "var(--danger)";
+  const trackPath = `M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`;
+  return (
+    <div className="flex flex-col items-center">
+      <div
+        role="img"
+        aria-label={`On-time delivery ${pct}% — ${onTime} on time, ${late} late`}
+        className="relative"
+      >
+        <svg width="180" height="112" viewBox="0 0 180 112">
+          <path
+            d={trackPath}
+            fill="none"
+            stroke="var(--inset)"
+            strokeWidth={sw}
+            strokeLinecap="round"
+          />
+          <path
+            d={trackPath}
+            fill="none"
+            stroke={color}
+            strokeWidth={sw}
+            strokeLinecap="round"
+            strokeDasharray={`${frac * len} ${len}`}
+            style={{ transition: "stroke-dasharray 700ms ease" }}
+          />
+        </svg>
+        <div className="absolute inset-x-0 bottom-2 flex flex-col items-center">
+          <span className="num font-display text-[28px] font-semibold leading-none text-ink">
+            {done === 0 ? "—" : `${pct}%`}
+          </span>
+          <span className="mt-0.5 text-[11px] text-ink-muted">on time</span>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-4 text-xs">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full bg-success" />
+          <span className="text-ink-soft">On time</span>
+          <span className="num font-medium text-ink">{onTime}</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full bg-danger" />
+          <span className="text-ink-soft">Late</span>
+          <span className="num font-medium text-ink">{late}</span>
+        </span>
       </div>
     </div>
   );

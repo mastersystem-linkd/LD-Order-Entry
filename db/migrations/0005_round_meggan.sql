@@ -1,0 +1,1 @@
+ALTER TABLE "order_line_items" ADD COLUMN IF NOT EXISTS "is_deleted" boolean DEFAULT false NOT NULL;

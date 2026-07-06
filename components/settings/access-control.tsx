@@ -98,7 +98,7 @@ export function AccessControl() {
                           readOnly
                           disabled
                           aria-label={`ADMIN — ${c.label} (always on)`}
-                          className="size-4 accent-[var(--accent)] opacity-60"
+                          className="size-5 accent-[var(--accent)] opacity-60"
                         />
                       </td>
                     ))}
@@ -114,21 +114,23 @@ export function AccessControl() {
                       {CAPABILITIES.map((c) => {
                         const checked = grants?.[role]?.[c.key] ?? false;
                         return (
-                          <td key={c.key} className="px-3 py-2.5 text-center">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={toggle.isPending}
-                              onChange={(e) =>
-                                toggle.mutate({
-                                  role,
-                                  capability: c.key,
-                                  allowed: e.target.checked,
-                                })
-                              }
-                              aria-label={`${role} — ${c.label}`}
-                              className="size-4 accent-[var(--accent)] disabled:opacity-60"
-                            />
+                          <td key={c.key} className="px-1 py-1 text-center">
+                            <label className="inline-flex cursor-pointer items-center justify-center p-2">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={toggle.isPending}
+                                onChange={(e) =>
+                                  toggle.mutate({
+                                    role,
+                                    capability: c.key,
+                                    allowed: e.target.checked,
+                                  })
+                                }
+                                aria-label={`${role} — ${c.label}`}
+                                className="size-5 accent-[var(--accent)] disabled:opacity-60"
+                              />
+                            </label>
                           </td>
                         );
                       })}

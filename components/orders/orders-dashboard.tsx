@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BanIcon,
   CheckIcon,
+  ChevronRightIcon,
   ClipboardListIcon,
   ClockIcon,
   DownloadIcon,
@@ -52,6 +53,18 @@ import {
   OrderFilters,
   type OrderFilterState,
 } from "@/components/orders/order-filters";
+import {
+  OrderDesignsList,
+  OrderDesignsPanel,
+} from "@/components/orders/order-designs";
+
+// The KPI cards double as one-click status filters. "" = show all.
+type StatusFilter =
+  | ""
+  | "COMPLETED"
+  | "PARTIALLY COMPLETED"
+  | "PENDING"
+  | "cancelled";
 
 export function OrdersDashboard({ caps }: { caps: Capability[] }) {
   const router = useRouter();
@@ -69,7 +82,19 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
   const [toDelete, setToDelete] = React.useState<OrderRow | null>(null);
   const [toCancel, setToCancel] = React.useState<OrderRow | null>(null);
   const [selected, setSelected] = React.useState<OrderRow | null>(null);
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  // KPI-driven status filter (applied client-side over the full fetched set).
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("");
   const debouncedFilters = useDebouncedValue(filters, 300);
+
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const buildParams = React.useCallback(
     (extra?: Record<string, string>) => {
@@ -82,24 +107,35 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
     [search, debouncedFilters],
   );
 
+  // Fetch the whole matching set (search + column filters still applied
+  // server-side); the KPI status filter + pagination run client-side so the KPI
+  // cards can show accurate all-orders counts and act as one-click filters.
   const list = useQuery({
-    queryKey: ["orders", { search, page, filters: debouncedFilters }],
-    queryFn: () =>
-      apiGet<OrdersList>(`/api/orders?${buildParams({ page: String(page) })}`),
+    queryKey: ["orders", { search, filters: debouncedFilters }],
+    queryFn: () => apiGet<OrdersList>(`/api/orders?${buildParams({ all: "1" })}`),
     placeholderData: (prev) => prev,
   });
 
-  // Any filter change resets to the first page.
+  // Any filter / search / KPI-status change resets to the first page.
   React.useEffect(() => {
     setPage(1);
-  }, [debouncedFilters]);
+  }, [debouncedFilters, search, statusFilter]);
 
+  // Whole-order delete is now a SOFT delete (moves every design to Trash,
+  // restorable) — not the permanent hard delete. Purge-for-good lives in Trash.
   const del = useMutation({
-    mutationFn: (id: string) => apiSend(`/api/orders/${id}`, "DELETE"),
+    mutationFn: (id: string) =>
+      apiSend(`/api/orders/${id}/delete`, "PATCH", {
+        line_id: null,
+        deleted: true,
+      }),
     onSuccess: () => {
-      toast.success(`Order ${toDelete?.order_no} deleted.`);
+      toast.success(`Order ${toDelete?.order_no} deleted — moved to Trash.`);
       setToDelete(null);
+      setSelected(null);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order-status"] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -187,16 +223,55 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
   }
 
   const data = list.data;
-  const rows = data?.orders ?? [];
-  const pendingOnPage = rows.filter(
-    (r) => r.operations_status === "PENDING",
-  ).length;
-  const completedOnPage = rows.filter(
-    (r) => r.operations_status === "COMPLETED",
-  ).length;
-  const inProgressOnPage = rows.filter(
-    (r) => r.operations_status === "PARTIALLY COMPLETED",
-  ).length;
+  const rows = React.useMemo(() => data?.orders ?? [], [data]);
+
+  // Keep the mobile popup's header (a frozen `selected` snapshot) in sync with
+  // the live list after an inline per-design cancel/delete; close it if the
+  // order has vanished (its last design was deleted → fully-deleted order).
+  React.useEffect(() => {
+    if (!selected) return;
+    const fresh = rows.find((r) => r.id === selected.id);
+    if (fresh) {
+      if (fresh !== selected) setSelected(fresh);
+    } else if (!list.isFetching) {
+      setSelected(null);
+    }
+  }, [rows, selected, list.isFetching]);
+
+  // All-orders KPI counts (over the full fetched set).
+  const kpi = React.useMemo(
+    () => ({
+      total: rows.length,
+      completed: rows.filter((r) => r.operations_status === "COMPLETED").length,
+      inProgress: rows.filter(
+        (r) => r.operations_status === "PARTIALLY COMPLETED",
+      ).length,
+      pending: rows.filter((r) => r.operations_status === "PENDING").length,
+      cancelledDesigns: rows.reduce((s, r) => s + r.cancelled_line_count, 0),
+      ordersWithCancel: rows.filter((r) => r.cancelled_line_count > 0).length,
+    }),
+    [rows],
+  );
+
+  // Apply the active KPI status filter, then paginate client-side.
+  const visibleRows = React.useMemo(() => {
+    switch (statusFilter) {
+      case "":
+        return rows;
+      case "cancelled":
+        return rows.filter((r) => r.cancelled_line_count > 0);
+      default:
+        return rows.filter((r) => r.operations_status === statusFilter);
+    }
+  }, [rows, statusFilter]);
+
+  const PAGE_SIZE = 20;
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = visibleRows.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -207,42 +282,50 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
             tone="indigo"
             icon={<ClipboardListIcon />}
             label="Total orders"
-            value={data ? formatNumber(data.total).replace(".00", "") : "—"}
-            sub="All pages"
+            value={data ? String(kpi.total) : "—"}
+            sub="Show all"
+            active={statusFilter === ""}
+            onClick={() => setStatusFilter("")}
           />
           <MiniStat
             tone="green"
             icon={<CheckIcon />}
             label="Completed"
-            value={data ? String(completedOnPage) : "—"}
-            sub="This page"
+            value={data ? String(kpi.completed) : "—"}
+            sub="Tap to filter"
+            active={statusFilter === "COMPLETED"}
+            onClick={() => setStatusFilter("COMPLETED")}
           />
           <MiniStat
             tone="amber"
             icon={<ListChecksIcon />}
             label="In progress"
-            value={data ? String(inProgressOnPage) : "—"}
-            sub="This page"
+            value={data ? String(kpi.inProgress) : "—"}
+            sub="Tap to filter"
+            active={statusFilter === "PARTIALLY COMPLETED"}
+            onClick={() => setStatusFilter("PARTIALLY COMPLETED")}
           />
           <MiniStat
             tone="slate"
             icon={<ClockIcon />}
             label="Pending"
-            value={data ? String(pendingOnPage) : "—"}
-            sub="This page"
+            value={data ? String(kpi.pending) : "—"}
+            sub="Tap to filter"
+            active={statusFilter === "PENDING"}
+            onClick={() => setStatusFilter("PENDING")}
           />
           <MiniStat
             tone="rose"
             icon={<XCircleIcon />}
             label="Cancelled"
-            value={
-              data ? String(data.summary?.fully_cancelled_orders ?? 0) : "—"
-            }
+            value={data ? String(kpi.cancelledDesigns) : "—"}
             sub={
               data
-                ? `${data.summary?.cancelled_designs ?? 0} designs · all pages`
+                ? `in ${kpi.ordersWithCancel} order${kpi.ordersWithCancel === 1 ? "" : "s"}`
                 : undefined
             }
+            active={statusFilter === "cancelled"}
+            onClick={() => setStatusFilter("cancelled")}
           />
         </div>
       </Reveal>
@@ -315,17 +398,19 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
             {(list.error as Error)?.message ?? "Failed to load orders."}
           </CardContent>
         </Card>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <Card data-size="sm">
           <CardContent className="py-10 text-center text-sm text-ink-soft">
-            No orders found{search ? ` for “${search}”` : ""}.
+            {statusFilter
+              ? "No orders match this filter."
+              : `No orders found${search ? ` for “${search}”` : ""}.`}
           </CardContent>
         </Card>
       ) : (
         <>
           {/* Mobile: one tappable card per order */}
           <div className="flex flex-col gap-2.5 lg:hidden">
-            {rows.map((o) => (
+            {pageRows.map((o) => (
               <OrderCard key={o.id} o={o} onOpen={() => setSelected(o)} />
             ))}
           </div>
@@ -354,23 +439,42 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                   </tr>
                 </THead>
                 <tbody>
-                  {rows.map((o) => {
+                  {pageRows.map((o) => {
                     const cancelled = o.operations_status === "CANCELLED";
                     const struck = cancelled
                       ? "text-ink-muted line-through"
                       : "";
+                    const isOpen = expanded.has(o.id);
                     return (
-                    <tr
-                      key={o.id}
-                      className="border-b border-line transition-colors last:border-0 hover:bg-surface-2"
-                    >
+                    <React.Fragment key={o.id}>
+                    <tr className="border-b border-line transition-colors last:border-0 hover:bg-surface-2">
                       <Td className={cn("font-medium", struck)}>
-                        <Link
-                          href={`/orders/${o.id}`}
-                          className="hover:text-accent hover:underline"
-                        >
-                          {o.order_no}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(o.id)}
+                            aria-expanded={isOpen}
+                            aria-label={
+                              isOpen
+                                ? `Collapse ${o.order_no}`
+                                : `Expand ${o.order_no} designs`
+                            }
+                            className="-m-1 rounded p-1 text-ink-muted transition-colors hover:bg-inset hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+                          >
+                            <ChevronRightIcon
+                              className={cn(
+                                "size-4 shrink-0 transition-transform",
+                                isOpen && "rotate-90",
+                              )}
+                            />
+                          </button>
+                          <Link
+                            href={`/orders/${o.id}`}
+                            className="hover:text-accent hover:underline"
+                          >
+                            {o.order_no}
+                          </Link>
+                        </div>
                       </Td>
                       <Td className={cn("num whitespace-nowrap text-ink", struck)}>
                         {o.order_date}
@@ -473,6 +577,14 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                         </div>
                       </Td>
                     </tr>
+                    {isOpen ? (
+                      <tr className="border-b border-line bg-inset/40 last:border-0">
+                        <td colSpan={13} className="p-0">
+                          <OrderDesignsPanel orderId={o.id} caps={caps} />
+                        </td>
+                      </tr>
+                    ) : null}
+                    </React.Fragment>
                     );
                   })}
                     </tbody>
@@ -484,33 +596,36 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
         </>
       )}
 
-      {/* Pagination */}
-      {data && data.total_pages > 1 ? (
+      {/* Pagination (client-side over the filtered set) */}
+      {visibleRows.length > 0 ? (
         <div className="flex items-center justify-between text-sm">
           <span className="text-ink-soft">
-            {data.total} order{data.total === 1 ? "" : "s"}
+            {visibleRows.length} order{visibleRows.length === 1 ? "" : "s"}
+            {statusFilter ? " (filtered)" : ""}
           </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1 || list.isFetching}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <span className="num">
-              {data.page} / {data.total_pages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= data.total_pages || list.isFetching}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <span className="num">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -523,13 +638,15 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete order</DialogTitle>
+            <DialogTitle>Delete order?</DialogTitle>
             <DialogDescription>
               Delete order{" "}
               <span className="font-medium text-ink">
                 {toDelete?.order_no}
               </span>{" "}
-              and all its line items and stage progress? This cannot be undone.
+              and all its designs? They move to Trash (hidden from lists and
+              operations) and keep their stage progress. You can restore them
+              from Trash anytime.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -538,7 +655,7 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
               onClick={() => setToDelete(null)}
               disabled={del.isPending}
             >
-              Cancel
+              Keep
             </Button>
             <Button
               variant="destructive"
@@ -550,7 +667,9 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                   <Spinner /> Deleting…
                 </>
               ) : (
-                "Delete"
+                <>
+                  <Trash2Icon /> Delete order
+                </>
               )}
             </Button>
           </DialogFooter>
@@ -677,6 +796,16 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
               />
             </dl>
           ) : null}
+          {selected && canEdit ? (
+            <div className="mt-1">
+              <div className="mb-1.5 text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
+                Manage designs
+              </div>
+              <div className="max-h-[40vh] overflow-y-auto pr-0.5">
+                <OrderDesignsList orderId={selected.id} caps={caps} />
+              </div>
+            </div>
+          ) : null}
           <DialogFooter className="flex-row flex-wrap justify-end">
             {selected ? (
               <Button
@@ -789,12 +918,16 @@ function MiniStat({
   value,
   sub,
   tone,
+  active,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
   sub?: string;
   tone: "indigo" | "green" | "amber" | "slate" | "rose";
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const tile =
     tone === "green"
@@ -806,14 +939,14 @@ function MiniStat({
           : tone === "slate"
             ? "bg-inset text-ink-soft"
             : "bg-accent/10 text-accent";
-  return (
-    <div className="flex items-center gap-2.5 rounded-card border border-line bg-surface p-2.5 shadow-sm">
+  const inner = (
+    <>
       <span
         className={`grid size-9 shrink-0 place-items-center rounded-[10px] [&_svg]:size-[17px] ${tile}`}
       >
         {icon}
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 text-left">
         <div className="truncate text-[11px] font-medium text-ink-soft">
           {label}
         </div>
@@ -824,7 +957,29 @@ function MiniStat({
           <div className="truncate text-[10px] text-ink-muted">{sub}</div>
         ) : null}
       </div>
-    </div>
+    </>
+  );
+  if (!onClick) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-card border border-line bg-surface p-2.5 shadow-sm">
+        {inner}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex items-center gap-2.5 rounded-card border bg-surface p-2.5 text-left shadow-sm transition-colors active:scale-[.99]",
+        active
+          ? "border-accent ring-2 ring-[var(--accent-ring)]"
+          : "border-line hover:border-line-strong",
+      )}
+    >
+      {inner}
+    </button>
   );
 }
 
