@@ -1167,55 +1167,88 @@ function OrderStatusCard({
   g: OrderStatusGroup;
   onOpen: () => void;
 }) {
+  const struck = g.isCancelled ? "text-ink-muted line-through" : "";
+  const donePct = Math.round((g.doneCount / 7) * 100);
+  const fabricLabel =
+    g.fabrics.length === 0
+      ? "—"
+      : g.fabrics.length === 1
+        ? g.fabrics[0]
+        : `${g.fabrics.length} fabrics`;
   return (
     <button
       type="button"
       onClick={onOpen}
       className="w-full rounded-card border border-line bg-surface p-3 text-left shadow-sm transition-colors hover:border-line-strong active:scale-[.99]"
     >
+      {/* Header: order no + party · date, and the status badge */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div
-            className={cn(
-              "num font-semibold text-ink",
-              g.isCancelled && "text-ink-muted line-through",
-            )}
-          >
+          <div className={cn("num text-[15px] font-semibold text-ink", struck)}>
             {g.orderNo}
           </div>
-          <div
-            className={cn(
-              "truncate text-[13px] text-ink-soft",
-              g.isCancelled && "line-through",
-            )}
-          >
-            {g.party}
+          <div className={cn("mt-0.5 truncate text-[12px] text-ink-soft", struck)}>
+            {g.party} · <span className="num">{formatDate(g.odDate)}</span>
           </div>
         </div>
         {g.isCancelled ? <CancelledTag /> : <OverallBadge overall={g.overall} />}
       </div>
-      <div className="mt-1.5 truncate text-[12px] text-ink-muted">
-        {g.fabrics.length} {g.fabrics.length === 1 ? "fabric" : "fabrics"}
+
+      {/* Key figures — aligned 3-column grid */}
+      <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-line pt-2.5">
+        <Fig label="Designs" value={String(g.designCount)} />
+        <Fig label="Total qty" value={`${formatNumber(g.qtyTotal)} m`} />
+        <Fig label="Amount" value={`₹${formatNumber(g.grandTotal)}`} />
       </div>
-      <div className="mt-2 flex items-center gap-x-3 text-[12px] text-ink-muted">
-        <span className="num">
-          {g.designCount} design{g.designCount === 1 ? "" : "s"}
-        </span>
-        <span className="num">{formatNumber(g.qtyTotal)} mtr</span>
+
+      {/* Meta line: fabric, sales, cancelled */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-ink-muted">
+        <span className="min-w-0 max-w-full truncate">{fabricLabel}</span>
+        {g.salesPerson ? <span className="truncate">· {g.salesPerson}</span> : null}
         {g.cancelledCount > 0 ? (
-          <span className="num text-danger">{g.cancelledCount} cancelled</span>
+          <span className="num font-medium text-danger">
+            {g.cancelledCount} cancelled
+          </span>
         ) : null}
       </div>
+
+      {/* Progress + current stage (hidden for a fully-cancelled order) */}
       {g.isCancelled ? null : (
-        <div className="mt-2.5">
-          <CurrentStageBadge
-            stages={g.stages}
-            currentStageKey={g.currentStageKey}
-            aggregate
-          />
+        <div className="mt-2.5 border-t border-line pt-2.5">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-ink-muted">
+            <span>Progress</span>
+            <span className="num">{g.doneCount}/7 stages</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-inset">
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-500"
+              style={{ width: `${donePct}%` }}
+            />
+          </div>
+          <div className="mt-2">
+            <CurrentStageBadge
+              stages={g.stages}
+              currentStageKey={g.currentStageKey}
+              aggregate
+            />
+          </div>
         </div>
       )}
     </button>
+  );
+}
+
+// Aligned label-over-value figure used in the mobile status card.
+function Fig({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] font-medium tracking-[0.04em] text-ink-muted uppercase">
+        {label}
+      </div>
+      <div className="num mt-0.5 truncate text-[13px] font-semibold text-ink">
+        {value}
+      </div>
+    </div>
   );
 }
 

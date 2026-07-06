@@ -80,7 +80,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Orders", href: "/orders", cap: "orders.view" },
   { label: "Order status", href: "/order-status", cap: "orders.view" },
   { label: "Operations", href: "/tracking", cap: "operations.view" },
-  { label: "Trash", href: "/trash", cap: "orders.edit" },
+  // Trash lives inside Settings (a tab), not as its own sidebar item.
   { label: "Settings", href: "/settings", adminOnly: true },
 ];
 

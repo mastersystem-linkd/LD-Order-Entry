@@ -6,9 +6,11 @@ import {
   ListIcon,
   ShieldCheckIcon,
   TimerIcon,
+  Trash2Icon,
   UsersIcon,
 } from "lucide-react";
 
+import type { Capability } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/ui/reveal";
 import { DropdownMaster } from "@/components/settings/dropdown-master";
@@ -16,8 +18,9 @@ import { DesignDatabasePanel } from "@/components/settings/design-db";
 import { TimeTracking } from "@/components/settings/time-tracking";
 import { UsersManage } from "@/components/settings/users-manage";
 import { AccessControl } from "@/components/settings/access-control";
+import { TrashView } from "@/components/trash/trash-view";
 
-type Tab = "dropdowns" | "designs" | "sla" | "users" | "access";
+type Tab = "dropdowns" | "designs" | "sla" | "users" | "access" | "trash";
 
 const TABS: { key: Tab; label: string; icon: typeof ListIcon }[] = [
   { key: "dropdowns", label: "Dropdown Master", icon: ListIcon },
@@ -25,9 +28,10 @@ const TABS: { key: Tab; label: string; icon: typeof ListIcon }[] = [
   { key: "sla", label: "Time tracking", icon: TimerIcon },
   { key: "users", label: "Users", icon: UsersIcon },
   { key: "access", label: "Access", icon: ShieldCheckIcon },
+  { key: "trash", label: "Trash", icon: Trash2Icon },
 ];
 
-export function SettingsView() {
+export function SettingsView({ caps }: { caps: Capability[] }) {
   const [tab, setTab] = React.useState<Tab>("dropdowns");
 
   return (
@@ -63,6 +67,7 @@ export function SettingsView() {
         {tab === "sla" ? <TimeTracking /> : null}
         {tab === "users" ? <UsersManage /> : null}
         {tab === "access" ? <AccessControl /> : null}
+        {tab === "trash" ? <TrashView caps={caps} /> : null}
       </Reveal>
     </div>
   );
