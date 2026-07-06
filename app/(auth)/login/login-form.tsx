@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { EyeIcon, EyeOffIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
@@ -19,7 +20,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 function GoogleIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="size-4" aria-hidden>
+    <svg viewBox="0 0 24 24" className="size-[18px]" aria-hidden>
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1Z"
@@ -52,6 +53,8 @@ export function LoginForm({
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [error, setError] = useState<string | null>(
     initialError
       ? (ERROR_MESSAGES[initialError] ?? "Couldn't sign in. Please try again.")
@@ -91,19 +94,18 @@ export function LoginForm({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col">
       {googleEnabled ? (
         <>
-          <Button
+          <button
             type="button"
-            variant="outline"
             onClick={onGoogle}
             disabled={googleLoading || loading}
-            className="w-full"
+            className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-surface px-4 py-3 text-[14.5px] font-semibold text-ink transition-colors hover:border-ink-soft disabled:cursor-not-allowed disabled:opacity-60"
           >
             {googleLoading ? <Spinner /> : <GoogleIcon />} Continue with Google
-          </Button>
-          <div className="flex items-center gap-3 text-[11px] font-medium tracking-wide text-ink-muted uppercase">
+          </button>
+          <div className="my-5 flex items-center gap-3.5 text-[11px] font-medium tracking-wide text-ink-muted uppercase">
             <span className="h-px flex-1 bg-line" />
             or
             <span className="h-px flex-1 bg-line" />
@@ -114,15 +116,17 @@ export function LoginForm({
       {error ? (
         <p
           role="alert"
-          className="rounded-[10px] bg-danger/10 px-3 py-2 text-sm text-danger"
+          className="mb-4 rounded-[10px] bg-danger/10 px-3 py-2 text-sm text-danger"
         >
           {error}
         </p>
       ) : null}
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email">Email</Label>
+      <form onSubmit={onSubmit} className="flex flex-col">
+        <div className="mb-4">
+          <Label htmlFor="email" className="mb-2 block">
+            Email
+          </Label>
           <Input
             id="email"
             name="email"
@@ -132,26 +136,63 @@ export function LoginForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            className="h-11 rounded-xl"
           />
         </div>
 
-        <Button
+        <div className="mb-1.5">
+          <Label htmlFor="password" className="mb-2 block">
+            Password
+          </Label>
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPw ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="h-11 rounded-xl pr-11"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? "Hide password" : "Show password"}
+              className="absolute top-1/2 right-2 grid -translate-y-1/2 place-items-center rounded-md p-1.5 text-ink-muted transition-colors hover:text-ink-soft"
+            >
+              {showPw ? (
+                <EyeOffIcon className="size-[18px]" />
+              ) : (
+                <EyeIcon className="size-[18px]" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-5 flex min-h-[20px] items-center justify-between gap-2">
+          <span
+            className={cn(
+              "text-[11.5px] text-ink-muted transition-opacity",
+              showHint ? "opacity-100" : "opacity-0",
+            )}
+          >
+            Ask an admin to reset it.
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowHint((v) => !v)}
+            className="shrink-0 text-[12.5px] font-semibold text-accent hover:underline"
+          >
+            Forgot password?
+          </button>
+        </div>
+
+        <button
           type="submit"
           disabled={loading || googleLoading}
-          className="mt-1 w-full"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? (
             <>
@@ -160,7 +201,7 @@ export function LoginForm({
           ) : (
             "Sign in"
           )}
-        </Button>
+        </button>
       </form>
     </div>
   );
