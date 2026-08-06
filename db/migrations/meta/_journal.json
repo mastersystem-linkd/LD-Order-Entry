@@ -43,6 +43,13 @@
       "when": 1783312282583,
       "tag": "0005_round_meggan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786060800000,
+      "tag": "0006_drop_manager_role",
+      "breakpoints": true
     }
   ]
 }

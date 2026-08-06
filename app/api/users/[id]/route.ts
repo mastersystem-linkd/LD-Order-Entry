@@ -81,7 +81,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const patch: {
     email?: string;
     name?: string | null;
-    role?: "ADMIN" | "MANAGER" | "SALES" | "OPS" | "VIEWER";
+    role?: "ADMIN" | "SALES" | "OPS" | "VIEWER";
     isActive?: boolean;
     passwordHash?: string;
   } = {};

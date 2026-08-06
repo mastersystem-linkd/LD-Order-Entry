@@ -18,14 +18,9 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-// Roles (§1). Default VIEWER. MANAGER = orders + operations, no settings.
-export const userRole = pgEnum("user_role", [
-  "ADMIN",
-  "SALES",
-  "OPS",
-  "VIEWER",
-  "MANAGER",
-]);
+// Roles (§1). Default VIEWER. MANAGER existed between migrations 0003 and 0006
+// but was dropped — its grants were identical to ADMIN's, so it added nothing.
+export const userRole = pgEnum("user_role", ["ADMIN", "SALES", "OPS", "VIEWER"]);
 
 // Per-role capability grants — the admin-editable access matrix (Settings →
 // Access). A row (role, capability) with allowed=true means that role has that

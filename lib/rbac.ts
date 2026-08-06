@@ -3,9 +3,11 @@
 // must stay free of Node-only imports (no DB here — capabilities are resolved
 // from the DB into the session JWT at login; see lib/auth.ts).
 
-export type Role = "ADMIN" | "MANAGER" | "SALES" | "OPS" | "VIEWER";
+// MANAGER was removed (migration 0006) — it was indistinguishable from ADMIN in
+// the Access matrix, so it only duplicated a role that already exists.
+export type Role = "ADMIN" | "SALES" | "OPS" | "VIEWER";
 
-export const ROLES: Role[] = ["ADMIN", "MANAGER", "SALES", "OPS", "VIEWER"];
+export const ROLES: Role[] = ["ADMIN", "SALES", "OPS", "VIEWER"];
 
 // ---- Capabilities (the admin-editable access matrix, Settings → Access) ----
 export type Capability =
@@ -45,13 +47,12 @@ export const CAPABILITY_KEYS: Capability[] = CAPABILITIES.map((c) => c.key);
 
 // Roles configurable in the Access matrix. ADMIN is ALWAYS full access and is
 // never stored or edited (so an admin can't lock everyone out of Settings).
-export const EDITABLE_ROLES: Role[] = ["MANAGER", "SALES", "OPS", "VIEWER"];
+export const EDITABLE_ROLES: Role[] = ["SALES", "OPS", "VIEWER"];
 
 // Default grants — mirror the role_permissions seed; used as a safety fallback
 // when a role has no stored rows yet.
 export const DEFAULT_ROLE_CAPS: Record<Role, Capability[]> = {
   ADMIN: ["orders.view", "orders.edit", "operations.view", "operations.edit"],
-  MANAGER: ["orders.view", "orders.edit", "operations.view", "operations.edit"],
   SALES: ["orders.view", "orders.edit"],
   OPS: ["orders.view", "operations.view", "operations.edit"],
   VIEWER: ["orders.view", "operations.view"],
