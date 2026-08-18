@@ -1450,6 +1450,7 @@ Vercel production keeps its own set.
 |---|---|---|
 | `DATABASE_URL` | **yes** | Supabase **transaction pooler** (port 6543). `lib/db.ts` throws at import time if it is missing. |
 | `DIRECT_URL` | for DDL | Supabase direct/session connection (port 5432). Used only by drizzle-kit. |
+| `DB_SCHEMA` | dev only | Overrides the schema name — set to `ld_order_entry_dev` locally. **Ignored when `NODE_ENV=production`**, so it cannot redirect the live app, and overridden by `db/force-prod-schema.ts` for drizzle-kit so migrations always target production. |
 | `AUTH_SECRET` | **yes** | Signs and encrypts session JWTs. Generate with `npx auth secret`. |
 | `EXPORT_API_KEY` | **yes** | The static key the Embroidery System sends as `x-api-key`. |
 | `AUTH_GOOGLE_ID` | no | Blank → the Google provider is not registered and the login button is hidden. |
@@ -1492,6 +1493,15 @@ npm run dev                       # http://localhost:3000  (Turbopack)
 | `npm run db:seed` | Idempotent seed |
 
 Type-checking is not a script — run `npx tsc --noEmit`.
+
+**Local dev writes to `ld_order_entry_dev`**, not the live schema — a structural
+twin in the same Supabase project, seeded but empty of orders. That is what
+`DB_SCHEMA` in `.env.local` selects.
+
+To verify a change that touches the **write** path without a local database,
+run `npx tsx db/verify-write-path.ts`. It exercises a real transaction, the
+7-stage seeding, the stock gate, the generated column and cascade delete, then
+deletes everything it created — safe against production.
 
 The seed is safe to re-run: stages and role permissions use
 `onConflictDoNothing` (so administrator edits to the access matrix survive),

@@ -1,4 +1,6 @@
 import "./db/load-env";
+// Must come before drizzle-kit loads db/schema.ts — see the file for why.
+import "./db/force-prod-schema";
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({

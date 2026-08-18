@@ -22,7 +22,17 @@ import {
 // Supabase's Data API (which only publishes `public`) can never expose orders.
 // Drizzle emits fully-qualified "ld_order_entry"."table" in every statement, so
 // nothing depends on the connection's search_path (unreliable through a pooler).
-export const app = pgSchema("ld_order_entry");
+// Production is HARD-LOCKED: a stray DB_SCHEMA on Vercel must never be able to
+// point the live app at a different schema and make it look empty. Only
+// non-production honours the override, so local dev can run against
+// `ld_order_entry_dev` without touching real orders.
+const PRODUCTION_SCHEMA = "ld_order_entry";
+export const SCHEMA_NAME =
+  process.env.NODE_ENV === "production"
+    ? PRODUCTION_SCHEMA
+    : (process.env.DB_SCHEMA?.trim() || PRODUCTION_SCHEMA);
+
+export const app = pgSchema(SCHEMA_NAME);
 
 // Roles (§1). Default VIEWER. MANAGER existed between migrations 0003 and 0006
 // but was dropped — its grants were identical to ADMIN's, so it added nothing.
