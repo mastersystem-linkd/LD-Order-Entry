@@ -127,14 +127,74 @@ But some near-identical strings are **genuinely different businesses**:
 
 `SURAJ ENTERPRISES` vs `SURYA ENTERPRISES` — Suraj and Surya are different names.
 
-**Do not auto-merge this bucket.** It is exactly what SCOT's Rule 5 review queue
-exists for. Treated as matches it would inflate coverage to 90%; treated as
-unknown, real coverage is ~76%.
+The haste list makes the danger unmistakable, because it is full of
+initial-style names where a two-character edit changes the company entirely:
+
+| Paired by edit distance | Reality |
+|---|---|
+| `A.M.Garments` ~ `A.G.GARMENTS` | different firms |
+| `A.P.CLOTHING` ~ `A.M.CLOTHING` | different firms |
+| `A.S.Apparels` ~ `A.R.APPARELS` | different firms |
+| `Aadya Creation` ~ `NAVYA CREATION` | different firms |
+| `Armaan Enterprises` ~ `AMAN ENTERPRISES` | probably different |
+
+**Do not auto-merge this bucket.** Edit distance is unsafe precisely where Indian
+trade names are shortest — two initials and a trade word. It is exactly what
+SCOT's Rule 5 review queue exists for. Treated as matches it would inflate
+coverage to 90%; treated as unknown, real safe coverage is ~76%.
 
 ### 5. Decorative prefixes — 21 names (1.2%)
 
 `SHREE` / `SHRI` / `THE` present on one side only: `SHREE BHOLA TRADERS` vs
 `BHOLA TRADERS`. Small but free to fix.
+
+---
+
+## The `haste` field — the same customer universe
+
+`haste` (Marathi/Gujarati *हस्ते*, "by the hand of") is the party an order came
+**through**. It was analysed the same way, and the result settles what it is.
+
+| | Count |
+|---|---:|
+| HASTE dropdown values | **2,275** |
+| Of those, also present in the PARTY dropdown | **1,463 (64%)** |
+| HASTE values used on a live order | 8 (across 10 orders) |
+
+**Two thirds of the haste list is literally the same companies as the party
+list.** These are not urgency levels or delivery notes — they are customers,
+drawn from the same universe, and they match CRR at almost exactly the same rate.
+
+| Reason it missed | HASTE (2,275) | PARTY (1,709) |
+|---|---:|---:|
+| Exact alias on file | 28.1% | 39.6% |
+| Matched by `scot_canon` | 12.6% | 5.9% |
+| — *strict total* | **40.7%** | **45.4%** |
+| Spacing / punctuation | 10.8% | 13.9% |
+| Singular vs plural | 8.8% | 10.6% |
+| Shortened / extended | 4.0% | 4.7% |
+| Spelling variant *(review)* | 15.9% | 14.2% |
+| **Not in CRR at all** | **18.5%** | **9.5%** |
+
+Two differences worth noting:
+
+- **Haste is twice as likely to be absent from CRR** (18.5% vs 9.5%). Plausibly
+  these are intermediaries and agents rather than direct billing customers, so
+  they were never opened as CRR accounts.
+- **Haste values are mixed-case** (`Ar Apparels`, `Hks Apparel`, `Izod Plus.`)
+  where party values are mostly uppercase — the two lists were imported from
+  different sources.
+
+### And when haste IS filled, it names a different company
+
+Across the 10 live orders that populate it, **not one haste value equals that
+order's `party_name`**. So an order carries two distinct counterparties: who it
+is billed to, and who it came through.
+
+This is the open question in the SCOT handover. SCOT's model has room for exactly
+one customer per order. Today it is 10 orders out of 222, so nothing is broken —
+but every one of those is currently attributed to `party_name` alone, and the
+haste company is invisible to SCOT.
 
 ---
 

@@ -125,6 +125,18 @@ async function main() {
   const drop: Row[] = (await sql.unsafe(
     `select value as name, 0 as orders
        from ld_order_entry.lookup_values where category='PARTY'`)) as never;
+  const hasteDrop: Row[] = (await sql.unsafe(
+    `select value as name, 0 as orders
+       from ld_order_entry.lookup_values where category='HASTE'`)) as never;
+  const hasteUsed: Row[] = (await sql.unsafe(
+    `select haste as name, count(*)::int as orders
+       from ld_order_entry.customer_orders
+       where haste is not null and haste <> '' group by 1`)) as never;
+  const overlap: { n: number }[] = (await sql.unsafe(
+    `select count(*)::int as n from (
+        select upper(btrim(value)) v from ld_order_entry.lookup_values where category='PARTY'
+        intersect
+        select upper(btrim(value)) from ld_order_entry.lookup_values where category='HASTE') x`)) as never;
 
   const out: string[] = [];
   const say = (s = "") => { out.push(s); console.log(s); };
@@ -133,9 +145,15 @@ async function main() {
   say(`Ours:     ${drop.length} party dropdown values, ${used.length} names actually used on orders`);
   say();
 
+  say(`HASTE:    ${hasteDrop.length} dropdown values, ${hasteUsed.length} used on orders`);
+  say(`Names appearing in BOTH the PARTY and HASTE dropdowns: ${overlap[0].n}`);
+  say();
+
   for (const [title, rows] of [
     ["OUR FULL PARTY LIST", drop],
     ["PARTY NAMES ACTUALLY USED ON ORDERS", used],
+    ["HASTE DROPDOWN (the through / care-of party)", hasteDrop],
+    ["HASTE VALUES ACTUALLY USED ON ORDERS", hasteUsed],
   ] as const) {
     const buckets = new Map<string, { n: number; orders: number; ex: string[] }>();
     for (const r of rows) {
