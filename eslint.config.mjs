@@ -20,6 +20,16 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  {
+    // Ad-hoc end-to-end smoke scripts (see CLAUDE.md). They walk untyped JSON
+    // straight off the API and assert on values at runtime, so `any` on a
+    // response body is the honest type rather than a shortcut. Scoped to these
+    // files only - application code stays strict.
+    files: ["verify-*.ts", "db/copy-to-supabase.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

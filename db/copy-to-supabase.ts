@@ -38,6 +38,19 @@ if (SOURCE === TARGET) {
   console.error("Refusing to run: source and target are the same database.");
   process.exit(1);
 }
+// The cutover happened on 2026-08-18: ld_order_entry is now the LIVE database.
+// This script TRUNCATES the target before loading, so a stray re-run would wipe
+// production and reload it from a frozen Neon, destroying everything entered
+// since. The migration is finished — running this again is almost certainly a
+// mistake, so make it impossible to do by accident.
+if (process.env.MIGRATE_ALLOW_WIPE !== "yes") {
+  console.error(
+    "Refusing to run: this TRUNCATES the target schema before loading, and\n" +
+      "ld_order_entry is live production since the 2026-08-18 cutover.\n" +
+      "If you really mean to wipe and reload it, set MIGRATE_ALLOW_WIPE=yes.",
+  );
+  process.exit(1);
+}
 
 const SRC = "public";
 const DST = "ld_order_entry";

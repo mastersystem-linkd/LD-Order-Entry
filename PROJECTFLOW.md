@@ -34,6 +34,7 @@
 22. [Verification scripts](#22-verification-scripts)
 23. [Known constraints and gotchas](#23-known-constraints-and-gotchas)
 24. [Glossary](#24-glossary)
+25. [The Neon → Supabase migration (2026-08-18)](#25-the-neon--supabase-migration-2026-08-18)
 
 ---
 
@@ -1410,12 +1411,18 @@ with the error hidden behind the CLI spinner.
 The Supabase move fixed it. The schema was rebuilt from a freshly generated
 baseline, so the migration files and the database now agree.
 
-Two rules:
+Three rules:
 
 - **Migrations use `DIRECT_URL`** (port 5432), never the transaction pooler.
 - **`drizzle.config.ts` sets `schemaFilter: ["ld_order_entry"]`.** Without it,
   drizzle-kit introspects every schema it can reach in the shared project, finds
   the other apps' tables missing from `db/schema.ts`, and proposes to DROP them.
+- **The journal is baselined.** `drizzle.__drizzle_migrations` holds one row for
+  `0000_boring_joseph` — hash = sha256 of the migration file, `created_at` = its
+  `when` from `_journal.json`. The schema was built by running that SQL directly,
+  so without this row drizzle would try to replay the baseline and fail on
+  `CREATE SCHEMA`, recreating the exact Neon problem. `npm run db:migrate` exits
+  clean and applies only genuinely new migrations.
 
 **Apply each migration's SQL directly** in the Neon SQL console, or with a
 one-off `@neondatabase/serverless` script. All migration SQL is written to be
@@ -1587,6 +1594,44 @@ npx tsx verify-p2.ts        # dev server must already be running
 | **Trash** | Where soft-deleted orders and designs live until restored or purged. |
 | **Embroidery System** | The separate downstream application that pulls order data from this one. |
 | **Department** | `LD` (default) or `LINKD` — a filter dimension on the dashboard. |
+
+---
+
+## 25. The Neon → Supabase migration (2026-08-18)
+
+Recorded because two of its failures are worth never repeating.
+
+**Why `pg_dump` could not be used.** Neon ran Postgres 18.4, Supabase runs 17.6.
+Postgres restores forwards only, so the dump route was closed. The structure was
+built instead from `db/schema.ts` via a generated baseline migration, and only
+the rows were moved — rows are version-agnostic, schema DDL is not.
+
+**Two silent corruptions, caught by verification rather than by errors.**
+`db/copy-to-supabase.ts` reported "8/8 tables copied" while writing wrong data,
+twice. postgres.js re-serialises each parameter using the type the *server*
+infers for it:
+
+- a text value bound to a `boolean` column fails its `=== true` check and is
+  stored as **FALSE** — this wiped all 35 cancellations, the trashed design, and
+  **14,382 completed tracking stages**;
+- a text value bound to a `timestamptz` column goes through `new Date()`,
+  truncating microseconds to milliseconds.
+
+Neither raised an error. Row counts and rupee totals matched perfectly
+throughout, because counts and sums don't cover boolean columns. What caught it
+was the **row-fingerprint pass** — md5 over every field of every row — which is
+why that pass exists. The fix binds every value as `$n::text::<type>` so
+Postgres performs all conversions server-side.
+
+**The cutover sequence**, which is what made "no data loss" a guarantee rather
+than a hope: freeze Neon read-only → copy → verify → deploy. Freezing first
+closes the window in which an order could be written to Neon after the copy read
+it. Neon was never written to at any point and remains a complete backup.
+
+**One process error worth noting:** the Vercel environment variables were added
+and a deploy triggered *before* the new code was pushed, so the old Neon driver
+went live pointed at a Supabase URL and the site returned 500s until the correct
+code was pushed. Environment variables and code must land together.
 
 ---
 
