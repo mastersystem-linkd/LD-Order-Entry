@@ -12,8 +12,12 @@ import {
 } from "@/db/schema";
 
 // This route is intentionally OUTSIDE the user-session middleware (see the
-// matcher in middleware.ts, which excludes `api/export`). It authenticates the
-// Embroidery System with a static API key in the `x-api-key` header instead.
+// matcher in middleware.ts, which excludes `api/export`). Consumers authenticate
+// with a static API key in the `x-api-key` header instead. Two consume it: the
+// Embroidery System (stock/demand) and SCOT (the sales-coordinator dashboard).
+// SCOT resolves our free-text party names to its own customer master via an
+// alias table, so names MUST be passed through verbatim — never trimmed,
+// case-folded or otherwise "cleaned", or they arrive as unknown new variants.
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
@@ -25,22 +29,45 @@ function jsonError(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
 }
 
+// Consumers of this feed, each with its own key so one can be rotated or
+// revoked without disturbing the other.
+//
+// `pricing` is deliberately per-consumer. CLAUDE.md §7 kept pricing out of this
+// export entirely; SCOT asked for it (revenue drives its client categorisation),
+// the Embroidery System never did and does not need it. Gating on the key keeps
+// the existing contract intact rather than widening it for everyone.
+type Consumer = { name: string; pricing: boolean };
+
+const CONSUMERS: { env: string; consumer: Consumer }[] = [
+  { env: "EXPORT_API_KEY", consumer: { name: "embroidery", pricing: false } },
+  { env: "EXPORT_API_KEY_SCOT", consumer: { name: "scot", pricing: true } },
+];
+
 // Constant-time key comparison so a wrong key can't be timed character by char.
-function validApiKey(provided: string | null): boolean {
-  const expected = process.env.EXPORT_API_KEY;
-  if (!expected || !provided) return false;
+// Every configured key is checked with no early exit, so response time reveals
+// neither which key matched nor how many are configured.
+function identifyConsumer(provided: string | null): Consumer | null {
+  if (!provided) return null;
   const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  let matched: Consumer | null = null;
+  for (const { env, consumer } of CONSUMERS) {
+    const expected = process.env[env];
+    if (!expected) continue;
+    const b = Buffer.from(expected);
+    if (a.length === b.length && timingSafeEqual(a, b)) matched = consumer;
+  }
+  return matched;
 }
 
-// GET /api/export/orders — read-only incremental pull for the Embroidery System
-// (CLAUDE.md §7). NO pricing is ever returned. Stable ids (order.id, line.id)
-// become Embroidery's external_ref; stable ordering by (updated_at, id) keeps
-// incremental sync reliable. `updated_since` is INCLUSIVE — the Embroidery side
-// dedupes on the stable ids, so the boundary record may legitimately repeat.
+// GET /api/export/orders — read-only incremental pull (CLAUDE.md §7).
+// Pricing is returned ONLY to consumers whose key grants it (SCOT), never to
+// Embroidery. Stable ids (order.id, line.id) become each consumer's external_ref;
+// stable ordering by (updated_at, id) keeps incremental sync reliable.
+// `updated_since` is INCLUSIVE — consumers dedupe on the stable ids, so the
+// boundary record may legitimately repeat.
 export async function GET(req: Request) {
-  if (!validApiKey(req.headers.get("x-api-key"))) {
+  const consumer = identifyConsumer(req.headers.get("x-api-key"));
+  if (!consumer) {
     return jsonError("Unauthorized", 401);
   }
 
@@ -95,7 +122,8 @@ export async function GET(req: Request) {
 
   const orderIds = orders.map((o) => o.id);
 
-  // Line items for this page (no rate / line_total — pricing never leaves here).
+  // Pricing is selected here but only emitted to consumers whose key grants it
+  // (see CONSUMERS above).
   const lines = orderIds.length
     ? await db
         .select({
@@ -104,6 +132,8 @@ export async function GET(req: Request) {
           quality: orderLineItems.quality,
           design_no: orderLineItems.designNo,
           qty_mtr: orderLineItems.qtyMtr,
+          rate: orderLineItems.rate,
+          line_total: orderLineItems.lineTotal,
           is_cancelled: orderLineItems.isCancelled,
           is_deleted: orderLineItems.isDeleted,
         })
@@ -151,6 +181,8 @@ export async function GET(req: Request) {
       quality: l.quality,
       design_no: l.design_no,
       qty_mtr: l.qty_mtr,
+      // `line_total` is the generated qty_mtr * rate, i.e. SCOT's "amount".
+      ...(consumer.pricing ? { rate: l.rate, line_total: l.line_total } : {}),
       is_cancelled: l.is_cancelled,
       // Soft-deleted lines are still emitted (flagged) so the Embroidery System
       // can remove them on its side — hiding them would leave a stale record.

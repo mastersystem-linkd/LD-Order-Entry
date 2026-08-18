@@ -1168,15 +1168,23 @@ string, so TanStack Query and every mutation surface a clean message.
 
 ---
 
-## 14. The export API (Embroidery System integration)
+## 14. The export API (Embroidery System + SCOT)
 
 `GET /api/export/orders` is the one endpoint that is **not** behind the user
 session. The middleware matcher explicitly excludes `api/export`, and the route
 authenticates with a static API key instead.
 
-**Authentication.** The caller sends `x-api-key`. The route compares it against
-`process.env.EXPORT_API_KEY` with `timingSafeEqual` after a length check, so a
-wrong key cannot be discovered character by character.
+**Authentication.** The caller sends `x-api-key`. There are **two consumers with
+two keys**, so either can be rotated or revoked without disturbing the other:
+
+| Key | Consumer | Gets pricing? |
+|---|---|---|
+| `EXPORT_API_KEY` | Embroidery System (stock / demand) | no |
+| `EXPORT_API_KEY_SCOT` | SCOT (sales-coordinator dashboard) | **yes** |
+
+Every configured key is compared with `timingSafeEqual` after a length check,
+with **no early exit**, so response time reveals neither which key matched nor
+how many are configured.
 
 **Query parameters.**
 
@@ -1208,7 +1216,9 @@ incremental paging reliable.
             "id": "uuid",
             "quality": "Cotton",
             "design_no": "D-114",
-            "qty_mtr": "250.00",
+            "qty_mtr": "50.00",
+            "rate": "155.00",
+            "line_total": "7750.00",
             "is_cancelled": false,
             "is_deleted": false,
             "operations_status": "PARTIALLY COMPLETED"
@@ -1221,12 +1231,30 @@ incremental paging reliable.
 }
 ```
 
-**Two rules that must not change:**
+**Three rules that must not change:**
 
-1. **No pricing is ever exported.** `rate` and `line_total` are not selected.
+1. **Pricing is per-consumer.** `rate` and `line_total` are emitted only to
+   SCOT, which asked for them because revenue drives its client categorisation.
+   Embroidery never asked and never receives them. Gating on the key keeps the
+   original contract intact rather than widening it for everybody.
 2. **Soft-deleted lines ARE emitted**, flagged `is_deleted: true`. Hiding them
-   would leave the Embroidery System holding a stale record it can never learn
-   to remove.
+   would leave a consumer holding a stale record it can never learn to remove.
+3. **`party_name` goes out VERBATIM.** SCOT resolves our free-text names to its
+   own customer master using an alias table built from raw historical spellings,
+   plus a canonicaliser that strips trailing dots, trailing bracket groups and
+   one trailing corporate suffix (`LTD`, `PVT LTD`, …; `CO`/`COMPANY` are
+   deliberately *not* stripped). So `SKY CLOTHING.` already matches
+   `SKY CLOTHING` on their side. If we "helpfully" tidy a name before sending
+   it, we hand them a string their table has never seen — a brand new unknown
+   variant — and the customer's history fragments. Never trim, case-fold or
+   expand a party name on the way out, and never silently rename a party on
+   existing orders.
+
+> **Open question with SCOT.** Our `haste` column also holds company names — it
+> is the "through / care of" party, and the Dropdown Master has 2,275 of them,
+> not urgency levels. The export does not send it, and SCOT's spec assumes one
+> customer name per order. Only ~10 of 222 orders populate it today, but this
+> needs agreeing before it grows.
 
 Because cancel and soft-delete both bump `customer_orders.updated_at`, those
 changes reliably re-appear in the next incremental pull.
