@@ -419,11 +419,16 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
           <Reveal index={1}>
             <Card data-size="sm" className="hidden lg:block">
               <CardContent className="px-0">
-                <div className="overflow-x-auto">
+                {/* The table is wider than most screens (13 columns). Bounding
+                    the height keeps its horizontal scrollbar on screen instead
+                    of stranding it at the foot of the page, and the header +
+                    order-no column stay pinned so you never lose your place
+                    while scrolling sideways. */}
+                <div className="max-h-[calc(100vh-19rem)] overflow-auto">
                   <table className="w-full text-left text-sm text-ink">
-                    <THead>
+                    <THead className="sticky top-0 z-20 bg-surface">
                   <tr>
-                    <Th>Order no</Th>
+                    <Th className="sticky left-0 z-10 bg-surface">Order no</Th>
                     <Th>Date</Th>
                     <Th>Party</Th>
                     <Th>Haste</Th>
@@ -447,8 +452,11 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                     const isOpen = expanded.has(o.id);
                     return (
                     <React.Fragment key={o.id}>
-                    <tr className="border-b border-line transition-colors last:border-0 hover:bg-surface-2">
-                      <Td className={cn("font-medium", struck)}>
+                    <tr className="group border-b border-line transition-colors last:border-0 hover:bg-surface-2">
+                      {/* Pinned so the order number stays visible while the
+                          rest of the row is scrolled sideways. bg matches the
+                          row, including its hover state. */}
+                      <Td className={cn("sticky left-0 z-10 bg-surface font-medium group-hover:bg-surface-2", struck)}>
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
@@ -479,14 +487,18 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                       <Td className={cn("num whitespace-nowrap text-ink", struck)}>
                         {o.order_date}
                       </Td>
-                      <Td className={struck}>{o.party_name}</Td>
-                      <Td className={struck}>{o.haste ?? "—"}</Td>
-                      <Td className={struck}>{o.agent ?? "—"}</Td>
+                      <Td className={cn("max-w-[220px] truncate", struck)} title={o.party_name}>
+                        {o.party_name}
+                      </Td>
+                      <Td className={cn("max-w-[140px] truncate", struck)} title={o.haste ?? undefined}>
+                        {o.haste ?? "—"}
+                      </Td>
+                      <Td className={cn("max-w-[140px] truncate", struck)} title={o.agent ?? undefined}>
+                        {o.agent ?? "—"}
+                      </Td>
                       <Td
-                        className={cn(
-                          "min-w-[160px] whitespace-normal text-ink",
-                          struck,
-                        )}
+                        className={cn("max-w-[200px] truncate text-ink", struck)}
+                        title={o.fabrics.join(", ")}
                       >
                         {o.fabrics.length ? o.fabrics.join(", ") : "—"}
                       </Td>
@@ -882,15 +894,15 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
   );
 }
 
+// Passes through the standard cell attributes so callers can set `title` for a
+// tooltip on truncated text.
 function Td({
   children,
   className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+  ...props
+}: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td className={`px-3 py-2 whitespace-nowrap ${className ?? ""}`}>
+    <td className={cn("px-3 py-2 whitespace-nowrap", className)} {...props}>
       {children}
     </td>
   );

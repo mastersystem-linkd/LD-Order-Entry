@@ -98,18 +98,20 @@ export function OrderDesignsPanel({
       <div className="mb-1.5 text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
         Designs ({lines.length})
       </div>
+      {/* Narrow columns and let the fabric name truncate, so this nested table
+          fits inside the parent's scroll region instead of widening it. */}
       <div className="overflow-x-auto rounded-card border border-line bg-surface">
-        <table className="w-full text-left text-[13px]">
+        <table className="w-full table-fixed text-left text-[13px]">
           <thead>
             <tr className="border-b border-line text-[11px] text-ink-muted">
-              <th className="px-3 py-1.5 font-medium">Fabric</th>
-              <th className="px-3 py-1.5 font-medium">Design no</th>
-              <th className="px-3 py-1.5 text-right font-medium">Qty</th>
-              <th className="px-3 py-1.5 text-right font-medium">Rate</th>
-              <th className="px-3 py-1.5 text-right font-medium">Line total</th>
-              <th className="px-3 py-1.5 font-medium">Status</th>
+              <th className="w-[26%] px-3 py-1.5 font-medium">Fabric</th>
+              <th className="w-[16%] px-3 py-1.5 font-medium">Design no</th>
+              <th className="w-[10%] px-3 py-1.5 text-right font-medium">Qty</th>
+              <th className="w-[10%] px-3 py-1.5 text-right font-medium">Rate</th>
+              <th className="w-[14%] px-3 py-1.5 text-right font-medium">Line total</th>
+              <th className="w-[14%] px-3 py-1.5 font-medium">Status</th>
               {canEdit ? (
-                <th className="px-3 py-1.5 text-right font-medium">Actions</th>
+                <th className="w-[10%] px-3 py-1.5 text-right font-medium">Actions</th>
               ) : null}
             </tr>
           </thead>
@@ -120,8 +122,12 @@ export function OrderDesignsPanel({
                 : "";
               return (
                 <tr key={l.id} className="border-b border-line last:border-0">
-                  <td className={cn("px-3 py-2", struck)}>{l.quality}</td>
-                  <td className={cn("num px-3 py-2", struck)}>{l.design_no}</td>
+                  <td className={cn("truncate px-3 py-2", struck)} title={l.quality}>
+                    {l.quality}
+                  </td>
+                  <td className={cn("num truncate px-3 py-2", struck)} title={l.design_no}>
+                    {l.design_no}
+                  </td>
                   <td className={cn("num px-3 py-2 text-right", struck)}>
                     {formatNumber(Number(l.qty_mtr))}
                   </td>
