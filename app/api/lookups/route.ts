@@ -28,6 +28,10 @@ export async function GET(req: Request) {
         category: lookupValues.category,
         value: lookupValues.value,
         is_active: lookupValues.isActive,
+        // Non-null = this spelling resolves to a customer in the CRR master.
+        // Drives the "In CRR" badge so operators can see at a glance which
+        // names SCOT will recognise.
+        crr_customer_id: lookupValues.crrCustomerId,
       })
       .from(lookupValues)
       .where(eq(lookupValues.category, category))

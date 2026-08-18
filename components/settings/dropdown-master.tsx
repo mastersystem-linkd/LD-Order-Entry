@@ -23,7 +23,14 @@ type LookupRow = {
   category: string;
   value: string;
   is_active: boolean;
+  /** CRR customer this spelling resolves to, or null if CRR has no such customer. */
+  crr_customer_id: number | null;
 };
+
+// Party and Haste are both company names, so both are matched against the CRR
+// customer master. The other categories (fabric, transport, agent, sales
+// person) are not customers and are never linked.
+const CRR_LINKED_CATEGORIES = new Set(["PARTY", "HASTE"]);
 
 const CATEGORIES: { key: string; label: string }[] = [
   { key: "PARTY", label: "Party" },
@@ -212,6 +219,26 @@ export function DropdownMaster() {
             </Button>
           </form>
 
+          {CRR_LINKED_CATEGORIES.has(category) ? (
+            <div className="rounded-field border border-line bg-surface-2 px-3.5 py-3 text-[13px] leading-relaxed text-ink-soft">
+              <span className="font-medium text-ink">
+                Customer names are shared with CRR.
+              </span>{" "}
+              A{" "}
+              <span className="rounded-pill bg-success/15 px-1.5 py-0.5 text-[11px] font-medium text-success">
+                In CRR
+              </span>{" "}
+              tag means this exact company already exists in the CRR customer
+              master, so orders using it are attributed automatically in SCOT.{" "}
+              <span className="rounded-pill bg-inset px-1.5 py-0.5 text-[11px] text-ink-muted">
+                not in CRR
+              </span>{" "}
+              simply means CRR has no account under that name yet — the order still
+              saves normally, someone just matches it up in SCOT once. Keep typing
+              names the way you always have; nothing here needs to be corrected.
+            </div>
+          ) : null}
+
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -388,6 +415,23 @@ export function DropdownMaster() {
                         >
                           {r.value}
                         </span>
+                        {CRR_LINKED_CATEGORIES.has(category) ? (
+                          r.crr_customer_id != null ? (
+                            <span
+                              title={`Matches CRR customer #${r.crr_customer_id}. SCOT will attribute these orders automatically.`}
+                              className="shrink-0 rounded-pill bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success"
+                            >
+                              In CRR
+                            </span>
+                          ) : (
+                            <span
+                              title="No customer with this name in the CRR master. Orders using it will need a person to match them in SCOT. That is normal for a new customer."
+                              className="shrink-0 rounded-pill bg-inset px-2 py-0.5 text-[11px] text-ink-muted"
+                            >
+                              not in CRR
+                            </span>
+                          )
+                        ) : null}
                         {!r.is_active ? (
                           <span className="rounded-pill bg-inset px-2 py-0.5 text-[11px] text-ink-muted">
                             inactive

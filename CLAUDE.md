@@ -63,6 +63,8 @@ UUID PKs (`gen_random_uuid()`); `TIMESTAMPTZ DEFAULT now()`; quantities `DECIMAL
 ### `customer_orders`
 - `id` UUID PK · `order_no` VARCHAR(50) UNIQUE NOT NULL · `order_date` DATE NOT NULL · `party_name` VARCHAR(200) NOT NULL · `sales_person` VARCHAR(100) · `agent` VARCHAR(120) · `haste` VARCHAR(120) · `transport` VARCHAR(120) · `challan_no` VARCHAR(100) · `lot_no` VARCHAR(100) · `department` VARCHAR(40) DEFAULT 'LD' · `remarks` TEXT · `created_by` VARCHAR(120) · `created_at`, `updated_at`
 - INDEX (`party_name`); INDEX (`order_date`)
+- `crr_customer_id` INT — the CRR customer this order's party resolves to, or NULL when it could not be established **deterministically**. Never guessed. INDEX. *(migration 0001)*
+- `party_name_original` VARCHAR(200) · `haste_original` VARCHAR(120) — what the operator actually typed, captured **before** the name was normalised to a CRR spelling. NULL = never normalised. Written once and never overwritten, so a re-run of the linker cannot lose the first value. **This is the audit trail: an order can always be shown, or restored, exactly as written.** *(migration 0001)*
 - **There is NO `is_cancelled` / `is_deleted` on the header** — order-level CANCELLED and deleted are **derived** from the lines (§6).
 
 ### `order_line_items`
@@ -77,8 +79,12 @@ UUID PKs (`gen_random_uuid()`); `TIMESTAMPTZ DEFAULT now()`; quantities `DECIMAL
 - `id` UUID PK · `order_line_item_id` UUID FK → order_line_items (cascade) · `stage_key` FK → workflow_stages · `planned_at` TIMESTAMPTZ · `actual_at` TIMESTAMPTZ · `is_done` BOOL DEFAULT FALSE · `delay_minutes` INT · `stock_status` VARCHAR(20) (**only on the `stock_checking` row**: `in_stock` | `out_of_stock` | NULL — §6; *migration 0002*) · `updated_by` · `updated_at`
 - **UNIQUE (`order_line_item_id`, `stage_key`)**; INDEX (`order_line_item_id`)
 
+### `crr_customers`  (local copy of the CRR customer master's alias list)
+- `id` UUID PK · `customer_id` INT (CRR's numeric id; **not unique** — one customer has many spellings) · `alias` VARCHAR(120) (CRR's branch/route marker) · `full_raw_name` VARCHAR(250) (the spelling exactly as CRR holds it) · `display_name` VARCHAR(250) (the tidiest spelling for that customer, branch tags stripped) · `canon` / `tight` VARCHAR(250) (precomputed match keys) · `created_at`
+- **UNIQUE (`customer_id`, `full_raw_name`)**; indexes on `canon`, `tight`, `customer_id`. Loaded by `db/load-crr-customers.ts`; re-runnable when CRR sends a fresh export. *(migration 0001)*
+
 ### `lookup_values`  (autocomplete sources — the Dropdown Master)
-- `id` UUID PK · `category` VARCHAR(30) NOT NULL (PARTY|SALES_PERSON|AGENT|HASTE|TRANSPORT|FABRIC) · `value` VARCHAR(200) NOT NULL · `is_active` BOOL DEFAULT TRUE · INDEX (`category`)
+- `id` UUID PK · `category` VARCHAR(30) NOT NULL (PARTY|SALES_PERSON|AGENT|HASTE|TRANSPORT|FABRIC) · `value` VARCHAR(200) NOT NULL · `is_active` BOOL DEFAULT TRUE · `crr_customer_id` INT (the CRR customer this spelling resolves to; drives the **In CRR** badge — only ever set for PARTY and HASTE) · INDEX (`category`), INDEX (`crr_customer_id`) *(migration 0002)*
 
 ### `design_database`  (log of every fabric+design used — powers design autocomplete + a browsable history)
 - `id` UUID PK · `created_at` · `order_id` UUID FK → customer_orders (**ON DELETE SET NULL**) · `order_no` VARCHAR(50) NOT NULL (denormalized so it survives order deletion) · `fabric_name` VARCHAR(100) NOT NULL · `design_no` VARCHAR(100) NOT NULL
@@ -120,6 +126,15 @@ UUID PKs (`gen_random_uuid()`); `TIMESTAMPTZ DEFAULT now()`; quantities `DECIMAL
 - `GET /api/export/orders` — auth via a static API key in a request header (`x-api-key`). Read-only. Sits **outside** the user-session middleware (excluded by `middleware.ts`). **Two consumers, two keys**, so either can be rotated or revoked alone: `EXPORT_API_KEY` (Embroidery System) and `EXPORT_API_KEY_SCOT` (SCOT, the sales-coordinator dashboard). Both are compared in constant time with no early exit.
 - Query: `updated_since` (ISO timestamp) for incremental sync (INCLUSIVE — Embroidery dedupes on stable ids, so the boundary record may repeat); pagination (`page`, `limit`).
 - Returns each order with header fields + line items carrying **stable ids** (`order.id`, `line.id` → Embroidery's `external_ref`): `order_no`, `order_date`, `party_name`, `sales_person`, `department`, and per line `quality`, `design_no`, `qty_mtr`, **`is_cancelled`**, **`is_deleted`** (emitted, not hidden, so Embroidery can remove trashed lines on its side), plus the line's operations status. **Pricing is per-consumer**: `rate` and `line_total` are emitted ONLY to SCOT (revenue drives its client categorisation) and never to Embroidery, which never asked for them. Gated on which key matched — see `CONSUMERS` in the route.
+
+### CRR customer identity (party & haste)
+`party_name` and `haste` both hold **company names**. Both are matched against the local `crr_customers` copy of the CRR master by `lib/crr-match.ts`, which offers three keys in descending confidence: exact spelling → `crrCanon()` (SCOT's own rules) → `crrTight()` (also folds internal punctuation and trailing plurals, which is what recovers most of our misses). **A key that resolves to more than one CRR customer is skipped, never guessed** — an unresolved order is a normal state, not an error.
+
+- `db/load-crr-customers.ts` — loads/refreshes the CRR alias export.
+- `db/link-orders-to-crr.ts` — links orders and normalises spellings. **Dry run by default; `--apply` to commit.** Preserves originals.
+- `db/sync-crr-dropdowns.ts` — tags dropdown values with their CRR customer and adds CRR customers not already covered. Never deletes or rewrites an existing value, and never adds a customer an existing value already resolves to (that would refill the list with near-duplicates).
+
+**Branch tags are always stripped from a display name** (`(N)`, `(JOB)`, `(AITK)` are route markers, not part of the company). Where stripping would collide two customers, the tag is kept on the later one so the dropdown is never ambiguous.
 
 ### SCOT and customer-name identity
 SCOT resolves our free-text `party_name` to its own customer master (CRR) using an alias table plus a canonicalising function that strips trailing dots, trailing bracket groups and one trailing corporate suffix. **Therefore: pass party names through VERBATIM.** Never trim, case-fold, expand or otherwise "clean" a name on the way out — that table is built from the raw historical spellings, so a tidied string arrives as an unknown NEW variant and fragments the customer's history. Equally, **never silently rename a party on existing orders**; old orders must keep the name they were created with. Tidying duplicate values in the Dropdown Master is fine and useful (it stops new variants being coined), but it must not rewrite `customer_orders.party_name`.

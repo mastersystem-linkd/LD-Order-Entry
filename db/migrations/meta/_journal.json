@@ -8,6 +8,20 @@
       "when": 1787040436512,
       "tag": "0000_boring_joseph",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787051431599,
+      "tag": "0001_real_moira_mactaggert",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787051666675,
+      "tag": "0002_slippery_gunslinger",
+      "breakpoints": true
     }
   ]
 }

@@ -82,6 +82,42 @@ export const users = app.table("users", {
     .defaultNow(),
 });
 
+// crr_customers (reference copy of the CRR customer master's alias list) ------
+// CRR (crr.linkdprints.com) is the group's customer master. SCOT resolves our
+// free-text party names against it. Holding a local copy lets us (a) offer the
+// canonical spellings in the Dropdown Master, (b) LINK an order to its CRR
+// customer without altering what the operator typed, and (c) emit the CRR
+// customer_id on the export, which is SCOT's "gold" exact-match path (Rule 4).
+// Refreshed by db/load-crr-customers.ts from the CRR alias export.
+export const crrCustomers = app.table(
+  "crr_customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // CRR's numeric customer id. NOT unique here: one customer has many aliases.
+    customerId: integer("customer_id").notNull(),
+    // Branch/route marker CRR keeps alongside the name, e.g. "(R)", "(AITK)".
+    alias: varchar("alias", { length: 120 }),
+    // The spelling exactly as CRR holds it — never cleaned.
+    fullRawName: varchar("full_raw_name", { length: 250 }).notNull(),
+    // The name we show for this customer: the tidiest spelling on file.
+    displayName: varchar("display_name", { length: 250 }).notNull(),
+    // Match keys, precomputed by the loader so lookups are a plain index hit.
+    // `canon` follows SCOT's scot_canon(); `tight` also folds internal
+    // punctuation and trailing plurals, which recovers the bulk of our misses.
+    canon: varchar("canon", { length: 250 }).notNull(),
+    tight: varchar("tight", { length: 250 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("uq_crr_customers_id_name").on(t.customerId, t.fullRawName),
+    index("idx_crr_customers_canon").on(t.canon),
+    index("idx_crr_customers_tight").on(t.tight),
+    index("idx_crr_customers_customer_id").on(t.customerId),
+  ],
+);
+
 // customer_orders ------------------------------------------------------------
 export const customerOrders = app.table(
   "customer_orders",
@@ -99,6 +135,16 @@ export const customerOrders = app.table(
     department: varchar("department", { length: 40 }).notNull().default("LD"),
     remarks: text("remarks"),
     createdBy: varchar("created_by", { length: 120 }),
+    // ---- CRR linkage (added with the SCOT integration) ---------------------
+    // The CRR customer this order's party resolves to, when we can establish it
+    // confidently. NULL means unresolved — never guessed. Emitted on the export
+    // so SCOT can match exactly instead of heuristically (its Rule 4).
+    crrCustomerId: integer("crr_customer_id"),
+    // What the operator ACTUALLY typed, preserved verbatim whenever party_name
+    // or haste is normalised to a CRR spelling. Null = never normalised. This is
+    // the audit trail: the order can always be shown, or restored, as written.
+    partyNameOriginal: varchar("party_name_original", { length: 200 }),
+    hasteOriginal: varchar("haste_original", { length: 120 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -109,6 +155,7 @@ export const customerOrders = app.table(
   (t) => [
     index("idx_customer_orders_party_name").on(t.partyName),
     index("idx_customer_orders_order_date").on(t.orderDate),
+    index("idx_customer_orders_crr_customer").on(t.crrCustomerId),
   ],
 );
 
@@ -228,8 +275,16 @@ export const lookupValues = app.table(
     category: varchar("category", { length: 30 }).notNull(),
     value: varchar("value", { length: 200 }).notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    // The CRR customer this value resolves to, when one could be established.
+    // NULL = not known to CRR (a perfectly normal state - CRR is the group
+    // master and we trade with parties it has never opened an account for).
+    // Drives the "In CRR" badge in Settings -> Dropdown Master.
+    crrCustomerId: integer("crr_customer_id"),
   },
-  (t) => [index("idx_lookup_values_category").on(t.category)],
+  (t) => [
+    index("idx_lookup_values_category").on(t.category),
+    index("idx_lookup_values_crr_customer").on(t.crrCustomerId),
+  ],
 );
 
 // Inferred row types for app use.
@@ -240,3 +295,4 @@ export type WorkflowStage = typeof workflowStages.$inferSelect;
 export type LineStageProgress = typeof lineStageProgress.$inferSelect;
 export type LookupValue = typeof lookupValues.$inferSelect;
 export type DesignDatabaseRow = typeof designDatabase.$inferSelect;
+export type CrrCustomer = typeof crrCustomers.$inferSelect;

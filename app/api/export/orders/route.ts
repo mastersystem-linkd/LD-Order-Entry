@@ -110,6 +110,9 @@ export async function GET(req: Request) {
       order_no: customerOrders.orderNo,
       order_date: customerOrders.orderDate,
       party_name: customerOrders.partyName,
+      party_name_as_entered: customerOrders.partyNameOriginal,
+      crr_customer_id: customerOrders.crrCustomerId,
+      haste: customerOrders.haste,
       sales_person: customerOrders.salesPerson,
       department: customerOrders.department,
       updated_at: customerOrders.updatedAt,
@@ -173,6 +176,16 @@ export async function GET(req: Request) {
     order_no: o.order_no,
     order_date: o.order_date,
     party_name: o.party_name,
+    // The operator's original wording, present only where party_name was
+    // normalised to the CRR spelling. Null means the two are the same.
+    party_name_as_entered: o.party_name_as_entered,
+    // SCOT's Rule 4 "gold": the CRR customer this party resolves to, or null
+    // where we could not establish it deterministically. NEVER guessed — a null
+    // means "we do not know", not "no such customer".
+    crr_customer_id: o.crr_customer_id,
+    // The "through / care of" counterparty. A company name, not an urgency
+    // level, and frequently a DIFFERENT firm from party_name.
+    haste: o.haste,
     sales_person: o.sales_person,
     department: o.department,
     updated_at: o.updated_at,

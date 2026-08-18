@@ -132,6 +132,13 @@ async function main() {
     `select haste as name, count(*)::int as orders
        from ld_order_entry.customer_orders
        where haste is not null and haste <> '' group by 1`)) as never;
+  const agentDrop: Row[] = (await sql.unsafe(
+    `select value as name, 0 as orders
+       from ld_order_entry.lookup_values where category='AGENT'`)) as never;
+  const agentUsed: Row[] = (await sql.unsafe(
+    `select agent as name, count(*)::int as orders
+       from ld_order_entry.customer_orders
+       where agent is not null and agent <> '' group by 1`)) as never;
   const overlap: { n: number }[] = (await sql.unsafe(
     `select count(*)::int as n from (
         select upper(btrim(value)) v from ld_order_entry.lookup_values where category='PARTY'
@@ -153,6 +160,8 @@ async function main() {
     ["OUR FULL PARTY LIST", drop],
     ["PARTY NAMES ACTUALLY USED ON ORDERS", used],
     ["HASTE DROPDOWN (the through / care-of party)", hasteDrop],
+    ["AGENT DROPDOWN", agentDrop],
+    ["AGENT VALUES ACTUALLY USED ON ORDERS", agentUsed],
     ["HASTE VALUES ACTUALLY USED ON ORDERS", hasteUsed],
   ] as const) {
     const buckets = new Map<string, { n: number; orders: number; ex: string[] }>();
@@ -173,12 +182,14 @@ async function main() {
     const total = rows.length;
     say(`### ${title}  (${total} names)`);
     say();
-    say("| Reason | Names | Share |");
-    say("|---|---:|---:|");
+    const totOrders = rows.reduce((a, r) => a + r.orders, 0);
+    say("| Reason | Names | Share | Orders affected |");
+    say("|---|---:|---:|---:|");
     for (const k of order) {
       const b = buckets.get(k);
       if (!b) continue;
-      say(`| ${labels[k]} | ${b.n} | ${((b.n / total) * 100).toFixed(1)}% |`);
+      const op = totOrders ? `${b.orders} (${((b.orders / totOrders) * 100).toFixed(1)}%)` : "-";
+      say(`| ${labels[k]} | ${b.n} | ${((b.n / total) * 100).toFixed(1)}% | ${op} |`);
     }
     say();
     for (const k of order) {

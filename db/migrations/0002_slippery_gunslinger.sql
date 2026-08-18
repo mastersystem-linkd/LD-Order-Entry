@@ -1,0 +1,2 @@
+ALTER TABLE "ld_order_entry"."lookup_values" ADD COLUMN "crr_customer_id" integer;--> statement-breakpoint
+CREATE INDEX "idx_lookup_values_crr_customer" ON "ld_order_entry"."lookup_values" USING btree ("crr_customer_id");
