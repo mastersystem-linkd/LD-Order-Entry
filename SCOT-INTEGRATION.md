@@ -36,7 +36,10 @@ Ordering is `(updated_at ASC, id ASC)`, so incremental paging is stable.
         "id": "3f2a…",                          // stable UUID — your external_ref
         "order_no": "LKD-08-25-003",            // user-entered, unique
         "order_date": "2026-08-11",
-        "party_name": "Spinder Fibres Pvt Ltd", // VERBATIM, see §5
+        "party_name": "SOLID GARMENTS",          // see §5
+        "party_name_as_entered": "SOLID GARMENT",// null when unchanged
+        "crr_customer_id": 18077,                // null when unresolved
+        "haste": null,                           // "through / care of" party
         "sales_person": "Amit Shah",
         "department": "LD",
         "updated_at": "2026-08-11T09:14:22.101Z",
@@ -72,7 +75,7 @@ Ordering is `(updated_at ASC, id ASC)`, so incremental paging is stable.
 | `rate` | `rate` |
 | `amount` | `line_total` |
 | `updated_at` | `updated_at` |
-| `customer_id` (CRR) | **not available** — see §6 |
+| `customer_id` (CRR) | `crr_customer_id` — **now supplied**, see §6 |
 
 ## 4. Things to know
 
@@ -105,7 +108,7 @@ etc.). We deliberately did **not** merge them, per your Rule 2.
 
 ## 6. Two open items from our side
 
-**a) We are NOT sending `customer_id` — and we think that's the right call.**
+**a) We ARE now sending `crr_customer_id` — for the orders where we know it.**
 
 You sent us the CRR alias export (5,974 aliases, 4,909 customers). We ran your
 `scot_canon` rules over it against our live data. The results matter for your
@@ -144,14 +147,27 @@ The remaining ~50% are genuine review-bucket cases under your Rule 5:
 - **typos on both sides** — `OVERTAKE`/`OVARTAKE`, `MAHADEVSAO`/`MAHADEOSAO`
 - **genuinely new customers** — `BRANDS AND BOOTS PVT LTD`, `VIN SQUARE`
 
-**Why we're not sending an id:** we don't *know* which CRR customer an order
-belongs to — we would be guessing with the same heuristics you already have, at
-~40% confidence, and a wrong `customer_id` is worse than none because you'd
-trust it as exact. Your Rule 4 assumes the app already knows. Ours doesn't.
+**What changed.** You sent us the alias export, so we loaded it and did the
+resolution on our side. `crr_customer_id` is now on every order we could resolve
+**deterministically** — exact spelling, your canon rules, or those two extra
+folds. **118 of 222 orders (53%) carry an id today.**
 
-If CRR can instead supply a mapping keyed to **our** party strings, we'll store
-and emit it gladly. Short of that, the name is the honest signal — as your own
-closing line says.
+**Read a null as "we don't know", not "no such customer."** We never guess. A
+name resolving to two customers is left null, and so is anything the three rules
+don't reach. Roughly 21% of our parties genuinely aren't in the export you sent —
+some are large firms (`RAYMOND LIFESTYLE LIMITED`), which makes us suspect **the
+export may be partial**. Worth checking on your side.
+
+**Two more fields you now get:**
+
+- **`party_name_as_entered`** — where we normalised a spelling to CRR's, this is
+  what the operator originally typed. Null when the two are the same. Your Rule 2
+  asked to be told about renames; this is us telling you, per order.
+- **`haste`** — the "through / care of" counterparty, see (b) below.
+
+We normalised 55 orders' party spellings to CRR's own wording so they match you
+exactly. Every original is preserved in our database and surfaced here, so
+nothing detached from its history.
 
 **b) ⚠️ We have a SECOND company-name field that this feed does not carry.**
 
