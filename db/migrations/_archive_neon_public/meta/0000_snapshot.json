@@ -1,12 +1,12 @@
 {
-  "id": "f03941ff-30c5-419b-b99a-72796fa80e76",
+  "id": "ccf2c238-6481-4f3a-92f0-606cd3ce60c6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "ld_order_entry.customer_orders": {
+    "public.customer_orders": {
       "name": "customer_orders",
-      "schema": "ld_order_entry",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
@@ -150,116 +150,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "ld_order_entry.design_database": {
-      "name": "design_database",
-      "schema": "ld_order_entry",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "order_id": {
-          "name": "order_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "order_no": {
-          "name": "order_no",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fabric_name": {
-          "name": "fabric_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "design_no": {
-          "name": "design_no",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "idx_design_database_fabric": {
-          "name": "idx_design_database_fabric",
-          "columns": [
-            {
-              "expression": "fabric_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_design_database_design": {
-          "name": "idx_design_database_design",
-          "columns": [
-            {
-              "expression": "design_no",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "design_database_order_id_customer_orders_id_fk": {
-          "name": "design_database_order_id_customer_orders_id_fk",
-          "tableFrom": "design_database",
-          "tableTo": "customer_orders",
-          "schemaTo": "ld_order_entry",
-          "columnsFrom": [
-            "order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "uq_design_database_order_fabric_design": {
-          "name": "uq_design_database_order_fabric_design",
-          "nullsNotDistinct": false,
-          "columns": [
-            "order_no",
-            "fabric_name",
-            "design_no"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "ld_order_entry.line_stage_progress": {
+    "public.line_stage_progress": {
       "name": "line_stage_progress",
-      "schema": "ld_order_entry",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
@@ -305,12 +198,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "stock_status": {
-          "name": "stock_status",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "updated_by": {
           "name": "updated_by",
           "type": "varchar(120)",
@@ -347,7 +234,6 @@
           "name": "line_stage_progress_order_line_item_id_order_line_items_id_fk",
           "tableFrom": "line_stage_progress",
           "tableTo": "order_line_items",
-          "schemaTo": "ld_order_entry",
           "columnsFrom": [
             "order_line_item_id"
           ],
@@ -361,7 +247,6 @@
           "name": "line_stage_progress_stage_key_workflow_stages_stage_key_fk",
           "tableFrom": "line_stage_progress",
           "tableTo": "workflow_stages",
-          "schemaTo": "ld_order_entry",
           "columnsFrom": [
             "stage_key"
           ],
@@ -387,9 +272,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "ld_order_entry.lookup_values": {
+    "public.lookup_values": {
       "name": "lookup_values",
-      "schema": "ld_order_entry",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
@@ -442,9 +327,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "ld_order_entry.order_line_items": {
+    "public.order_line_items": {
       "name": "order_line_items",
-      "schema": "ld_order_entry",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
@@ -495,13 +380,6 @@
         },
         "is_cancelled": {
           "name": "is_cancelled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "is_deleted": {
-          "name": "is_deleted",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -571,7 +449,6 @@
           "name": "order_line_items_order_id_customer_orders_id_fk",
           "tableFrom": "order_line_items",
           "tableTo": "customer_orders",
-          "schemaTo": "ld_order_entry",
           "columnsFrom": [
             "order_id"
           ],
@@ -588,65 +465,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "ld_order_entry.role_permissions": {
-      "name": "role_permissions",
-      "schema": "ld_order_entry",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "role": {
-          "name": "role",
-          "type": "user_role",
-          "typeSchema": "ld_order_entry",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "capability": {
-          "name": "capability",
-          "type": "varchar(40)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "allowed": {
-          "name": "allowed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "uq_role_permissions_role_cap": {
-          "name": "uq_role_permissions_role_cap",
-          "nullsNotDistinct": false,
-          "columns": [
-            "role",
-            "capability"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "ld_order_entry.users": {
+    "public.users": {
       "name": "users",
-      "schema": "ld_order_entry",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
@@ -676,7 +497,7 @@
         "role": {
           "name": "role",
           "type": "user_role",
-          "typeSchema": "ld_order_entry",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'VIEWER'"
@@ -712,9 +533,9 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "ld_order_entry.workflow_stages": {
+    "public.workflow_stages": {
       "name": "workflow_stages",
-      "schema": "ld_order_entry",
+      "schema": "",
       "columns": {
         "stage_key": {
           "name": "stage_key",
@@ -733,13 +554,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
-        },
-        "planned_offset_days": {
-          "name": "planned_offset_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
         }
       },
       "indexes": {},
@@ -752,9 +566,9 @@
     }
   },
   "enums": {
-    "ld_order_entry.user_role": {
+    "public.user_role": {
       "name": "user_role",
-      "schema": "ld_order_entry",
+      "schema": "public",
       "values": [
         "ADMIN",
         "SALES",
@@ -763,9 +577,7 @@
       ]
     }
   },
-  "schemas": {
-    "ld_order_entry": "ld_order_entry"
-  },
+  "schemas": {},
   "sequences": {},
   "roles": {},
   "policies": {},
