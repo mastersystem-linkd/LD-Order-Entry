@@ -97,10 +97,11 @@ Ordering is `(updated_at ASC, id ASC)`, so incremental paging is stable.
 export code and both internal docs record this so nobody "cleans" it later.
 
 We checked our list against your canonicalisation rules: **1,709 party values,
-1,695 distinct companies** — 14 near-duplicates, none of which appear on any
-order. Your alias layer will absorb all of them (`FOCUS LIFESTYLE` vs
-`FOCUS LIFESTYLE PVT LTD`, etc.). We deliberately did **not** merge them, per
-your Rule 2.
+1,695 distinct companies** — so 14 near-duplicate pairs. Only **2 orders** in the
+whole system use a value from any of those pairs, and in both cases the other
+spelling is unused, so no customer's history is split across two strings. Your
+alias layer absorbs all 14 anyway (`FOCUS LIFESTYLE` vs `FOCUS LIFESTYLE PVT LTD`,
+etc.). We deliberately did **not** merge them, per your Rule 2.
 
 ## 6. Two open items from our side
 
@@ -155,9 +156,11 @@ closing line says.
 **b) ⚠️ We have a SECOND company-name field that this feed does not carry.**
 
 Our orders have a `haste` column — in this trade it means *"through / care of"*,
-i.e. the party the order came via. It holds **company names, not urgency
-levels**: our dropdown has **2,275 of them** (`DONEAR INDUSTRIES`,
-`ARISTIDE CLOTHING CO.` and so on).
+i.e. the party the order came via. Despite the name it is **not an urgency
+level**: the dropdown holds **2,275 values, all but three of them company names**
+(`DONEAR INDUSTRIES`, `ARISTIDE CLOTHING CO.` and so on). The three exceptions —
+`Urgent`, `Normal`, `Low` — survive from the app's original seed data and are
+used by **zero** orders.
 
 Your spec assumes **one customer name per order**, so there is nowhere to put
 it, and we have not invented a place. Today only ~10 of 222 orders populate it,
