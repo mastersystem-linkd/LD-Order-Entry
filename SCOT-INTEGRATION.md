@@ -104,10 +104,53 @@ your Rule 2.
 
 ## 6. Two open items from our side
 
-**a) We have no CRR `customer_id`.** Your Rule 4 calls it "gold" and we agree —
-but we can't derive it. **If CRR can give us a party-name → `customer_id`
-mapping, we'll store it and add it to this feed**, taking you from heuristic to
-exact matching. Please send the list if it exists.
+**a) We are NOT sending `customer_id` — and we think that's the right call.**
+
+You sent us the CRR alias export (5,974 aliases, 4,909 customers). We ran your
+`scot_canon` rules over it against our live data. The results matter for your
+planning:
+
+| Matching method | Our party names | **Our orders** |
+|---|---|---|
+| Exact alias hit | 33.3% | — |
+| `scot_canon` **as specified** | **41.5%** | **37.4%** |
+| + internal punctuation folded, `CO` = `COMPANY` | 52.4% | 50.0% |
+
+So `scot_canon` as written resolves **about 37% of our orders**, not the ~98%
+your document reports for the CRR↔Tally path. That figure holds where both sides
+descend from the same Tally export. Our names were typed independently by
+operators, so they diverge in ways your canon does not currently fold.
+
+**The single biggest fixable cause is spacing around initials:**
+
+| Ours | CRR has | `scot_canon` result |
+|---|---|---|
+| `R. K. FASHION` | `R.K.FASHION` | ✗ no match |
+| `G.C. TRADING CO.` | `G.C.TRADING CO.` | ✗ no match |
+| `L. J. CLOTHING` | `L.J.CLOTHING COMPANY` | ✗ no match |
+| `A K AGENCY` | `A.K.AGENCY` | ✗ no match |
+
+Your canon collapses *runs of whitespace* but keeps spaces adjacent to dots, so
+`R. K.` and `R.K.` stay distinct. **Folding internal punctuation would lift you
+from 37% to 50% of orders on our feed alone.** (`CO`/`COMPANY` is the other
+half of that gain — we understand why you don't strip it, but here it costs
+real matches.)
+
+The remaining ~50% are genuine review-bucket cases under your Rule 5:
+
+- **shortened forms** — we write `PR EXPO`, CRR has `PR EXPO TRADELINK LLP`
+- **singular/plural** — `SOLID GARMENT` vs `SOLID GARMENTS`
+- **typos on both sides** — `OVERTAKE`/`OVARTAKE`, `MAHADEVSAO`/`MAHADEOSAO`
+- **genuinely new customers** — `BRANDS AND BOOTS PVT LTD`, `VIN SQUARE`
+
+**Why we're not sending an id:** we don't *know* which CRR customer an order
+belongs to — we would be guessing with the same heuristics you already have, at
+~40% confidence, and a wrong `customer_id` is worse than none because you'd
+trust it as exact. Your Rule 4 assumes the app already knows. Ours doesn't.
+
+If CRR can instead supply a mapping keyed to **our** party strings, we'll store
+and emit it gladly. Short of that, the name is the honest signal — as your own
+closing line says.
 
 **b) ⚠️ We have a SECOND company-name field that this feed does not carry.**
 
