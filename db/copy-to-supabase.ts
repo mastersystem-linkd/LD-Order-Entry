@@ -5,10 +5,12 @@
 // db/migrations/0000_*.sql (generated from db/schema.ts) and this script moves
 // only the rows, which are version-agnostic.
 //
-// Every value is read as TEXT in UTC and written back as TEXT, so nothing is
-// re-typed in transit. That matters: parsing timestamptz into a JS Date would
-// silently truncate Postgres's microseconds to milliseconds, and parsing
-// numeric into a JS number would risk the rupee totals. Text round-trips exactly.
+// Date/time columns are read as TEXT in UTC, because postgres.js would
+// otherwise return them as JS Dates and silently truncate Postgres's
+// microseconds to milliseconds. Everything else is passed through in its native
+// form — postgres.js already returns numeric and uuid as strings, so precision
+// is safe, and casting a boolean to text makes Postgres store FALSE with no
+// error at all (which is exactly what went wrong on the first run).
 //
 // Safe to re-run — it truncates the target first. Run it once to rehearse, then
 // again during the cutover window.
@@ -48,7 +50,10 @@ const BATCH = 500;
 // Columns are listed explicitly on both sides because physical column order
 // differs between the two databases (is_deleted was appended by migration 0005
 // on Neon, but sits mid-table in the regenerated schema).
-const TABLES: { name: string; cols: string[] }[] = [
+// `fpExtra` = columns not copied but still compared in the fingerprint pass.
+// line_total is GENERATED, so Postgres recomputes it on the target — comparing
+// it proves the recomputation produced identical values, rupee for rupee.
+const TABLES: { name: string; cols: string[]; fpExtra?: string[] }[] = [
   { name: "workflow_stages", cols: ["stage_key", "label", "sort_order", "planned_offset_days"] },
   { name: "users", cols: ["id", "email", "password_hash", "name", "role", "is_active", "created_at"] },
   { name: "role_permissions", cols: ["id", "role", "capability", "allowed", "updated_at"] },
@@ -63,6 +68,7 @@ const TABLES: { name: string; cols: string[] }[] = [
     name: "order_line_items",
     cols: ["id", "order_id", "quality", "design_no", "qty_mtr", "rate", "is_cancelled",
       "is_deleted", "remarks", "created_at", "updated_at"],
+    fpExtra: ["line_total"],
   },
   {
     name: "line_stage_progress",
@@ -108,6 +114,39 @@ async function main() {
 
   console.log("\nCopying:");
   for (const t of TABLES) {
+    // ---- Why every column is read AND written as text -----------------------
+    // postgres.js re-serialises each parameter using the type the SERVER infers
+    // for it, and that coercion is lossy in both directions:
+    //   * a string bound to a timestamptz parameter goes through new Date(),
+    //     truncating Postgres microseconds to milliseconds;
+    //   * the string 'true' bound to a boolean parameter fails its `=== true`
+    //     check and is written as FALSE, silently and without any error.
+    // Both were observed on real runs of this script.
+    //
+    // The cure is to give postgres.js nothing to guess about: select every
+    // column ::text, and bind every placeholder as $n::text::<column type> so
+    // Postgres itself performs every conversion, server-side, exactly as if the
+    // value had been typed into psql.
+    const typeRows = await src.unsafe(
+      `select column_name, data_type, udt_name from information_schema.columns
+        where table_schema = $1 and table_name = $2`,
+      [SRC, t.name] as never[],
+    );
+    const castTo = new Map(
+      typeRows.map((r) => [
+        r.column_name as string,
+        // The enum is schema-scoped, so it must be qualified with the TARGET
+        // schema, not the source's.
+        r.data_type === "USER-DEFINED"
+          ? `"${DST}"."${r.udt_name}"`
+          : (r.data_type as string),
+      ]),
+    );
+    const missing = t.cols.filter((c) => !castTo.has(c));
+    if (missing.length) {
+      throw new Error(`${t.name}: could not resolve types for ${missing.join(", ")}`);
+    }
+
     const selectList = t.cols.map((c) => `"${c}"::text as "${c}"`).join(", ");
     const rows = await src.unsafe(`select ${selectList} from "${SRC}"."${t.name}"`);
 
@@ -115,7 +154,12 @@ async function main() {
     for (let i = 0; i < rows.length; i += BATCH) {
       const chunk = rows.slice(i, i + BATCH);
       const placeholders = chunk
-        .map((_, r) => `(${t.cols.map((_, c) => `$${r * t.cols.length + c + 1}`).join(",")})`)
+        .map(
+          (_, r) =>
+            `(${t.cols
+              .map((c, ci) => `$${r * t.cols.length + ci + 1}::text::${castTo.get(c)}`)
+              .join(",")})`,
+        )
         .join(",");
       const values = chunk.flatMap((row) => t.cols.map((c) => (row as Record<string, unknown>)[c]));
       await dst.unsafe(
@@ -152,9 +196,30 @@ async function main() {
     );
   }
 
+  // Totals prove nothing was lost. Fingerprints prove nothing was scrambled:
+  // every field of every row, hashed in a fixed column and row order on both
+  // sides. NULLs are coalesced to a sentinel so a NULL can't masquerade as an
+  // empty string, and timestamps render in UTC on both sessions.
+  console.log("\nRow fingerprints (every field of every row):");
+  for (const t of TABLES) {
+    const cols = [...t.cols, ...(t.fpExtra ?? [])];
+    const order = t.cols.includes("id") ? '"id"' : '"stage_key"';
+    const parts = cols.map((c) => `coalesce("${c}"::text,'~NULL~')`).join(", ");
+    const fp = (s: string) =>
+      `select coalesce(md5(string_agg(concat_ws('|', ${parts}), chr(10) order by ${order})),'empty') as fp` +
+      ` from "${s}"."${t.name}"`;
+    const [[x], [y]] = await Promise.all([
+      src.unsafe(fp(SRC)),
+      dst.unsafe(fp(DST)),
+    ]);
+    const same = x.fp === y.fp;
+    if (!same) mismatches++;
+    console.log(`  ${same ? "OK  " : "DIFF"} ${t.name.padEnd(22)} ${x.fp}`);
+  }
+
   console.log(
     mismatches === 0
-      ? "\nAll values match. The copy is complete and verified."
+      ? "\nEvery total and every row hash matches. Copy verified."
       : `\n${mismatches} MISMATCH(ES). Do NOT cut over — investigate first.`,
   );
   return mismatches;
