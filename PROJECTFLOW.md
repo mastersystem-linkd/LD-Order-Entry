@@ -124,10 +124,11 @@ Out of stock gate** on one workflow stage. That is an operational checkpoint
 
 | Technology | Role |
 |---|---|
-| **Neon** (`@neondatabase/serverless` ^1.1.0) | Serverless PostgreSQL. Two drivers are used: HTTP for reads/simple writes, WebSocket pool for interactive transactions. |
+| **Supabase Postgres** (17.6) | The database, in project *LD Silk Mills* (ap-south-1). All tables live in the **`ld_order_entry`** schema, not `public`. |
+| **postgres.js** (`postgres` ^3.4) | The driver. One client serves both reads and interactive transactions. |
 | **Drizzle ORM** ^0.45.2 | Type-safe SQL query builder. The schema in `db/schema.ts` is the single source of truth and generates the TypeScript row types. |
 | **drizzle-kit** ^0.31.10 | Migration generation, snapshots, and Drizzle Studio. |
-| **ws** ^8.21.0 | WebSocket transport that the Neon pool driver needs for transactions. |
+
 
 ### Auth and validation
 
@@ -178,7 +179,7 @@ current exports are CSV, generated client-side by `lib/csv.ts`.
 
 ### Explicitly forbidden
 
-Supabase · Prisma · any second UI kit · raw `pg` in application code.
+Neon · Prisma · any second UI kit · raw `pg` in application code.
 
 ---
 
@@ -351,7 +352,7 @@ make full authorization decisions with **zero database round trips**.
 
 ## 6. The database
 
-PostgreSQL on Neon. Conventions used throughout:
+Supabase PostgreSQL 17.6, project *LD Silk Mills*. **Every table lives in the `ld_order_entry` schema**, never `public` — the project is shared with other apps, and Supabase's Data API publishes only `public`, so order data is unreachable through it. Conventions used throughout:
 
 - UUID primary keys via `gen_random_uuid()` (`uuid().primaryKey().defaultRandom()`)
 - `TIMESTAMPTZ DEFAULT now()` for timestamps
@@ -1336,39 +1337,34 @@ only — never raw hex in components. Both themes always.
 
 ## 17. Database access patterns
 
-`lib/db.ts` is the only file that opens a connection. It exports **two** clients:
+`lib/db.ts` is the only file that opens a connection. It exports **one** client under two names:
 
 ```ts
-export const db  = drizzle(neon(DATABASE_URL), { schema });        // HTTP driver
-export const dbx = drizzlePool(new Pool({ … }), { schema });       // WebSocket pool
+const client = postgres(DATABASE_URL, { prepare: false, max: 5 });
+export const db  = drizzle(client, { schema });
+export const dbx = db;   // alias — postgres.js handles transactions on the same client
 ```
 
-| Client | Driver | Use for |
-|---|---|---|
-| `db` | HTTP | Reads and simple single-statement writes. Fast, stateless, no socket. |
-| `dbx` | WebSocket pool | **Interactive transactions only.** The HTTP driver cannot hold a transaction across `await`s. |
+Neon needed two drivers because its HTTP driver could not hold a transaction
+across `await`s. postgres.js can, so the split is gone — `dbx` survives only as
+an alias so the six transaction call sites did not have to change.
 
-The pool is lazy — it opens a socket only when a transaction first runs, so
-importing the module stays cheap on read-only paths.
+`prepare: false` is **required**: runtime connects through Supabase's Supavisor
+transaction pooler (port 6543), which hands a different backend connection to
+each transaction, so server-side prepared statements cannot be reused. Schema
+DDL uses `DIRECT_URL` (port 5432) instead — the pooler cannot run migrations.
 
 Everything multi-step goes through `dbx.transaction`: order create, order edit,
 stage updates, cancel, and soft-delete.
 
-### The `ws` / `bufferutil` fix — do not remove this
+### The `ws` / `bufferutil` workaround is gone
 
-`next.config.ts` sets:
-
-```ts
-serverExternalPackages: ["@neondatabase/serverless", "ws"]
-```
-
-When Turbopack or webpack bundles `ws`, it stubs the optional native
-`bufferutil` require as an empty object. `ws` then calls `bufferUtil.mask`,
-which is `undefined`, and **every interactive transaction dies** with
-`bufferUtil.mask is not a function`. Keeping these packages external makes Node
-require them normally at runtime; `bufferutil` is simply absent, so `ws` falls
-back to its pure-JS masker and transactions work. Any code path using
-`dbx.transaction` depends on this.
+Neon's pool driver used the `ws` package, and bundling it stubbed the optional
+native `bufferutil` as an empty object — so `ws` called an undefined
+`bufferUtil.mask` and **every interactive transaction died**. `next.config.ts`
+had to mark those packages external to work around it. postgres.js is pure JS
+over a plain TCP socket, so that entire failure mode no longer exists and the
+`serverExternalPackages` entry has been removed.
 
 ### Query conventions
 
@@ -1387,7 +1383,14 @@ back to its pure-JS masker and transactions work. Any code path using
 
 ### History
 
-| # | File | What it does |
+**Current:** a single baseline, `0000_boring_joseph.sql`, which creates the
+`ld_order_entry` schema, the `user_role` enum and all 8 tables. It is what built
+the Supabase database.
+
+**Archived** under `db/migrations/_archive_neon_public/` — the Neon-era
+`public`-schema history, kept for the record and never replayed:
+
+| # | File | What it did |
 |---|---|---|
 | 0000 | `0000_init.sql` | Initial schema — all core tables |
 | 0001 | `0001_new_peter_quill.sql` | `workflow_stages.planned_offset_days` (the SLA) |
@@ -1395,15 +1398,24 @@ back to its pure-JS masker and transactions work. Any code path using
 | 0003 | `0003_smart_sally_floyd.sql` | Adds `MANAGER` to the `user_role` enum |
 | 0004 | `0004_sturdy_lightspeed.sql` | `role_permissions` table |
 | 0005 | `0005_round_meggan.sql` | `order_line_items.is_deleted` (soft delete) |
-| 0006 | `0006_drop_manager_role.sql` | **Removes `MANAGER`** — recreates the `user_role` enum without it, reassigns any leftover MANAGER user to OPS, clears its `role_permissions` rows |
+| 0006 | `0006_drop_manager_role.sql` | **Removed `MANAGER`** — recreated the `user_role` enum without it, reassigned any leftover MANAGER user to OPS, cleared its `role_permissions` rows. Applied to Neon production before the Supabase migration. |
 
-### ⚠️ `db:migrate` does not work on this database
+### `db:migrate` works again
 
-The live Neon database was originally set up with `db:push` and manual SQL, so
-drizzle's `__drizzle_migrations` tracking table is **empty**. Running
-`drizzle-kit migrate` therefore tries to replay from `0000_init` (`CREATE
-TABLE …`) and fails on already-existing tables — and the CLI spinner hides the
-error, so it looks like it worked.
+On Neon this was broken: the database had been set up with `db:push` and manual
+SQL, so drizzle's `__drizzle_migrations` table was empty and `drizzle-kit
+migrate` always tried to replay from `0000_init`, failing on existing tables
+with the error hidden behind the CLI spinner.
+
+The Supabase move fixed it. The schema was rebuilt from a freshly generated
+baseline, so the migration files and the database now agree.
+
+Two rules:
+
+- **Migrations use `DIRECT_URL`** (port 5432), never the transaction pooler.
+- **`drizzle.config.ts` sets `schemaFilter: ["ld_order_entry"]`.** Without it,
+  drizzle-kit introspects every schema it can reach in the shared project, finds
+  the other apps' tables missing from `db/schema.ts`, and proposes to DROP them.
 
 **Apply each migration's SQL directly** in the Neon SQL console, or with a
 one-off `@neondatabase/serverless` script. All migration SQL is written to be
@@ -1429,7 +1441,8 @@ Vercel production keeps its own set.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `DATABASE_URL` | **yes** | Neon connection string, pooled, `sslmode=require`. `lib/db.ts` throws at import time if it is missing. |
+| `DATABASE_URL` | **yes** | Supabase **transaction pooler** (port 6543). `lib/db.ts` throws at import time if it is missing. |
+| `DIRECT_URL` | for DDL | Supabase direct/session connection (port 5432). Used only by drizzle-kit. |
 | `AUTH_SECRET` | **yes** | Signs and encrypts session JWTs. Generate with `npx auth secret`. |
 | `EXPORT_API_KEY` | **yes** | The static key the Embroidery System sends as `x-api-key`. |
 | `AUTH_GOOGLE_ID` | no | Blank → the Google provider is not registered and the login button is hidden. |
@@ -1482,7 +1495,8 @@ It never creates orders.
 
 ## 21. Build and deployment
 
-- **Host:** Vercel. **Repository:** `github.com/mastersystem-linkd/LD-Order-Entry`.
+- **Host:** Vercel. **Database:** Supabase *LD Silk Mills* (ap-south-1, Mumbai) — set the Vercel function region to `bom1` to match, or every query crosses a continent.
+- **Repository:** `github.com/mastersystem-linkd/LD-Order-Entry`.
 - **Branch:** `main`. There is no `.vercel` project link in the repo, so
   production deploys are driven by the **Vercel ↔ GitHub integration** — pushing
   to `main` triggers a production build.
@@ -1525,11 +1539,11 @@ npx tsx verify-p2.ts        # dev server must already be running
 
 1. **Access changes apply on next login.** Capabilities are resolved into the
    JWT at sign-in. Tell users to sign out and back in after a matrix change.
-2. **`db:migrate` is broken for this database.** Apply migration SQL manually
-   (§18).
+2. **Never let drizzle-kit run without `schemaFilter`.** The Supabase project is
+   shared; without the fence it will propose dropping other apps' tables.
 3. **Migrations must reach production before the code that reads them.**
-4. **Never remove `serverExternalPackages`** from `next.config.ts` — every
-   transaction depends on it (§17).
+4. **`prepare: false` in `lib/db.ts` is load-bearing** — the transaction pooler
+   cannot reuse server-side prepared statements.
 5. **Never write `line_total`.** It is a generated column; writing it errors.
 6. **Never store an order-level cancelled or deleted flag.** Both are derived.
 7. **Never hard-delete from a list.** Soft-delete to Trash; purge only from
@@ -1540,13 +1554,17 @@ npx tsx verify-p2.ts        # dev server must already be running
 10. **The `all=1` orders fetch is capped at 5,000.** Client-side pagination over
     the full set is what makes the KPI cards exact; beyond that cap the design
     would need revisiting.
-11. **`.env.local` has two `DATABASE_URL` lines.** The first uncommented one
-    wins — check which database you are actually pointed at.
+11. **Point local dev at a non-production database.** The Supabase project is now
+    the live system of record; there is no separate prod/dev split by default.
 12. **Google sign-in never auto-provisions.** An admin must create the account
     first, or the sign-in is rejected.
-13. **The `user_role` enum still physically contains `MANAGER`** on any database
-    where migration 0006 has not yet been applied. The code no longer accepts
-    it; apply the migration to bring schema and database back into agreement.
+13. **Moving data between major Postgres versions needs care.** Neon ran 18.4 and
+    Supabase runs 17.6; Postgres restores forwards only, so `pg_dump` was
+    unusable and the rows were moved with `db/copy-to-supabase.ts` instead.
+14. **postgres.js re-serialises parameters using the type the server infers.**
+    Binding a text value to a `boolean` column silently stores FALSE, and to a
+    `timestamptz` column truncates microseconds — with no error either time. The
+    copy script therefore binds every value as `$n::text::<type>`.
 
 ---
 

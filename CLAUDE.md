@@ -19,8 +19,9 @@ Standalone **order-entry & operations-tracking** ERP for a fabric / embroidery h
 **Roles:** `ADMIN` (always full — settings & users) · `SALES` · `OPS` · `VIEWER`. *(`MANAGER` existed from migration 0003 and was **removed in 0006** — its grants were identical to ADMIN's, so it was a duplicate access level.)* **Each role's access is an admin-editable Role × Capability matrix** (Settings → Access, stored in `role_permissions`). Capabilities: `orders.view`, `orders.edit`, `operations.view`, `operations.edit` (defined in `lib/rbac.ts`). **ADMIN is always full and never stored/editable** (can't be locked out). *(Enforcement: a role's caps are resolved into the session JWT at login — so Access changes apply on the user's **next login** — and both the edge middleware (`canAccessPath(role, caps, path)`) and the write APIs (`requireCapability`) check them. Settings/user management stays ADMIN-only, not a capability.)*
 
 ## 2. Tech stack — LOCKED
-Next.js 15 (App Router, TS strict) · Neon (`@neondatabase/serverless`) · Drizzle + drizzle-kit · NextAuth/Auth.js v5 (email+password **and Google OAuth**; roles; JWT sessions, no DB adapter) · Tailwind v4 + shadcn/ui (base-ui) · TanStack Query · **Recharts** (dashboard charts) · **next-themes** (light/dark via `data-theme`) · SheetJS (`xlsx`, reserved) · Vercel.
-Not allowed: Supabase, Prisma, any second UI kit, raw `pg` in app code.
+Next.js 15 (App Router, TS strict) · **Supabase Postgres** (`postgres` / postgres.js) · Drizzle + drizzle-kit · NextAuth/Auth.js v5 (email+password **and Google OAuth**; roles; JWT sessions, no DB adapter) · Tailwind v4 + shadcn/ui (base-ui) · TanStack Query · **Recharts** (dashboard charts) · **next-themes** (light/dark via `data-theme`) · SheetJS (`xlsx`, reserved) · Vercel.
+**All tables live in the `ld_order_entry` schema, never `public`** — the Supabase project *LD Silk Mills* is shared with other apps, and Supabase's Data API publishes only `public`, so order data is unreachable from it. `db/schema.ts` uses `pgSchema("ld_order_entry")`, so Drizzle emits fully-qualified names and nothing depends on `search_path`.
+Not allowed: Neon, Prisma, any second UI kit, raw `pg` in app code.
 
 ## 3. Locked decisions
 1. **`order_no` is TEXT, user-entered, UNIQUE** (e.g. `LKD-08-25-003`); validate duplicates on entry; never auto-number.
@@ -44,7 +45,8 @@ order-entry-system/
   components/           app-shell/ · orders/ · order-status/ · tracking/ · dashboard/ · trash/ · settings/ · ui/
   lib/                  db.ts · auth.ts · auth.config.ts · workflow.ts (stage + status + derivations) · rbac.ts ·
                         api.ts (guards) · validation.ts (zod) · orders.ts (client types) · order-status.ts · dashboard.ts
-  db/                   schema.ts · migrations/ (0000–0005) · seed.ts · load-env.ts
+  db/                   schema.ts (pgSchema "ld_order_entry") · migrations/ (0000 baseline +
+                        _archive_neon_public/) · seed.ts · load-env.ts · copy-to-supabase.ts
   middleware.ts         edge auth + canAccessPath
 ```
 
@@ -126,7 +128,7 @@ UUID PKs (`gen_random_uuid()`); `TIMESTAMPTZ DEFAULT now()`; quantities `DECIMAL
 - Fabric/design free text with autocomplete; never block an unknown value.
 - `line_total` generated — never write it; never store the grand total.
 - Validation: all write payloads go through zod schemas in `lib/validation.ts`.
-- Migrations: drizzle-kit, zero-padded sequential. **See the migration note in Implementation notes — `db:migrate` cannot run on the live DB; apply each migration's SQL directly to Neon.**
+- Migrations: drizzle-kit, zero-padded sequential. `npm run db:migrate` works again as of the Supabase move (see Implementation notes). Migrations use `DIRECT_URL`, never the pooler.
 - UI: sentence case; tables primary; semantic design tokens (§9); light **and** dark.
 
 ## 9. Design tokens
@@ -141,7 +143,7 @@ DO: read this first; keep stage/status/derivation logic in `workflow.ts`; treat 
 DON'T: manage stock/vendors/procurement here; auto-number `order_no`; write `line_total`; store an order-level cancelled/deleted flag (both are derived); hard-delete from a list (soft-delete → Trash); block unknown fabric/design; call the Embroidery System.
 
 ## 11. Build order (history)
-- **OE-P0** — scaffold + Neon/Drizzle + schema + migration + seed + health.
+- **OE-P0** — scaffold + Drizzle + schema + migration + seed + health (originally on Neon).
 - **OE-P1** — auth + role middleware + app shell.
 - **OE-P2** — order entry form (rich) + Orders Dashboard.
 - **OE-P3** — Operations tracking (7-stage workflow).
@@ -152,14 +154,15 @@ DON'T: manage stock/vendors/procurement here; auto-number `order_no`; write `lin
 - **OE-P8** — Google sign-in · MANAGER role · list filters + CSV · mobile card views · optimistic tracking · stock-only gating.
 - **OE-P9** — **reversible order/design cancellation** (`is_cancelled`, CANCELLED status, expandable Orders table with per-design cancel).
 - **OE-P10** — **reversible soft-delete + Trash** (`is_deleted`, migration 0005, `/trash`, permanent purge, per-design delete in the expandable Orders table; Trash nested under Settings in the nav).
+- **OE-P12** — **Neon → Supabase migration**: all tables moved into the `ld_order_entry` schema of the shared *LD Silk Mills* project; `@neondatabase/serverless` replaced by postgres.js; migration history rebuilt from a clean baseline. Data moved with `db/copy-to-supabase.ts` (Neon was PG 18.4 vs Supabase 17.6, so `pg_dump` was unusable — Postgres restores forwards only).
 - **OE-P11** — **interactive KPI cards** (Orders/Order-status filter in place; Dashboard KPIs deep-link) · **enhanced analytics dashboard** (cancellation + trash metrics, cancelled slice + total in the status donut, on-time radial gauge, horizontal pipeline bars) · **split-screen login redesign** · draft autosave, Order-status column picker, Neon `ws` driver fix.
 
 ---
 
 ## Implementation notes (living)
 - **Next.js pinned to 15.x** per §2 (Next 15.5.x, React 19, Tailwind v4). Turbopack build.
-- **⚠️ Migrations don't run via `db:migrate`.** The live Neon DB was set up with `db:push` / manual SQL, so drizzle's `__drizzle_migrations` tracking table is **empty** — `drizzle-kit migrate` tries to replay from `0000_init` (CREATE TABLE…) and fails on already-existing tables (the spinner hides the error). **Apply each migration's SQL directly** in the Neon SQL console (or a one-off `@neondatabase/serverless` node script). All migration SQL is written idempotent (`ADD COLUMN IF NOT EXISTS`). **A new column/enum must be applied to BOTH the dev DB and the production DB before/when the code that reads it deploys**, or prod queries error (`column … does not exist`).
-- **Migrations to date:** `0000_init` · `0001` (`workflow_stages.planned_offset_days`, SLA) · `0002` (`line_stage_progress.stock_status`) · `0003` (adds `MANAGER` to `user_role` enum — `ALTER TYPE … ADD VALUE` can't run in a txn; run it directly) · `0004` (`role_permissions`) · `0005` (`order_line_items.is_deleted` — soft-delete) · **`0006` (drops `MANAGER` — recreates the `user_role` enum, since Postgres has no `DROP VALUE`; reassigns any leftover MANAGER user to OPS and clears its `role_permissions` rows. Wrapped in a `DO $$` guard so a re-run is a no-op)**.
+- **Migrations work normally again.** The Neon DB had an empty `__drizzle_migrations` table, so `drizzle-kit migrate` always tried to replay from `0000_init` and failed on existing tables. The Supabase move rebuilt the schema from a fresh generated baseline, so the history and the database now agree. `db:generate` / `db:migrate` use **`DIRECT_URL`** (port 5432) — DDL must never go through the transaction pooler. `drizzle.config.ts` sets **`schemaFilter: ["ld_order_entry"]`**: without it drizzle-kit introspects sibling apps' schemas in the shared project and proposes to DROP their tables.
+- **Migrations to date:** `0000_boring_joseph` — the single baseline that creates the `ld_order_entry` schema, the `user_role` enum and all 8 tables. The Neon-era `public`-schema migrations `0000_init`–`0006_drop_manager_role` are kept for history under `db/migrations/_archive_neon_public/` and are never replayed.
 - **Order/status/derivation logic** lives only in `lib/workflow.ts`: `applyStageProgress` + `WorkflowError` (§6), `computeLineStatus`, `computeOrderStatus`, `isOrderCancelled(total, cancelled)`, `isOrderDeleted(total, deleted)`, `plannedAtForOffset`, `buildInitialStageRows`, `lineMatchKey`.
 - **Cancellation** — endpoint `app/api/orders/[id]/cancel/route.ts`; validation `cancelOrderSchema`; UI in `components/orders/order-detail.tsx`, the expandable Orders table (`orders-dashboard.tsx` + `order-designs.tsx` — `useDesignActions` hook), and struck rendering in the Order-status board.
 - **Soft-delete + Trash** — endpoints `app/api/orders/[id]/delete/route.ts` (soft), `app/api/orders/[id]/lines/[lineId]/route.ts` (per-line purge), `DELETE app/api/orders/[id]/route.ts` (order purge, guarded), `app/api/trash/route.ts` (listing). Types `TrashOrder`/`TrashDesign`/`TrashList` in `lib/orders.ts`. Page `app/(app)/trash/page.tsx` + `components/trash/trash-view.tsx` (desktop tables + mobile cards). Nav: Trash is `orders.edit`-gated, nested under Settings in `NAV_ITEMS` but surfaced top-level for a non-admin editor who can't see Settings (`visibleNav`, `lib/rbac.ts`).
@@ -171,6 +174,7 @@ DON'T: manage stock/vendors/procurement here; auto-number `order_no`; write `lin
 - **Login** — `app/(auth)/login/`: server `page.tsx` (split-screen, session-redirect + safe callbackUrl + googleEnabled), client `login-form.tsx` (credentials + Google + password show/hide + "Forgot password?" reveals an admin-reset hint, since there's no self-serve reset), `login-theme-toggle.tsx` (segmented Light/Dark via next-themes).
 - **Order entry form** (`components/orders/order-form.tsx`): rich header + fabric blocks × designs; **draft autosave** to `localStorage` (`oe:new-order-draft:v1`, create mode only) so a refresh keeps typed data; bulk "add N designs"; live duplicate `order_no` check.
 - **Shared table primitives** live in `components/ui/table.tsx` (`Th`, `THead`) — reuse for new tables. Shared KPI tile `components/ui/stat-card.tsx`.
-- **Neon `ws` driver fix** — `next.config.ts` sets `serverExternalPackages: ["@neondatabase/serverless", "ws"]` so bundling doesn't stub `bufferutil` and break interactive transactions (order create, stage updates, cancel/delete). Required for any `dbx.transaction`.
+- **One database client, not two.** Neon needed an HTTP driver for reads plus a WebSocket pool for transactions; postgres.js does both, so `lib/db.ts` exports a single instance and `dbx` is just an alias for `db` (kept so the six transaction call sites are unchanged). The old `serverExternalPackages` / `bufferutil` workaround in `next.config.ts` is gone with Neon.
+- **Connection strings.** Runtime uses the **Supavisor transaction pooler (port 6543)** with `prepare: false` — required, because the pooler hands a different backend connection to each transaction. DDL uses `DIRECT_URL` (port 5432). The direct host `db.<ref>.supabase.co` is **IPv6-only**; use the pooler from Vercel and from IPv4-only networks.
 - **Exports:** `/api/export/orders` is JSON (§7); Order-Status and Orders "Export" build CSV client-side. SheetJS/`xlsx` reserved, not yet wired.
-- **Local env:** `.env.local` (gitignored) holds `DATABASE_URL` (Neon dev DB — Singapore `ap-southeast-1`; note two `DATABASE_URL` lines exist, the second commented out — the **first uncommented** one wins), `AUTH_SECRET`, `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (blank = Google hidden), `EXPORT_API_KEY`, `NEXT_PUBLIC_APP_VERSION`. Vercel production keeps its own env. `db:seed` seeds the 7 stages, sample lookups, one ADMIN, and the default `role_permissions` matrix.
+- **Local env:** `.env.local` (gitignored) holds `DATABASE_URL` (Supabase **transaction pooler**, port 6543), `DIRECT_URL` (port 5432, migrations only), `AUTH_SECRET`, `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (blank = Google hidden), `EXPORT_API_KEY`, `NEXT_PUBLIC_APP_VERSION`. Vercel production keeps its own env. `db:seed` seeds the 7 stages, sample lookups, one ADMIN, and the default `role_permissions` matrix. **Point local dev at a non-production database** — the Supabase project is the live system of record.
