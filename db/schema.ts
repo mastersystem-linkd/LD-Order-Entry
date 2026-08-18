@@ -9,8 +9,7 @@ import {
   index,
   integer,
   numeric,
-  pgEnum,
-  pgTable,
+  pgSchema,
   text,
   timestamp,
   unique,
@@ -18,16 +17,23 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+// Every table lives in its OWN Postgres schema, not `public`, so the LD Silk
+// Mills Supabase project can host other apps without name collisions — and so
+// Supabase's Data API (which only publishes `public`) can never expose orders.
+// Drizzle emits fully-qualified "ld_order_entry"."table" in every statement, so
+// nothing depends on the connection's search_path (unreliable through a pooler).
+export const app = pgSchema("ld_order_entry");
+
 // Roles (§1). Default VIEWER. MANAGER existed between migrations 0003 and 0006
 // but was dropped — its grants were identical to ADMIN's, so it added nothing.
-export const userRole = pgEnum("user_role", ["ADMIN", "SALES", "OPS", "VIEWER"]);
+export const userRole = app.enum("user_role", ["ADMIN", "SALES", "OPS", "VIEWER"]);
 
 // Per-role capability grants — the admin-editable access matrix (Settings →
 // Access). A row (role, capability) with allowed=true means that role has that
 // capability. ADMIN is ALWAYS full and is never stored/edited here. Capability
 // keys are defined in lib/rbac.ts (CAPABILITIES). Resolved into the session JWT
 // at login; changes take effect on the user's next login.
-export const rolePermissions = pgTable(
+export const rolePermissions = app.table(
   "role_permissions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -54,7 +60,7 @@ export const LOOKUP_CATEGORIES = [
 export type LookupCategory = (typeof LOOKUP_CATEGORIES)[number];
 
 // users ----------------------------------------------------------------------
-export const users = pgTable("users", {
+export const users = app.table("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash"),
@@ -67,7 +73,7 @@ export const users = pgTable("users", {
 });
 
 // customer_orders ------------------------------------------------------------
-export const customerOrders = pgTable(
+export const customerOrders = app.table(
   "customer_orders",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -97,7 +103,7 @@ export const customerOrders = pgTable(
 );
 
 // order_line_items -----------------------------------------------------------
-export const orderLineItems = pgTable(
+export const orderLineItems = app.table(
   "order_line_items",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -134,7 +140,7 @@ export const orderLineItems = pgTable(
 );
 
 // workflow_stages (seed the 7 + their SLA — the Time Tracking config) --------
-export const workflowStages = pgTable("workflow_stages", {
+export const workflowStages = app.table("workflow_stages", {
   stageKey: varchar("stage_key", { length: 40 }).primaryKey(),
   label: varchar("label", { length: 60 }).notNull(),
   sortOrder: integer("sort_order").notNull(),
@@ -144,7 +150,7 @@ export const workflowStages = pgTable("workflow_stages", {
 });
 
 // line_stage_progress --------------------------------------------------------
-export const lineStageProgress = pgTable(
+export const lineStageProgress = app.table(
   "line_stage_progress",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -179,7 +185,7 @@ export const lineStageProgress = pgTable(
 // design_database (log of every fabric+design used) -------------------------
 // Powers design autocomplete + a browsable history. Denormalized order_no
 // survives order deletion (FK is ON DELETE SET NULL).
-export const designDatabase = pgTable(
+export const designDatabase = app.table(
   "design_database",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -205,7 +211,7 @@ export const designDatabase = pgTable(
 );
 
 // lookup_values (the Dropdown Master — autocomplete sources) -----------------
-export const lookupValues = pgTable(
+export const lookupValues = app.table(
   "lookup_values",
   {
     id: uuid("id").primaryKey().defaultRandom(),
