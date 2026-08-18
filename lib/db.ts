@@ -22,6 +22,21 @@ if (!process.env.DATABASE_URL) {
 // hands a different backend connection to each transaction, so server-side
 // prepared statements can't be reused and postgres.js must not try to.
 // Schema DDL uses DIRECT_URL instead (see drizzle.config.ts).
+// Guard against the failure that took production down once already: pointing
+// DATABASE_URL at Supabase's SESSION pooler (5432) instead of the TRANSACTION
+// pooler (6543). Session mode holds one backend connection per client for its
+// whole lifetime, and the Micro compute allows only 15 — so a handful of warm
+// serverless instances exhaust the pool and every query fails with
+// "max clients reached in session mode". The symptom (a generic 500 from every
+// route) says nothing about the cause, so say it loudly at startup instead.
+if (/:5432\//.test(process.env.DATABASE_URL) && process.env.NODE_ENV === "production") {
+  console.error(
+    "[db] DATABASE_URL uses port 5432 (session pooler). Production must use the " +
+      "TRANSACTION pooler on port 6543 — session mode will exhaust the connection " +
+      "pool and every query will fail. DIRECT_URL is the one that belongs on 5432.",
+  );
+}
+
 const client = postgres(process.env.DATABASE_URL, {
   prepare: false,
   max: 5,

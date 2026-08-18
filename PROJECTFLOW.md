@@ -1449,6 +1449,12 @@ Vercel production keeps its own set.
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | **yes** | Supabase **transaction pooler** (port 6543). `lib/db.ts` throws at import time if it is missing. |
+
+> **Getting this port wrong takes the site down.** Session mode (5432) holds a
+> connection per client for its whole lifetime against a 15-connection limit, so a
+> few warm serverless instances exhaust it and every query fails with `max clients
+> reached in session mode` — surfacing as a blanket 500. `lib/db.ts` logs an
+> explicit error if it sees 5432 in production.
 | `DIRECT_URL` | for DDL | Supabase direct/session connection (port 5432). Used only by drizzle-kit. |
 | `DB_SCHEMA` | dev only | Overrides the schema name — set to `ld_order_entry_dev` locally. **Ignored when `NODE_ENV=production`**, so it cannot redirect the live app, and overridden by `db/force-prod-schema.ts` for drizzle-kit so migrations always target production. |
 | `AUTH_SECRET` | **yes** | Signs and encrypts session JWTs. Generate with `npx auth secret`. |
