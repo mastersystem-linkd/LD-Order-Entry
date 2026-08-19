@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import NumberFlow from "@number-flow/react";
@@ -33,11 +34,22 @@ import { Reveal } from "@/components/ui/reveal";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Input } from "@/components/ui/input";
-import {
-  OnTimeGauge,
-  StatusDonut,
-  TrendChart,
-} from "@/components/dashboard/dashboard-charts";
+import { OnTimeGauge } from "@/components/dashboard/on-time-gauge";
+
+// Recharts is ~139 kB — nearly half this route's JavaScript — and nothing above
+// the charts needs it. Loading it separately lets the KPIs, pipeline and tables
+// paint as soon as the data lands; the charts fill in a moment later behind the
+// same skeleton they already show while loading.
+const chartsModule = () => import("@/components/dashboard/dashboard-charts");
+const ChartSkeleton = () => <Skel className="h-[232px]" />;
+const TrendChart = dynamic(
+  () => chartsModule().then((m) => m.TrendChart),
+  { ssr: false, loading: ChartSkeleton },
+);
+const StatusDonut = dynamic(
+  () => chartsModule().then((m) => m.StatusDonut),
+  { ssr: false, loading: ChartSkeleton },
+);
 
 const PRESETS: { key: DateRangePreset; label: string }[] = [
   { key: "today", label: "Today" },
@@ -53,7 +65,15 @@ function delta(cur: number, prev: number):
   return { dir: pct >= 0 ? "up" : "down", text: `${pct >= 0 ? "+" : ""}${pct}%` };
 }
 
-export function DashboardView() {
+export function DashboardView({
+  initial,
+}: {
+  // Rendered on the server for the range the URL asks for, so the first paint
+  // has real numbers instead of skeletons. Only used when the range the client
+  // resolves matches the one the server rendered — otherwise it belongs to a
+  // different query key and TanStack Query fetches normally.
+  initial?: { range: DashboardData["range"]; data: DashboardData };
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -65,12 +85,21 @@ export function DashboardView() {
   const to = sp.get("to") ?? fallback.to;
   const dept = (sp.get("dept") as Department) ?? "ALL";
 
+  const serverRendered =
+    initial &&
+    initial.range.from === from &&
+    initial.range.to === to &&
+    initial.range.department === dept
+      ? initial.data
+      : undefined;
+
   const q = useQuery({
     queryKey: ["dashboard", { from, to, dept }],
     queryFn: () =>
       apiGet<DashboardData>(
         `/api/dashboard?from=${from}&to=${to}&department=${dept}`,
       ),
+    initialData: serverRendered,
     placeholderData: (p) => p,
     staleTime: 30_000,
   });

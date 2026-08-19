@@ -94,18 +94,23 @@ export type OrderStatusGroup = {
   lines: OrderStatusRow[];
 };
 
+// One page of the board: orders, already grouped, refined and paginated by the
+// server. Each group still carries its design lines, so expanding a row and
+// exporting CSV need no extra request.
 export type OrderStatusList = {
-  rows: OrderStatusRow[];
+  groups: OrderStatusGroup[];
   page: number;
   pageSize: number;
   total: number;
   totalPages: number;
+  // Order-level, over the whole filtered set — NOT just this page. `cancelled`
+  // counts cancelled DESIGNS, so a partly-cancelled order still registers.
   summary: {
     total: number;
     inProgress: number;
     completed: number;
     overdue: number;
-    cancelledDesigns: number;
+    cancelled: number;
   };
 };
 

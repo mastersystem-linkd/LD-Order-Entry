@@ -79,13 +79,14 @@ export function buildInitialStageRows(
 // Stages whose completion means fulfilment work has actually started. Order
 // entry + stock checking are preliminary — finishing them alone does NOT make a
 // line "partially completed" (§6).
-const PROGRESS_STAGE_KEYS = new Set<string>([
+export const PROGRESS_STAGE_KEYS_LIST = [
   "rolling_checking",
   "challan",
   "bill",
   "dispatch",
   "received_lr",
-]);
+] as const;
+const PROGRESS_STAGE_KEYS = new Set<string>(PROGRESS_STAGE_KEYS_LIST);
 
 // Per-line operations status (§6): all 7 done → COMPLETED; at least one of the 5
 // post-stock stages done → PARTIALLY COMPLETED; otherwise (nothing, or only
@@ -99,6 +100,19 @@ export function computeLineStatus(
     (s) => s.isDone && PROGRESS_STAGE_KEYS.has(s.stageKey),
   );
   return started ? "PARTIALLY COMPLETED" : "PENDING";
+}
+
+// Same rule as computeLineStatus, expressed over counts a SQL aggregate can
+// produce — so a list endpoint can ask the database for one row per line
+// instead of dragging back all seven stage rows to reduce them here.
+export function lineStatusFromCounts(counts: {
+  stageRows: number;
+  doneRows: number;
+  anyProgressStageDone: boolean;
+}): OperationsStatus {
+  if (counts.stageRows === 0) return "PENDING";
+  if (counts.doneRows === counts.stageRows) return "COMPLETED";
+  return counts.anyProgressStageDone ? "PARTIALLY COMPLETED" : "PENDING";
 }
 
 // Order-level status = roll-up of its (non-cancelled) lines.

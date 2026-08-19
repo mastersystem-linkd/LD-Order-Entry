@@ -22,10 +22,11 @@ import {
 import { db, dbx } from "@/lib/db";
 import { firstZodError, orderPayloadSchema } from "@/lib/validation";
 import {
+  PROGRESS_STAGE_KEYS_LIST,
   buildInitialStageRows,
-  computeLineStatus,
   computeOrderStatus,
   isOrderCancelled,
+  lineStatusFromCounts,
 } from "@/lib/workflow";
 import {
   customerOrders,
@@ -154,24 +155,34 @@ export async function GET(req: Request) {
         )
     : [];
 
+  // The list only needs each line's derived STATUS, never its individual stage
+  // rows — so let Postgres reduce them. Fetching the raw rows meant ~29,000 of
+  // them crossed the wire on the Orders screen (which asks for `all=1`), seven
+  // per line, purely to be counted here.
   const lineIds = lines.map((l) => l.id);
-  const stages = lineIds.length
+  const statusRows = lineIds.length
     ? await db
         .select({
           lineId: lineStageProgress.orderLineItemId,
-          stageKey: lineStageProgress.stageKey,
-          isDone: lineStageProgress.isDone,
+          stageRows: count(),
+          doneRows: sql<number>`count(*) filter (where ${lineStageProgress.isDone})`,
+          anyProgressStageDone: sql<boolean>`bool_or(${lineStageProgress.isDone} and ${inArray(lineStageProgress.stageKey, [...PROGRESS_STAGE_KEYS_LIST])})`,
         })
         .from(lineStageProgress)
         .where(inArray(lineStageProgress.orderLineItemId, lineIds))
+        .groupBy(lineStageProgress.orderLineItemId)
     : [];
 
-  const stagesByLine = new Map<string, { stageKey: string; isDone: boolean }[]>();
-  for (const s of stages) {
-    const arr = stagesByLine.get(s.lineId) ?? [];
-    arr.push({ stageKey: s.stageKey, isDone: s.isDone });
-    stagesByLine.set(s.lineId, arr);
-  }
+  const statusByLine = new Map(
+    statusRows.map((s) => [
+      s.lineId,
+      lineStatusFromCounts({
+        stageRows: Number(s.stageRows),
+        doneRows: Number(s.doneRows),
+        anyProgressStageDone: Boolean(s.anyProgressStageDone),
+      }),
+    ]),
+  );
   const linesByOrder = new Map<string, typeof lines>();
   for (const l of lines) {
     const arr = linesByOrder.get(l.orderId) ?? [];
@@ -190,8 +201,8 @@ export async function GET(req: Request) {
     const qtyTotal = shown.reduce((s, l) => s + Number(l.qtyMtr), 0);
     const grandTotal = shown.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0);
     const fabrics = [...new Set(shown.map((l) => l.quality))];
-    const lineStatuses = active.map((l) =>
-      computeLineStatus(stagesByLine.get(l.id) ?? []),
+    const lineStatuses = active.map(
+      (l) => statusByLine.get(l.id) ?? "PENDING",
     );
     return {
       id: o.id,

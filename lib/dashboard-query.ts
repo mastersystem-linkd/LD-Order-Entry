@@ -59,7 +59,11 @@ export function dashboardParams(raw: {
 
 // Number of workflow stages, resolved inside the query so the "is this line
 // finished?" test needs no extra round trip. Mirrors `stages.length || 7`.
-const STAGE_COUNT = sql`coalesce(nullif((select count(*) from ${workflowStages}), 0), 7)`;
+// Built fresh per use: a `sql` fragment is bound to the query it is compiled
+// into, and reusing one across queries corrupts the placeholder numbering —
+// which the pooler answers by closing the connection.
+const stageCount = () =>
+  sql`coalesce(nullif((select count(*) from ${workflowStages}), 0), 7)`;
 
 export async function loadDashboard({
   from,
@@ -91,9 +95,12 @@ export async function loadDashboard({
   const prevFrom = shiftDays(prevTo, -(len - 1));
 
   // One row per in-range line: how many of its stages are done, and which stage
-  // it is waiting on. Feeds both the pipeline and the per-order roll-up.
-  const lineAgg = db.$with("line_agg").as(
-    db
+  // it is waiting on. Feeds both the pipeline and the per-order roll-up — and
+  // is built FRESH for each, because a CTE object carries per-query state and
+  // the two queries below run concurrently (sharing one closes the connection).
+  const lineAggCte = () =>
+    db.$with("line_agg").as(
+      db
       .select({
         orderId: orderLineItems.orderId,
         lineTotal: orderLineItems.lineTotal,
@@ -119,9 +126,43 @@ export async function loadDashboard({
         workflowStages,
         eq(workflowStages.stageKey, lineStageProgress.stageKey),
       )
-      .where(and(orderWhere, activeLine))
-      .groupBy(orderLineItems.id),
-  );
+        .where(and(orderWhere, activeLine))
+        .groupBy(orderLineItems.id),
+    );
+
+  function pipelineQuery() {
+    const la = lineAggCte();
+    return db
+      .with(la)
+      .select({ sort: la.currentSort, n: count() })
+      .from(la)
+      .where(sql`${la.currentSort} is not null`)
+      .groupBy(la.currentSort);
+  }
+
+  function orderRollupQuery() {
+    const la = lineAggCte();
+    return db
+      .with(la)
+      .select({
+        id: la.orderId,
+        orderNo: customerOrders.orderNo,
+        party: customerOrders.partyName,
+        orderDate: customerOrders.orderDate,
+        value: sql<string>`coalesce(sum(${la.lineTotal}), 0)`,
+        lines: count(),
+        completed: sql<number>`count(*) filter (where ${la.doneCount} >= ${stageCount()})`,
+        started: sql<number>`count(*) filter (where ${la.doneCount} > 0)`,
+      })
+      .from(la)
+      .innerJoin(customerOrders, eq(customerOrders.id, la.orderId))
+      .groupBy(
+        la.orderId,
+        customerOrders.orderNo,
+        customerOrders.partyName,
+        customerOrders.orderDate,
+      );
+  }
 
   // Every overdue stage, numbered per order so the outer query can keep only
   // each order's most-overdue one — while `count(*) over ()` still carries the
@@ -192,20 +233,14 @@ export async function loadDashboard({
       .groupBy(orderLineItems.orderId),
   );
 
-  // None of these depend on another's *result*, so they go out together.
-  const [
-    stages,
-    pipelineRows,
-    orderRows,
-    otRes,
-    byDay,
-    prevRes,
-    topPartiesRaw,
-    topFabricsRaw,
-    overdueRows,
-    cancelRes,
-    trashRes,
-  ] = await Promise.all([
+  // None of these depend on another's *result*, so they could all go out at
+  // once — but they must NOT. lib/db.ts caps the pool at 5 connections, and
+  // firing more queries than that at Supavisor leaves the surplus queued behind
+  // connections the pooler has already rotated: the request then stalls for
+  // minutes instead of failing. (Reproduced against the live pooler — the first
+  // call in a warm process succeeds and the next one hangs.) So fan out in
+  // waves that fit inside the pool.
+  const [stages, pipelineRows, orderRows, otRes] = await Promise.all([
     // Ordered stages (labels + sort) for the pipeline.
     db
       .select({
@@ -217,36 +252,11 @@ export async function loadDashboard({
       .orderBy(asc(workflowStages.sortOrder)),
 
     // Pipeline: unfinished lines grouped by the stage they are waiting on.
-    db
-      .with(lineAgg)
-      .select({ sort: lineAgg.currentSort, n: count() })
-      .from(lineAgg)
-      .where(sql`${lineAgg.currentSort} is not null`)
-      .groupBy(lineAgg.currentSort),
+    pipelineQuery(),
 
     // Per-order roll-up (~1 row per order, not per line): value plus the line
     // counts that decide the order's status.
-    db
-      .with(lineAgg)
-      .select({
-        id: lineAgg.orderId,
-        orderNo: customerOrders.orderNo,
-        party: customerOrders.partyName,
-        orderDate: customerOrders.orderDate,
-        value: sql<string>`coalesce(sum(${lineAgg.lineTotal}), 0)`,
-        lines: count(),
-        completed:
-          sql<number>`count(*) filter (where ${lineAgg.doneCount} >= ${STAGE_COUNT})`,
-        started: sql<number>`count(*) filter (where ${lineAgg.doneCount} > 0)`,
-      })
-      .from(lineAgg)
-      .innerJoin(customerOrders, eq(customerOrders.id, lineAgg.orderId))
-      .groupBy(
-        lineAgg.orderId,
-        customerOrders.orderNo,
-        customerOrders.partyName,
-        customerOrders.orderDate,
-      ),
+    orderRollupQuery(),
 
     // On-time rate over completed stages.
     db
@@ -263,6 +273,9 @@ export async function loadDashboard({
       .where(and(orderWhere, activeLine, eq(lineStageProgress.isDone, true)))
       .then((r) => r[0]),
 
+  ]);
+
+  const [byDay, prevRes, topPartiesRaw, topFabricsRaw] = await Promise.all([
     // Trend AND the current window's headline totals in one pass: the KPIs are
     // just the column sums of the daily series, so they cost no extra query.
     // `count(distinct)` over non-deleted lines is the EXISTS filter, per day.
@@ -323,6 +336,9 @@ export async function loadDashboard({
       .orderBy(desc(sql`coalesce(sum(${orderLineItems.qtyMtr}), 0)`))
       .limit(6),
 
+  ]);
+
+  const [overdueRows, cancelRes, trashRes] = await Promise.all([
     // Needs attention: each order's most-overdue stage, worst ten.
     db
       .with(overdueAgg)
@@ -432,6 +448,12 @@ export async function loadDashboard({
     curValue += Number(r.v);
     curMeters += Number(r.m);
   }
+  // Both columns are numeric(10,2)/(12,2), so adding the daily subtotals in
+  // floating point can leave a trailing 0.00000000003. Round back to the scale
+  // the database actually stores.
+  const money = (n: number) => Math.round(n * 100) / 100;
+  curValue = money(curValue);
+  curMeters = money(curMeters);
   const trend: { date: string; orders: number; value: number }[] = [];
   {
     let d = new Date(`${from}T00:00:00Z`);

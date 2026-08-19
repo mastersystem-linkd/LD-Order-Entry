@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import { apiGet } from "@/lib/api-client";
 import { formatDate, formatNumber } from "@/lib/orders";
 import {
-  aggregateOrderGroups,
   STAGE_DOT,
   STAGE_OPTIONS,
   type OrderStatusGroup,
@@ -57,9 +56,6 @@ const OVERALL: Record<OverallStatus, { label: string; cls: string }> = {
 
 const selectCls =
   "h-9 rounded-field border border-line-strong bg-surface-2 px-2 text-sm text-ink outline-none focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
-
-// Orders per page (the board is now grouped by order, not by line).
-const ORDERS_PER_PAGE = 20;
 
 // The desktop table's toggleable columns. `order` is the identity column and is
 // locked on. Ids here are the single source of truth used by both the column
@@ -141,75 +137,57 @@ export function OrderStatusBoard({
     setPage(1);
   }, [search, party, fabric, stage, overall, cancelledOnly, debouncedFilters]);
 
-  // Server filters are line-attribute filters only. The derived bits
-  // (overall / stage / pagination) are applied client-side after we roll lines
-  // up into order groups, so `all=1` fetches the whole filtered set.
-  const tableParams = React.useCallback(() => {
-    const p = new URLSearchParams();
-    if (search) p.set("search", search);
-    if (party) p.set("party", party);
-    if (fabric) p.set("fabric", fabric);
-    appendOrderFilterParams(p, debouncedFilters);
-    p.set("all", "1");
-    return p.toString();
-  }, [search, party, fabric, debouncedFilters]);
+  // The server does the grouping, the KPI counts, the overall/stage/cancelled
+  // refinement and the pagination — so a page costs one small response instead
+  // of every line in the filtered set (~5 MB) rolled up in the browser.
+  const tableParams = React.useCallback(
+    (extra?: Record<string, string>) => {
+      const p = new URLSearchParams();
+      if (search) p.set("search", search);
+      if (party) p.set("party", party);
+      if (fabric) p.set("fabric", fabric);
+      if (stage) p.set("stage", stage);
+      if (cancelledOnly) p.set("cancelled", "1");
+      else if (overall) p.set("overall", overall);
+      appendOrderFilterParams(p, debouncedFilters);
+      for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v);
+      return p.toString();
+    },
+    [search, party, fabric, stage, overall, cancelledOnly, debouncedFilters],
+  );
 
   const q = useQuery({
     queryKey: [
       "order-status",
-      { search, party, fabric, filters: debouncedFilters },
+      {
+        search,
+        party,
+        fabric,
+        stage,
+        overall,
+        cancelledOnly,
+        page,
+        filters: debouncedFilters,
+      },
     ],
-    queryFn: () => apiGet<OrderStatusList>(`/api/order-status?${tableParams()}`),
+    queryFn: () =>
+      apiGet<OrderStatusList>(
+        `/api/order-status?${tableParams({ page: String(page) })}`,
+      ),
     placeholderData: (prev) => prev,
   });
 
-  const allLines = React.useMemo(() => q.data?.rows ?? [], [q.data]);
-  const groups = React.useMemo(
-    () => aggregateOrderGroups(allLines),
-    [allLines],
-  );
-
-  // Order-level summary (over all groups, before overall/stage refinement).
-  // Cancelled orders are counted on their own; the in-progress/completed/overdue
-  // tallies are over ACTIVE (non-cancelled) groups so a cancelled order's vacuous
-  // "completed" overall doesn't inflate the Completed card.
-  const summary = React.useMemo(() => {
-    const active = groups.filter((g) => !g.isCancelled);
-    return {
-      total: groups.length,
-      inProgress: active.filter((g) => g.overall === "in_progress").length,
-      completed: active.filter((g) => g.overall === "completed").length,
-      overdue: active.filter((g) => g.overall === "overdue").length,
-      // Count of cancelled DESIGNS (so a partially-cancelled order still shows).
-      cancelled: allLines.filter((l) => l.isCancelled).length,
-    };
-  }, [groups, allLines]);
-
-  const visibleGroups = React.useMemo(() => {
-    let gs = groups;
-    // Cancelled = any order that has at least one cancelled design (fully- or
-    // partially-cancelled); its cancelled rows render struck through.
-    if (cancelledOnly) gs = gs.filter((g) => (g.cancelledCount ?? 0) > 0);
-    // The overall cards refine over ACTIVE groups (a fully-cancelled order's
-    // overall is a vacuous "completed" — it belongs only under the Cancelled card).
-    else if (overall)
-      gs = gs.filter((g) => !g.isCancelled && g.overall === overall);
-    if (stage) gs = gs.filter((g) => g.currentStageKey === stage);
-    // Sorted by order date, newest first (with an order-no tie-break).
-    return [...gs].sort(
-      (a, b) =>
-        (a.odDate < b.odDate ? 1 : a.odDate > b.odDate ? -1 : 0) ||
-        a.orderNo.localeCompare(b.orderNo),
-    );
-  }, [groups, overall, cancelledOnly, stage]);
-
-  const total = visibleGroups.length;
-  const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
-  const safePage = Math.min(page, totalPages);
-  const pageGroups = visibleGroups.slice(
-    (safePage - 1) * ORDERS_PER_PAGE,
-    safePage * ORDERS_PER_PAGE,
-  );
+  const pageGroups = React.useMemo(() => q.data?.groups ?? [], [q.data]);
+  const summary = q.data?.summary ?? {
+    total: 0,
+    inProgress: 0,
+    completed: 0,
+    overdue: 0,
+    cancelled: 0,
+  };
+  const total = q.data?.total ?? 0;
+  const totalPages = q.data?.totalPages ?? 1;
+  const safePage = q.data?.page ?? page;
 
   // Flat line list for the drawer's prev/next (across the current page).
   const flatLines = React.useMemo(
@@ -241,14 +219,15 @@ export function OrderStatusBoard({
     !!(party || fabric || stage || overall || cancelledOnly) ||
     hasActiveOrderFilters(filters);
 
-  function exportCsv() {
+  async function exportCsv() {
     setExporting(true);
     try {
-      // Export the exact rows the board shows across all pages (line-level
-      // detail), built from visibleGroups so the "At stage" / "Overall"
-      // refinement matches the view — the server applies those two line-level,
-      // which would otherwise diverge from the group-level board.
-      const lines = visibleGroups.flatMap((g) => g.lines);
+      // Export the exact rows the board shows across ALL pages, so this asks
+      // for the whole filtered set — the same refinement, minus the paging.
+      const all = await apiGet<OrderStatusList>(
+        `/api/order-status?${tableParams({ all: "1" })}`,
+      );
+      const lines = all.groups.flatMap((g) => g.lines);
       const header = [
         "Order no",
         "Party",
@@ -405,7 +384,7 @@ export function OrderStatusBoard({
           <Button
             size="icon"
             onClick={exportCsv}
-            disabled={exporting || !visibleGroups.length}
+            disabled={exporting || total === 0}
             aria-label="Export CSV"
             title="Export CSV"
             className="shrink-0"
