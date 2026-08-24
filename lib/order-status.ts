@@ -32,6 +32,11 @@ export type StageCell = {
   state: StageState;
   date: string | null; // actual_at ISO, when done
   daysOverdue: number;
+  // The SLA deadline for this stage, and how late it was finished. Both were
+  // computed here all along but only reached the single-line detail endpoint;
+  // the tracking panel needs them to answer "when was this due?".
+  plannedAt?: string | null;
+  delayMinutes?: number | null;
   // Only meaningful on the stock_checking cell (null elsewhere): the stock gate
   // outcome. Per line it's the stored value; for an order aggregate it's folded
   // (any line out_of_stock → out_of_stock; all in stock → in_stock; else null).
@@ -55,6 +60,8 @@ export type OrderStatusRow = {
   qtyMtr: string;
   lineTotal: string | null;
   salesPerson: string | null;
+  agent: string | null;
+  department: string | null;
   odDate: string;
   haste: string | null;
   challanNo: string | null;
@@ -76,6 +83,8 @@ export type OrderStatusGroup = {
   orderNo: string;
   party: string;
   salesPerson: string | null;
+  agent: string | null;
+  department: string | null;
   odDate: string;
   haste: string | null;
   challanNo: string | null;
@@ -221,6 +230,8 @@ export function computeStages(
         r?.stockStatus === "in_stock" || r?.stockStatus === "out_of_stock"
           ? r.stockStatus
           : null,
+      plannedAt: iso(planned),
+      delayMinutes: r?.delayMinutes ?? null,
     });
     detailStages.push({
       stageKey: s.key,
@@ -334,6 +345,19 @@ export function aggregateOrderGroups(
         date,
         daysOverdue,
         stockStatus,
+        // Earliest deadline and worst delay across the order's active lines.
+        plannedAt: cells.reduce<string | null>(
+          (acc, c) =>
+            c.plannedAt && (acc == null || c.plannedAt < acc) ? c.plannedAt : acc,
+          null,
+        ),
+        delayMinutes: cells.reduce<number | null>(
+          (acc, c) =>
+            c.delayMinutes != null && (acc == null || c.delayMinutes > acc)
+              ? c.delayMinutes
+              : acc,
+          null,
+        ),
         doneOf: doneN,
         totalLines: total,
         outOf: cells.filter((c) => c.stockStatus === "out_of_stock").length,
@@ -363,6 +387,8 @@ export function aggregateOrderGroups(
       orderNo: first.orderNo,
       party: first.party,
       salesPerson: first.salesPerson,
+      agent: first.agent,
+      department: first.department,
       odDate: first.odDate,
       haste: first.haste,
       challanNo: first.challanNo,

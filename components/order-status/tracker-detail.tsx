@@ -11,7 +11,11 @@ import {
 } from "lucide-react";
 
 import { formatDate, formatNumber } from "@/lib/orders";
-import type { OrderStatusRow, StageCell } from "@/lib/order-status";
+import type {
+  OrderStatusGroup,
+  OrderStatusRow,
+  StageCell,
+} from "@/lib/order-status";
 import { cn } from "@/lib/utils";
 import {
   isDispatched,
@@ -74,6 +78,16 @@ const PILL: Record<string, string> = {
   cancelled: "bg-inset text-ink-muted ring-line",
 };
 
+// "3d 4h late" reads better than "4,560 minutes".
+function lateness(minutes: number | null | undefined): string | null {
+  if (minutes == null || minutes <= 0) return null;
+  const d = Math.floor(minutes / 1440);
+  const h = Math.floor((minutes % 1440) / 60);
+  if (d > 0) return h > 0 ? `${d}d ${h}h late` : `${d}d late`;
+  if (h > 0) return `${h}h late`;
+  return `${minutes}m late`;
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2">
@@ -98,6 +112,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export function TrackerDetail({
   line,
   group,
+  order,
   index,
   total,
   onPrev,
@@ -109,6 +124,8 @@ export function TrackerDetail({
 }: {
   line?: OrderStatusRow;
   group?: QualityGroup;
+  /** The whole order the line belongs to, for its totals. */
+  order?: OrderStatusGroup;
   index: number;
   total: number;
   onPrev: () => void;
@@ -127,6 +144,15 @@ export function TrackerDetail({
   const doneCount = line.stages.filter((s) => s.state === "done").length;
   const totalStages = line.stages.length || 7;
   const pct = Math.round((doneCount / totalStages) * 100);
+
+  // What this design is waiting on, and how the order as a whole is doing.
+  const currentStage = line.currentStageKey
+    ? (STAGE_COLUMNS.find((c) => c.key === line.currentStageKey)?.full ??
+      line.currentStageKey)
+    : null;
+  const orderLines = order?.lines.filter((l) => !l.isCancelled) ?? [];
+  const orderActive = orderLines.length;
+  const orderDispatched = orderLines.filter(isDispatched).length;
 
   // Buttons sit inside the drag handle; stop them starting a drag.
   const stopDrag = (e: React.PointerEvent) => e.stopPropagation();
@@ -250,33 +276,88 @@ export function TrackerDetail({
           </p>
         ) : null}
 
-        <div className="rounded-card border border-line bg-surface-2 px-3 py-1">
+        <SectionLabel>Order</SectionLabel>
+        <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
           <div className="divide-y divide-line">
-            <Row label="OD date">{formatDate(line.odDate)}</Row>
             <Row label="Order no">
               <span className="num">{line.orderNo}</span>
             </Row>
+            <Row label="OD date">{formatDate(line.odDate)}</Row>
+            <Row label="Entered on">{formatDate(line.createdAt)}</Row>
             <Row label="Sales person">{line.salesPerson || "—"}</Row>
-            <Row label="Quality">{line.fabric}</Row>
-            <Row label="Design matching">
-              <span className="num">{line.design}</span>
+            <Row label="Agent">{line.agent || "—"}</Row>
+            <Row label="Department">{line.department || "—"}</Row>
+            <Row label="Haste">{line.haste || "—"}</Row>
+            <Row label="Challan no">
+              <span className="num">{line.challanNo || "—"}</span>
             </Row>
-            <Row label="Mtr / yard">
-              <span className="num">{formatNumber(Number(line.qtyMtr))}</span>
+            <Row label="Lot no">
+              <span className="num">{line.lotNo || "—"}</span>
             </Row>
-            {line.haste ? <Row label="Haste">{line.haste}</Row> : null}
-            {line.challanNo ? (
-              <Row label="Challan no">
-                <span className="num">{line.challanNo}</span>
-              </Row>
-            ) : null}
-            {line.lotNo ? (
-              <Row label="Lot no">
-                <span className="num">{line.lotNo}</span>
-              </Row>
-            ) : null}
           </div>
         </div>
+
+        <div className="mt-4">
+          <SectionLabel>This design</SectionLabel>
+          <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
+            <div className="divide-y divide-line">
+              <Row label="Quality">{line.fabric}</Row>
+              <Row label="Design matching">
+                <span className="num">{line.design}</span>
+              </Row>
+              <Row label="Mtr / yard">
+                <span className="num">{formatNumber(Number(line.qtyMtr))}</span>
+              </Row>
+              <Row label="Value">
+                <span className="num">
+                  {line.lineTotal == null
+                    ? "—"
+                    : `₹${formatNumber(Number(line.lineTotal))}`}
+                </span>
+              </Row>
+              <Row label="Waiting on">
+                <span className={currentStage ? "text-accent" : "text-success"}>
+                  {currentStage ?? "All stages done"}
+                </span>
+              </Row>
+            </div>
+          </div>
+        </div>
+
+        {order ? (
+          <div className="mt-4">
+            <SectionLabel>Whole order {order.orderNo}</SectionLabel>
+            <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
+              <div className="divide-y divide-line">
+                <Row label="Qualities">
+                  <span className="num">{order.fabrics.length}</span>
+                </Row>
+                <Row label="Designs">
+                  <span className="num">{order.designCount}</span>
+                  {order.cancelledCount ? (
+                    <span className="num ml-1 text-[11px] font-normal text-danger">
+                      +{order.cancelledCount} cancelled
+                    </span>
+                  ) : null}
+                </Row>
+                <Row label="Total qty">
+                  <span className="num">{formatNumber(order.qtyTotal)}</span>
+                </Row>
+                <Row label="Total value">
+                  <span className="num">₹{formatNumber(order.grandTotal)}</span>
+                </Row>
+                <Row label="Dispatched">
+                  <span className="num">
+                    {orderDispatched}/{orderActive}
+                  </span>
+                  <span className="ml-1 text-[11px] font-normal text-ink-muted">
+                    designs
+                  </span>
+                </Row>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* The seven stages in order. The connector is drawn in the completed
             colour only where the work has actually got to, so the run of green
@@ -285,7 +366,11 @@ export function TrackerDetail({
           <SectionLabel>Progress</SectionLabel>
           <ol className="relative mt-2">
             {STAGE_COLUMNS.map((c, i) => {
-              const v = stageValue(c.key, byKey.get(c.key));
+              const cell = byKey.get(c.key);
+              const v = stageValue(c.key, cell);
+              // Only meaningful once a stage is finished — a late finish is a
+              // different fact from a stage that is merely overdue now.
+              const late = v.tone === "done" ? lateness(cell?.delayMinutes) : null;
               const last = i === STAGE_COLUMNS.length - 1;
               return (
                 <li key={c.key} className="relative flex gap-3 pb-3 last:pb-0">
@@ -310,19 +395,36 @@ export function TrackerDetail({
                       i + 1
                     )}
                   </span>
-                  <span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 border-b border-line pb-2.5">
-                    <span className="truncate text-[13px] font-medium text-ink">
-                      {c.full}
+                  <span className="flex min-w-0 flex-1 items-start justify-between gap-2 border-b border-line pb-2.5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-medium text-ink">
+                        {c.full}
+                      </span>
+                      {cell?.plannedAt ? (
+                        <span
+                          className={cn(
+                            "num block text-[11px]",
+                            v.tone === "late" ? "text-danger" : "text-ink-muted",
+                          )}
+                        >
+                          Due {formatDate(cell.plannedAt)}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="shrink-0 text-right">
                       <span
-                        className={cn("text-[12px] font-semibold", VALUE[v.tone])}
+                        className={cn("block text-[12px] font-semibold", VALUE[v.tone])}
                       >
                         {v.text}
                       </span>
                       {v.sub ? (
-                        <span className="num ml-1.5 text-[11px] font-normal text-ink-muted">
+                        <span className="num block text-[11px] font-normal text-ink-muted">
                           {v.sub}
+                        </span>
+                      ) : null}
+                      {late ? (
+                        <span className="num block text-[11px] font-medium text-warning">
+                          {late}
                         </span>
                       ) : null}
                     </span>

@@ -106,6 +106,10 @@ export function OrderTracker({
   const selectedGroup = selected
     ? groups.find((g) => g.key === `${selected.orderId}|${selected.fabric}`)
     : undefined;
+  // The order-level row the line came from, for the whole-order totals.
+  const selectedOrder = selected
+    ? q.data?.groups.find((o) => o.orderId === selected.orderId)
+    : undefined;
 
   const hasSelection = index >= 0;
 
@@ -364,6 +368,7 @@ export function OrderTracker({
             <TrackerDetail
               line={selected}
               group={selectedGroup}
+              order={selectedOrder}
               index={index}
               total={lines.length}
               onPrev={() => step(-1)}
