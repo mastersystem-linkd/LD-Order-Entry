@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CrosshairIcon,
+  GripHorizontalIcon,
+  XIcon,
+} from "lucide-react";
 
 import { formatDate, formatNumber } from "@/lib/orders";
 import type { OrderStatusRow, StageCell } from "@/lib/order-status";
@@ -97,6 +104,8 @@ export function TrackerDetail({
   onNext,
   onSelectLine,
   onClose,
+  onDragStart,
+  onGoToRow,
 }: {
   line?: OrderStatusRow;
   group?: QualityGroup;
@@ -106,6 +115,10 @@ export function TrackerDetail({
   onNext: () => void;
   onSelectLine: (lineId: string) => void;
   onClose?: () => void;
+  /** Pointer-down on the title bar starts dragging the panel. */
+  onDragStart?: (e: React.PointerEvent) => void;
+  /** Scroll the table to the row this panel is showing, and flash it. */
+  onGoToRow?: () => void;
 }) {
   if (!line) return null;
 
@@ -115,14 +128,30 @@ export function TrackerDetail({
   const totalStages = line.stages.length || 7;
   const pct = Math.round((doneCount / totalStages) * 100);
 
+  // Buttons sit inside the drag handle; stop them starting a drag.
+  const stopDrag = (e: React.PointerEvent) => e.stopPropagation();
   const navBtn =
     "inline-flex size-7 items-center justify-center rounded-field border border-line-strong bg-surface text-ink-soft transition-colors hover:bg-inset hover:text-ink disabled:opacity-40";
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      {/* Header: who / what, navigation, and how far along. */}
-      <div className="border-b border-line px-4 pt-3.5 pb-3">
+      {/* Header: who / what, navigation, and how far along. It is also the
+          drag handle — the panel covers part of the table, so it has to be
+          movable. Double-click snaps it back to its default corner. */}
+      <div
+        onPointerDown={onDragStart}
+        className={cn(
+          "border-b border-line px-4 pt-3.5 pb-3",
+          onDragStart && "cursor-grab active:cursor-grabbing select-none",
+        )}
+      >
         <div className="flex items-start gap-2">
+          {onDragStart ? (
+            <GripHorizontalIcon
+              aria-hidden
+              className="mt-1 size-4 shrink-0 text-ink-muted"
+            />
+          ) : null}
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[15px] leading-tight font-semibold text-ink">
               {line.party}
@@ -136,6 +165,7 @@ export function TrackerDetail({
               type="button"
               onClick={onPrev}
               disabled={total < 2}
+              onPointerDown={stopDrag}
               className={navBtn}
               aria-label="Previous design"
               title="Previous (←)"
@@ -149,16 +179,30 @@ export function TrackerDetail({
               type="button"
               onClick={onNext}
               disabled={total < 2}
+              onPointerDown={stopDrag}
               className={navBtn}
               aria-label="Next design"
               title="Next (→)"
             >
               <ChevronRightIcon className="size-4" />
             </button>
+            {onGoToRow ? (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={onGoToRow}
+                className={cn(navBtn, "ml-1")}
+                aria-label="Go to this row in the table"
+                title="Go to this row in the table"
+              >
+                <CrosshairIcon className="size-4" />
+              </button>
+            ) : null}
             {onClose ? (
               <button
                 type="button"
                 onClick={onClose}
+                onPointerDown={stopDrag}
                 className={cn(navBtn, "ml-1")}
                 aria-label="Close details"
                 title="Close (Esc)"

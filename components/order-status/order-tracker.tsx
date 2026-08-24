@@ -59,6 +59,15 @@ export function OrderTracker({
   // Collapsed by default — one row per quality is the point. The colour chips
   // on that row already answer "what went out?", so opening it is optional.
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  // Where the floating panel sits. null = its default corner; dragging pins it
+  // to explicit viewport coordinates.
+  const [panelPos, setPanelPos] = React.useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const dragOffset = React.useRef<{ dx: number; dy: number } | null>(null);
+  // Briefly highlights the row the panel jumped to, so the eye can find it.
+  const [flashId, setFlashId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setPage(1);
@@ -127,6 +136,60 @@ export function OrderTracker({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [step, hasSelection]);
+
+  // Drag the panel by its title bar. It is switched to explicit coordinates on
+  // the first move so it stops being anchored to the right edge.
+  function startDrag(e: React.PointerEvent) {
+    const el = panelRef.current;
+    if (!el || e.button !== 0) return;
+    const r = el.getBoundingClientRect();
+    dragOffset.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    setPanelPos({ x: r.left, y: r.top });
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onDragMove(e: React.PointerEvent) {
+    const off = dragOffset.current;
+    const el = panelRef.current;
+    if (!off || !el) return;
+    const r = el.getBoundingClientRect();
+    // Keep a grabbable strip on screen whichever way it is dragged.
+    const maxX = window.innerWidth - 80;
+    const maxY = window.innerHeight - 48;
+    setPanelPos({
+      x: Math.min(Math.max(e.clientX - off.dx, 80 - r.width), maxX),
+      y: Math.min(Math.max(e.clientY - off.dy, 8), maxY),
+    });
+  }
+  function endDrag() {
+    dragOffset.current = null;
+  }
+
+  // Jump the table to whatever the panel is showing. Repeated Next clicks walk
+  // the panel far from where the page is scrolled, so there has to be a way
+  // back to the row itself.
+  const goToRow = React.useCallback(() => {
+    if (!selected) return;
+    const groupKey = `${selected.orderId}|${selected.fabric}`;
+    // A colour row only exists in the DOM while its quality is open.
+    setExpanded((prev) =>
+      prev.has(groupKey) ? prev : new Set(prev).add(groupKey),
+    );
+    setFlashId(selected.lineId);
+    // Let the expansion render before measuring where to scroll.
+    requestAnimationFrame(() => {
+      const el =
+        document.querySelector(`[data-line-id="${CSS.escape(selected.lineId)}"]`) ??
+        document.querySelector(`[data-group-key="${CSS.escape(groupKey)}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [selected]);
+
+  // Clear the highlight once it has done its job.
+  React.useEffect(() => {
+    if (!flashId) return;
+    const t = setTimeout(() => setFlashId(null), 1600);
+    return () => clearTimeout(t);
+  }, [flashId]);
 
   function toggleGroup(key: string) {
     setExpanded((prev) => {
@@ -247,6 +310,7 @@ export function OrderTracker({
                       group={g}
                       open={expanded.has(g.key)}
                       selectedId={selectedId}
+                      flashId={flashId}
                       onToggle={() => toggleGroup(g.key)}
                       onSelect={setSelectedId}
                     />
@@ -284,19 +348,31 @@ export function OrderTracker({
         </Card>
 
         {hasSelection ? (
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-full max-w-[400px] p-2">
-            <div className="pointer-events-auto sticky top-2 flex max-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-card border border-line-strong bg-surface shadow-2xl">
-              <TrackerDetail
-                line={selected}
-                group={selectedGroup}
-                index={index}
-                total={lines.length}
-                onPrev={() => step(-1)}
-                onNext={() => step(1)}
-                onSelectLine={setSelectedId}
-                onClose={() => setSelectedId(null)}
-              />
-            </div>
+          <div
+            ref={panelRef}
+            onPointerMove={onDragMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onDoubleClick={() => setPanelPos(null)}
+            style={
+              panelPos
+                ? { left: panelPos.x, top: panelPos.y }
+                : { right: 24, top: 104 }
+            }
+            className="fixed z-30 flex max-h-[calc(100vh-8rem)] w-[min(94vw,520px)] flex-col overflow-hidden rounded-card border border-line-strong bg-surface shadow-2xl"
+          >
+            <TrackerDetail
+              line={selected}
+              group={selectedGroup}
+              index={index}
+              total={lines.length}
+              onPrev={() => step(-1)}
+              onNext={() => step(1)}
+              onSelectLine={setSelectedId}
+              onClose={() => setSelectedId(null)}
+              onDragStart={startDrag}
+              onGoToRow={goToRow}
+            />
           </div>
         ) : null}
       </div>
@@ -310,12 +386,14 @@ function QualityRows({
   group,
   open,
   selectedId,
+  flashId,
   onToggle,
   onSelect,
 }: {
   group: QualityGroup;
   open: boolean;
   selectedId: string | null;
+  flashId: string | null;
   onToggle: () => void;
   onSelect: (lineId: string) => void;
 }) {
@@ -324,6 +402,7 @@ function QualityRows({
   return (
     <>
       <tr
+        data-group-key={group.key}
         onClick={() => onSelect(group.lines[0].lineId)}
         title={`${TONE_LABEL[group.tone]} — click for full details`}
         className={cn(
@@ -404,6 +483,7 @@ function QualityRows({
               key={l.lineId}
               line={l}
               selected={l.lineId === selectedId}
+              flashed={l.lineId === flashId}
               onSelect={() => onSelect(l.lineId)}
             />
           ))
@@ -415,20 +495,27 @@ function QualityRows({
 function ColourRow({
   line,
   selected,
+  flashed,
   onSelect,
 }: {
   line: OrderStatusRow;
   selected: boolean;
+  flashed?: boolean;
   onSelect: () => void;
 }) {
   const tone = toneOfLines([line]);
   return (
     <tr
+      data-line-id={line.lineId}
       onClick={onSelect}
       title={`${TONE_LABEL[tone]} — click for full details`}
       className={cn(
         "cursor-pointer border-b border-line transition-colors",
-        selected ? "bg-accent/10" : "bg-surface-2 hover:bg-inset",
+        flashed
+          ? "bg-accent/25"
+          : selected
+            ? "bg-accent/10"
+            : "bg-surface-2 hover:bg-inset",
         "text-ink-soft",
       )}
     >
