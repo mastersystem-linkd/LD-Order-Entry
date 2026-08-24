@@ -200,11 +200,20 @@ html[data-theme="dark"] {
 
 @layer utilities {
   /* Tabular mono figures. */
+  /* Figures in data tables — plain, and column-aligned.
+     This used to be JetBrains Mono: perfectly aligned but it read as code
+     (slashed zeros, narrow strokes) on screens that are mostly money and
+     quantities. It cannot simply inherit General Sans either — that face has
+     PROPORTIONAL digits (a "1" is 306 units against an "8" at 593) and no
+     `tnum` feature, so a rupee column would visibly stagger row to row.
+     So: the platform's own UI sans, which is what "simple" looks like to the
+     reader, and which does carry tabular figures — verified on Windows
+     (Segoe UI, Arial), and true of SF Pro and Roboto as well. */
   .num {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-    letter-spacing: -0.01em;
+    font-family:
+      ui-sans-serif, system-ui, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-variant-numeric: tabular-nums lining;
+    font-feature-settings: "tnum" 1, "lnum" 1;
   }
   /* Solid surface (kept class name for compatibility). Opaque so text and
      controls stay crisp; no backdrop blur to muddy the background. */

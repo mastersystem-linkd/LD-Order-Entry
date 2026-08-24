@@ -65,7 +65,7 @@ export function MonthlyReport({
       <CardHeader className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <CardTitle>Monthly report</CardTitle>
-          <p className="mt-0.5 text-xs text-ink-muted">
+          <p className="mt-0.5 text-xs text-ink-soft">
             {since?.firstOrderDate ? (
               <>
                 Oldest order dated{" "}
@@ -136,7 +136,7 @@ export function MonthlyReport({
                       )}
                     >
                       <Td className="font-medium">
-                        <span className={empty ? "text-ink-muted" : "text-ink"}>
+                        <span className={empty ? "text-ink-soft" : "text-ink"}>
                           {monthLabel(m.month)}
                         </span>
                         {isSelected ? (
@@ -153,12 +153,12 @@ export function MonthlyReport({
                       <Td
                         className={cn(
                           "num text-right font-medium",
-                          empty ? "text-ink-muted" : "text-ink",
+                          empty ? "text-ink-soft" : "text-ink",
                         )}
                       >
                         {int(m.orders)}
                       </Td>
-                      <Td className="num text-right text-ink-soft">
+                      <Td className="num text-right text-ink">
                         {int(m.designs)}
                         {m.cancelledDesigns ? (
                           <span
@@ -169,16 +169,16 @@ export function MonthlyReport({
                           </span>
                         ) : null}
                       </Td>
-                      <Td className="num text-right text-ink-soft">
+                      <Td className="num text-right text-ink">
                         {formatNumber(m.qtyMtr)}
                       </Td>
-                      <Td className="num text-right text-ink-soft">
+                      <Td className="num text-right font-medium text-ink">
                         ₹{formatNumber(m.value)}
                       </Td>
                       <Td
                         className={cn(
                           "num text-right",
-                          m.completedOrders ? "text-success" : "text-ink-muted",
+                          m.completedOrders ? "text-success" : "text-ink-soft",
                         )}
                       >
                         {int(m.completedOrders)}
@@ -186,7 +186,7 @@ export function MonthlyReport({
                       <Td
                         className={cn(
                           "num text-right",
-                          m.partiallyOrders ? "text-warning" : "text-ink-muted",
+                          m.partiallyOrders ? "text-warning" : "text-ink-soft",
                         )}
                       >
                         {int(m.partiallyOrders)}
@@ -197,7 +197,7 @@ export function MonthlyReport({
                       <Td
                         className={cn(
                           "num text-right",
-                          m.cancelledOrders ? "text-danger" : "text-ink-muted",
+                          m.cancelledOrders ? "text-danger" : "text-ink-soft",
                         )}
                       >
                         {int(m.cancelledOrders)}
