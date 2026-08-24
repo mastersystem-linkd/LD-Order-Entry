@@ -32,6 +32,7 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { hasCap, type Capability } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import { Reveal } from "@/components/ui/reveal";
 import {
@@ -424,7 +425,7 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                     of stranding it at the foot of the page, and the header +
                     order-no column stay pinned so you never lose your place
                     while scrolling sideways. */}
-                <div className="max-h-[calc(100vh-19rem)] overflow-auto">
+                <HScroll bodyClassName="max-h-[calc(100vh-19rem)] overflow-auto">
                   <table className="w-full text-left text-sm text-ink">
                     <THead className="sticky top-0 z-20 bg-surface">
                   <tr>
@@ -601,7 +602,7 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                   })}
                     </tbody>
                   </table>
-                </div>
+                </HScroll>
               </CardContent>
             </Card>
           </Reveal>

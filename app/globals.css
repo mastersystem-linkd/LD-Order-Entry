@@ -199,7 +199,35 @@ html[data-theme="dark"] {
 }
 
 @layer utilities {
-  /* Tabular mono figures. */
+  /* Scrollbars on data tables are load-bearing here — the tables are wider
+     than any screen — so make them visible rather than the thin overlay bars
+     some platforms default to. Paired with <HScroll>, which puts a second one
+     above the header row so it can be reached without scrolling to the bottom
+     of a long table. */
+  .h-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) var(--inset);
+  }
+  .h-scrollbar::-webkit-scrollbar {
+    height: 11px;
+    width: 11px;
+  }
+  .h-scrollbar::-webkit-scrollbar-track {
+    background: var(--inset);
+    border-radius: 999px;
+  }
+  .h-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 2px solid var(--inset);
+    border-radius: 999px;
+  }
+  .h-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-muted);
+  }
+  .h-scrollbar::-webkit-scrollbar-corner {
+    background: var(--inset);
+  }
+
   /* Figures in data tables — plain, and column-aligned.
      This used to be JetBrains Mono: perfectly aligned but it read as code
      (slashed zeros, narrow strokes) on screens that are mostly money and

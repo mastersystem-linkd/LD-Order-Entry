@@ -21,6 +21,7 @@ import {
 import { hasCap, type Capability } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -682,7 +683,7 @@ export function TrackingBoard({
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-4 pb-2.5 pt-0.5 text-[11px] text-ink-soft">
                   <LegendChips />
                 </div>
-                <div className="max-h-[72vh] overflow-auto">
+                <HScroll bodyClassName="max-h-[72vh] overflow-auto">
                 <table className="w-full border-collapse text-left text-sm">
                   <thead className="sticky top-0 z-20 bg-surface">
                     <tr className="border-b border-line">
@@ -758,7 +759,7 @@ export function TrackingBoard({
                     ))}
                   </tbody>
                 </table>
-                </div>
+                </HScroll>
               </CardContent>
             </Card>
           </Reveal>

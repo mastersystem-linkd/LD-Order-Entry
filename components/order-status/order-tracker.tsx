@@ -10,6 +10,7 @@ import type { OrderStatusList, OrderStatusRow } from "@/lib/order-status";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -40,7 +41,7 @@ const stickyBase =
 // stacking two background utilities would leave the winner to CSS source
 // order, and a see-through sticky header is exactly the bug being fixed.
 const stickyCell = `${stickyBase} bg-[inherit]`;
-const stickyHead = `${stickyBase} bg-surface`;
+const stickyHead = `${stickyBase} z-[5] bg-surface`;
 
 // Search → grouped rows on the left → full status on the right, with ← / → to
 // walk the matches. One screen for the whole "where is this order?" question.
@@ -260,9 +261,9 @@ export function OrderTracker({
                 : "No orders to show."}
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <HScroll bodyClassName="max-h-[calc(100vh-17rem)] overflow-auto">
               <table className="w-full min-w-[1180px] text-left text-sm">
-                <thead className="border-b border-line bg-surface">
+                <thead className="sticky top-0 z-[4] border-b border-line bg-surface">
                   <tr className="bg-surface text-[12px] font-bold tracking-[0.04em] text-ink uppercase">
                     <th
                       className={cn(stickyHead, "left-0")}
@@ -321,7 +322,7 @@ export function OrderTracker({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </HScroll>
           )}
 
           {totalPages > 1 ? (

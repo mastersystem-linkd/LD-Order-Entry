@@ -9,6 +9,7 @@ import { apiGet, apiSend } from "@/lib/api-client";
 import { ROLES, type Role } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -326,7 +327,7 @@ export function UsersManage() {
                 })}
               </ul>
               {/* Desktop: table */}
-              <div className="hidden overflow-x-auto lg:block">
+              <HScroll className="hidden lg:block" bodyClassName="overflow-x-auto">
                 <table className="w-full min-w-[620px] text-left text-sm">
                   <THead>
                     <tr>
@@ -375,7 +376,7 @@ export function UsersManage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </HScroll>
             </>
           )}
         </CardContent>

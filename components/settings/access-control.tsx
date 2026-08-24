@@ -12,6 +12,7 @@ import {
   type Role,
 } from "@/lib/rbac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Spinner } from "@/components/ui/spinner";
 import { Th, THead } from "@/components/ui/table";
 
@@ -71,7 +72,7 @@ export function AccessControl() {
           ) : (
             <>
               {/* Desktop: full Role × Capability matrix */}
-              <div className="hidden overflow-x-auto md:block">
+              <HScroll className="hidden md:block" bodyClassName="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <THead>
                     <tr>
@@ -140,7 +141,7 @@ export function AccessControl() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </HScroll>
 
               {/* Mobile: one section per role; capabilities as aligned rows */}
               <div className="flex flex-col divide-y divide-line border-t border-line md:hidden">

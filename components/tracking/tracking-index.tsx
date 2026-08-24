@@ -18,6 +18,7 @@ import { formatNumber, type OrderRow, type OrdersList } from "@/lib/orders";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -196,7 +197,7 @@ export function TrackingIndex() {
               </div>
             ) : (
               <>
-              <div className="hidden overflow-x-auto md:block">
+              <HScroll className="hidden md:block" bodyClassName="overflow-x-auto">
                 <table className="w-full text-left text-sm text-ink">
                   <THead>
                     <tr>
@@ -274,7 +275,7 @@ export function TrackingIndex() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </HScroll>
 
               {/* Mobile: card list — tap a card for the detail popup */}
               <ul className="flex flex-col gap-2.5 p-3 md:hidden">

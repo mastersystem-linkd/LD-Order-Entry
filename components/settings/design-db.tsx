@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { apiGet, apiSend } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/orders";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -243,7 +244,7 @@ export function DesignDatabasePanel() {
               })}
             </ul>
             {/* Desktop: table */}
-            <div className="hidden overflow-x-auto lg:block">
+            <HScroll className="hidden lg:block" bodyClassName="overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
               <THead>
                 <tr>
@@ -305,7 +306,7 @@ export function DesignDatabasePanel() {
                 })}
               </tbody>
             </table>
-            </div>
+            </HScroll>
             </>
           )}
         </div>

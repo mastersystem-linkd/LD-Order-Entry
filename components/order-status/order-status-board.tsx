@@ -29,6 +29,7 @@ import {
 import type { Capability } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -504,7 +505,7 @@ export function OrderStatusBoard({
           {/* Desktop: full grouped table */}
           <Card data-size="sm" className="hidden lg:block">
             <CardContent className="px-0">
-              <div className="max-h-[70vh] overflow-auto">
+              <HScroll bodyClassName="max-h-[70vh] overflow-auto">
                 <table className="w-full border-collapse text-left text-sm">
                 <thead className="sticky top-0 z-20 bg-surface">
                   <tr className="border-b border-line">
@@ -819,7 +820,7 @@ export function OrderStatusBoard({
                   })}
                 </tbody>
                 </table>
-              </div>
+              </HScroll>
             </CardContent>
           </Card>
         </>

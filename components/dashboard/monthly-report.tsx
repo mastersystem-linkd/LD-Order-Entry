@@ -7,6 +7,7 @@ import { monthLabel, monthRange, type MonthKey } from "@/lib/months";
 import type { MonthlyReport as Report } from "@/lib/monthly-report";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Td, Th, THead } from "@/components/ui/table";
 
@@ -107,7 +108,7 @@ export function MonthlyReport({
             {loading ? "Loading…" : "Nothing to report yet."}
           </p>
         ) : (
-          <div className="-mx-1 overflow-x-auto px-1">
+          <HScroll className="-mx-1 px-1" bodyClassName="overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm text-ink">
               <THead>
                 <tr>
@@ -227,7 +228,7 @@ export function MonthlyReport({
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </HScroll>
         )}
       </CardContent>
     </Card>
