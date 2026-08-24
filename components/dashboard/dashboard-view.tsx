@@ -35,6 +35,9 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Input } from "@/components/ui/input";
 import { OnTimeGauge } from "@/components/dashboard/on-time-gauge";
+import { MonthlyReport } from "@/components/dashboard/monthly-report";
+import { useMonthlyReport } from "@/components/orders/use-months";
+import { monthLabel, monthOfRange, monthRange } from "@/lib/months";
 
 // Recharts is ~139 kB — nearly half this route's JavaScript — and nothing above
 // the charts needs it. Loading it separately lets the KPIs, pipeline and tables
@@ -112,6 +115,11 @@ export function DashboardView({
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
+  // Every month the order book covers, so the Dashboard can be pointed at one
+  // directly instead of hand-picking two dates.
+  const monthly = useMonthlyReport(dept);
+  const selectedMonth = monthOfRange(from, to);
+
   const activePreset: DateRangePreset = (() => {
     for (const p of PRESETS) {
       const r = presetRange(p.key, today);
@@ -149,6 +157,23 @@ export function DashboardView({
             </button>
           ))}
         </div>
+        <select
+          aria-label="Month"
+          value={selectedMonth ?? ""}
+          onChange={(e) => {
+            const key = e.target.value;
+            setParams(key ? monthRange(key) : presetRange("30d", today));
+          }}
+          className="h-9 rounded-field border border-line-strong bg-surface-2 px-2 text-[13px] text-ink outline-none focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]"
+        >
+          <option value="">By month…</option>
+          {(monthly.data?.months ?? []).map((m) => (
+            <option key={m.month} value={m.month}>
+              {monthLabel(m.month)}
+              {m.orders ? ` (${m.orders})` : " — none"}
+            </option>
+          ))}
+        </select>
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
           <Input
             type="date"
@@ -494,6 +519,16 @@ export function DashboardView({
                 </div>
               )}
             </Section>
+
+            {/* Month-by-month history — also where the order book starts. */}
+            <MonthlyReport
+              report={monthly.data}
+              loading={monthly.isLoading}
+              selectedMonth={selectedMonth}
+              onPickMonth={(r) =>
+                setParams(r.from && r.to ? r : presetRange("30d", today))
+              }
+            />
           </div>
         </Reveal>
       )}

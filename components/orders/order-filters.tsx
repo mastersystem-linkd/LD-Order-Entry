@@ -5,6 +5,8 @@ import { XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useMonthlyReport } from "@/components/orders/use-months";
+import { monthLabel, monthOfRange, monthRange } from "@/lib/months";
 
 // Shared order-list filters used by the Orders, Operations and Order Status
 // screens. The keys map 1:1 to the query params accepted by /api/orders and
@@ -45,6 +47,8 @@ export function appendOrderFilterParams(
 }
 
 const fieldCls = "flex flex-col gap-1 text-[11px] font-medium text-ink-soft";
+const selectCls =
+  "h-9 w-full rounded-field border border-line-strong bg-surface px-2 text-sm text-ink outline-none focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
 
 // Controlled filter panel — fires onChange on every keystroke; each screen
 // debounces before it hits the query.
@@ -63,9 +67,15 @@ export function OrderFilters({
   const set = (patch: Partial<OrderFilterState>) =>
     onChange({ ...value, ...patch });
 
+  // Every month the order book covers, newest first. Picking one just fills in
+  // From/To, so the month select and the date inputs can never disagree — and
+  // a hand-typed range that happens to be a whole month shows as that month.
+  const months = useMonthlyReport().data?.months ?? [];
+  const selectedMonth = monthOfRange(value.from, value.to);
+
   return (
     <div className="flex flex-col gap-3 rounded-field border border-line bg-surface-2 p-3">
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         <label className={fieldCls}>
           Order no
           <Input
@@ -101,6 +111,27 @@ export function OrderFilters({
             placeholder="Haste"
             className="h-9 w-full"
           />
+        </label>
+        <label className={fieldCls}>
+          Month
+          <select
+            className={selectCls}
+            value={selectedMonth ?? ""}
+            onChange={(e) => {
+              const key = e.target.value;
+              // "All months" clears the dates; a month sets the whole range, so
+              // the From/To inputs stay the single source of truth.
+              set(key ? monthRange(key) : { from: "", to: "" });
+            }}
+          >
+            <option value="">All months</option>
+            {months.map((m) => (
+              <option key={m.month} value={m.month}>
+                {monthLabel(m.month)}
+                {m.orders ? ` (${m.orders})` : " — none"}
+              </option>
+            ))}
+          </select>
         </label>
         <label className={fieldCls}>
           From date
