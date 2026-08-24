@@ -169,25 +169,46 @@ export function OrderTracker({
     dragOffset.current = null;
   }
 
-  // Jump the table to whatever the panel is showing. Repeated Next clicks walk
-  // the panel far from where the page is scrolled, so there has to be a way
-  // back to the row itself.
+  // Bring the line the panel is describing into view: open its quality (a
+  // colour row does not exist in the DOM while the group is collapsed) and
+  // scroll to it. `centre` is for the explicit ⌖ button; following the panel
+  // automatically uses "nearest", which moves the table as little as possible.
+  const revealLine = React.useCallback(
+    (line: OrderStatusRow, centre: boolean) => {
+      const groupKey = `${line.orderId}|${line.fabric}`;
+      setExpanded((prev) =>
+        prev.has(groupKey) ? prev : new Set(prev).add(groupKey),
+      );
+      // Let the expansion render before measuring where to scroll.
+      requestAnimationFrame(() => {
+        const el =
+          document.querySelector(`[data-line-id="${CSS.escape(line.lineId)}"]`) ??
+          document.querySelector(`[data-group-key="${CSS.escape(groupKey)}"]`);
+        el?.scrollIntoView({
+          behavior: "smooth",
+          block: centre ? "center" : "nearest",
+        });
+      });
+    },
+    [],
+  );
+
+  // The table follows the panel. Walking through with Next used to leave the
+  // panel describing a row that was collapsed and off-screen, so the operator
+  // had to keep pressing ⌖ to catch up.
+  React.useEffect(() => {
+    if (!selected) return;
+    revealLine(selected, false);
+    // Only when the SELECTION moves — not on every re-render of the same line.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  // The ⌖ button centres the row and flashes it, for when the eye has lost it.
   const goToRow = React.useCallback(() => {
     if (!selected) return;
-    const groupKey = `${selected.orderId}|${selected.fabric}`;
-    // A colour row only exists in the DOM while its quality is open.
-    setExpanded((prev) =>
-      prev.has(groupKey) ? prev : new Set(prev).add(groupKey),
-    );
     setFlashId(selected.lineId);
-    // Let the expansion render before measuring where to scroll.
-    requestAnimationFrame(() => {
-      const el =
-        document.querySelector(`[data-line-id="${CSS.escape(selected.lineId)}"]`) ??
-        document.querySelector(`[data-group-key="${CSS.escape(groupKey)}"]`);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }, [selected]);
+    revealLine(selected, true);
+  }, [selected, revealLine]);
 
   // Clear the highlight once it has done its job.
   React.useEffect(() => {
@@ -441,14 +462,18 @@ function QualityRows({
           </span>
         </td>
         <td
-          className={cn(stickyCell, "truncate")}
+          className={cn(stickyCell, "truncate", TONE_TEXT[group.tone])}
           style={{ left: L_PARTY, width: W_PARTY, minWidth: W_PARTY }}
           title={group.party}
         >
           {group.party}
         </td>
         <td
-          className={cn(stickyCell, "truncate font-medium")}
+          className={cn(
+            stickyCell,
+            "truncate font-medium",
+            TONE_TEXT[group.tone],
+          )}
           style={{ left: L_QUALITY, width: W_QUALITY, minWidth: W_QUALITY }}
           title={group.fabric}
         >
@@ -458,7 +483,12 @@ function QualityRows({
         <td className="num px-2.5 py-2 text-right whitespace-nowrap">
           {group.lines.length}
         </td>
-        <td className="num px-2.5 py-2 text-right whitespace-nowrap">
+        <td
+          className={cn(
+            "num px-2.5 py-2 text-right font-medium whitespace-nowrap",
+            TONE_TEXT[group.tone],
+          )}
+        >
           {formatNumber(group.qtyTotal)}
         </td>
         <td className="px-2.5 py-2 whitespace-nowrap">
@@ -531,7 +561,7 @@ function ColourRow({
         style={{ left: L_PARTY, width: W_PARTY, minWidth: W_PARTY }}
       />
       <td
-        className={cn(stickyCell, "num truncate")}
+        className={cn(stickyCell, "num truncate font-medium", TONE_TEXT[tone])}
         style={{ left: L_QUALITY, width: W_QUALITY, minWidth: W_QUALITY }}
         title={`Design ${line.design}`}
       >
@@ -541,7 +571,12 @@ function ColourRow({
       </td>
       <td className="px-2.5 py-1.5" />
       <td className="px-2.5 py-1.5" />
-      <td className="num px-2.5 py-1.5 text-right whitespace-nowrap">
+      <td
+        className={cn(
+          "num px-2.5 py-1.5 text-right font-medium whitespace-nowrap",
+          TONE_TEXT[tone],
+        )}
+      >
         {formatNumber(Number(line.qtyMtr))}
       </td>
       <td className="px-2.5 py-1.5" />
