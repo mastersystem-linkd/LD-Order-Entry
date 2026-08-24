@@ -13,15 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { ColourChip, TrackerDetail } from "./tracker-detail";
+import { TrackerDetail } from "./tracker-detail";
 import {
   flattenLines,
-  isDispatched,
   toneOfLines,
   toQualityGroups,
   TONE_LABEL,
-  TONE_ROW,
-  TONE_ROW_SELECTED,
+  TONE_TEXT,
   type QualityGroup,
 } from "./quality-groups";
 
@@ -169,25 +167,13 @@ export function OrderTracker({
         </Button>
       </div>
 
-      {/* What the row colours mean — the tint is the status, so say so once. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-soft">
-        <span className="font-medium text-ink-muted">Row colour</span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[3px] bg-success/40 ring-1 ring-success/40" />
-          Completed
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[3px] bg-warning/40 ring-1 ring-warning/40" />
-          In progress
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[3px] bg-danger/40 ring-1 ring-danger/40" />
-          Not started
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[3px] bg-line-strong" />
-          Cancelled
-        </span>
+      {/* What the row text colour means — say it once, plainly. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+        <span className="font-medium text-ink-muted">Row text colour</span>
+        <span className="font-semibold text-success">Completed</span>
+        <span className="font-semibold text-warning">In progress</span>
+        <span className="font-semibold text-danger">Not started</span>
+        <span className="font-semibold text-ink-muted">Cancelled</span>
       </div>
 
       {/* The table keeps the whole width. The detail panel floats over its
@@ -240,8 +226,9 @@ export function OrderTracker({
                       Mtr
                     </th>
                     <th className="px-2.5 py-2 whitespace-nowrap">Sales</th>
+                    <th className="px-2.5 py-2 whitespace-nowrap">Status</th>
                     <th className="px-2.5 py-2 whitespace-nowrap">
-                      Colours — dispatch status
+                      Stage progress
                     </th>
                   </tr>
                 </thead>
@@ -309,8 +296,54 @@ export function OrderTracker({
   );
 }
 
-// One quality: a summary row carrying every colour's dispatch state, and — when
-// opened — a row per colour.
+// The seven stages, named. The old column showed a strip of design numbers,
+// which read as noise — "1 3 4 5 09" tells an operator nothing about where the
+// work has reached. Names do.
+function StageChips({ lines }: { lines: OrderStatusRow[] }) {
+  // Labels come from the stage rows themselves (workflow_stages), so renaming a
+  // stage in Settings renames it here too.
+  const template = lines[0]?.stages ?? [];
+  const n = lines.length;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {template.map((st, i) => {
+        const cells = lines.map((l) => l.stages[i]);
+        const done = cells.filter((c) => c?.state === "done").length;
+        const overdue = cells.some((c) => c?.state === "overdue");
+        const all = done === n && n > 0;
+        const some = done > 0 && !all;
+        return (
+          <span
+            key={st.stageKey}
+            title={
+              n > 1
+                ? `${st.label}: ${done} of ${n} designs done`
+                : `${st.label}: ${cells[0]?.state.replace("_", " ") ?? "not started"}`
+            }
+            className={cn(
+              "inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap",
+              all
+                ? "border-success/40 bg-success/10 text-success"
+                : some
+                  ? "border-warning/40 bg-warning/10 text-warning"
+                  : overdue
+                    ? "border-danger/40 bg-danger/10 text-danger"
+                    : "border-line bg-surface-2 text-ink-muted",
+            )}
+          >
+            {all ? <span aria-hidden>✓</span> : null}
+            {st.label}
+            {n > 1 && !all ? <span className="num">{done}/{n}</span> : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// One quality: a named-stage strip showing how far its designs have got, and —
+// when opened — a row per colour with the same strip for that colour alone.
 function QualityRows({
   group,
   open,
@@ -333,12 +366,14 @@ function QualityRows({
         title={`${TONE_LABEL[group.tone]} — click for full details`}
         className={cn(
           "cursor-pointer border-b border-line transition-colors",
-          holdsSelection ? TONE_ROW_SELECTED[group.tone] : TONE_ROW[group.tone],
+          // Background stays neutral; the STATUS is the text colour.
+          holdsSelection ? "bg-accent/10" : "bg-surface hover:bg-inset",
+          TONE_TEXT[group.tone],
         )}
       >
         <td
-          className={cn(stickyCell, "left-0 num font-semibold text-ink")}
-          style={{ width: W_ORDER, minWidth: W_ORDER }}
+          className={cn(stickyCell, "num font-semibold")}
+          style={{ left: 0, width: W_ORDER, minWidth: W_ORDER }}
         >
           <span className="inline-flex items-center gap-1">
             <button
@@ -349,7 +384,7 @@ function QualityRows({
               }}
               aria-label={open ? "Hide colours" : "Show colours"}
               aria-expanded={open}
-              className="-ml-1 rounded p-0.5 text-ink-muted hover:bg-inset hover:text-ink"
+              className="-ml-1 rounded p-0.5 opacity-60 hover:bg-inset hover:opacity-100"
             >
               <ChevronRightIcon
                 className={cn("size-3.5 transition-transform", open && "rotate-90")}
@@ -359,59 +394,34 @@ function QualityRows({
           </span>
         </td>
         <td
-          className={cn(stickyCell, "truncate text-ink-soft")}
+          className={cn(stickyCell, "truncate")}
           style={{ left: L_PARTY, width: W_PARTY, minWidth: W_PARTY }}
           title={group.party}
         >
           {group.party}
         </td>
         <td
-          className={cn(stickyCell, "truncate font-medium text-ink")}
+          className={cn(stickyCell, "truncate font-medium")}
           style={{ left: L_QUALITY, width: W_QUALITY, minWidth: W_QUALITY }}
           title={group.fabric}
         >
           {group.fabric}
         </td>
-        <td className="px-2.5 py-2 whitespace-nowrap text-ink-soft">
-          {formatDate(group.odDate)}
-        </td>
-        <td className="num px-2.5 py-2 text-right whitespace-nowrap text-ink">
+        <td className="px-2.5 py-2 whitespace-nowrap">{formatDate(group.odDate)}</td>
+        <td className="num px-2.5 py-2 text-right whitespace-nowrap">
           {group.lines.length}
         </td>
-        <td className="num px-2.5 py-2 text-right whitespace-nowrap text-ink">
+        <td className="num px-2.5 py-2 text-right whitespace-nowrap">
           {formatNumber(group.qtyTotal)}
         </td>
-        <td className="px-2.5 py-2 whitespace-nowrap text-ink-soft">
+        <td className="px-2.5 py-2 whitespace-nowrap">
           {group.salesPerson || "—"}
         </td>
+        <td className="px-2.5 py-2 font-medium whitespace-nowrap">
+          {TONE_LABEL[group.tone]}
+        </td>
         <td className="px-2.5 py-2">
-          <div className="flex flex-wrap items-center gap-1">
-            <span
-              className={cn(
-                "num rounded-pill px-2 py-0.5 text-[11px] font-semibold",
-                group.pending === 0
-                  ? "bg-success/10 text-success"
-                  : group.dispatched === 0
-                    ? "bg-warning/10 text-warning"
-                    : "bg-inset text-ink-soft",
-              )}
-            >
-              {group.dispatched}/{group.lines.length} dispatched
-            </span>
-            {group.lines.slice(0, 12).map((l) => (
-              <ColourChip
-                key={l.lineId}
-                line={l}
-                active={l.lineId === selectedId}
-                onClick={() => onSelect(l.lineId)}
-              />
-            ))}
-            {group.lines.length > 12 ? (
-              <span className="num text-[11px] text-ink-muted">
-                +{group.lines.length - 12} more
-              </span>
-            ) : null}
-          </div>
+          <StageChips lines={group.lines} />
         </td>
       </tr>
 
@@ -438,7 +448,6 @@ function ColourRow({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const out = isDispatched(line);
   const tone = toneOfLines([line]);
   return (
     <tr
@@ -446,66 +455,35 @@ function ColourRow({
       title={`${TONE_LABEL[tone]} — click for full details`}
       className={cn(
         "cursor-pointer border-b border-line transition-colors",
-        selected ? TONE_ROW_SELECTED[tone] : TONE_ROW[tone],
+        selected ? "bg-accent/10" : "bg-surface-2 hover:bg-inset",
+        TONE_TEXT[tone],
       )}
     >
+      <td className={stickyCell} style={{ left: 0, width: W_ORDER, minWidth: W_ORDER }} />
       <td
-        className={cn(stickyCell, "left-0")}
-        style={{ width: W_ORDER, minWidth: W_ORDER }}
-      />
-      <td
-        className={cn(stickyCell)}
+        className={stickyCell}
         style={{ left: L_PARTY, width: W_PARTY, minWidth: W_PARTY }}
       />
       <td
-        className={cn(stickyCell, "num truncate text-ink")}
+        className={cn(stickyCell, "num truncate")}
         style={{ left: L_QUALITY, width: W_QUALITY, minWidth: W_QUALITY }}
+        title={`Design ${line.design}`}
       >
-        <span className={cn("pl-4", line.isCancelled && "line-through text-ink-muted")}>
+        <span className={cn("pl-5", line.isCancelled && "line-through")}>
           {line.design}
         </span>
       </td>
       <td className="px-2.5 py-1.5" />
       <td className="px-2.5 py-1.5" />
-      <td className="num px-2.5 py-1.5 text-right whitespace-nowrap text-ink-soft">
+      <td className="num px-2.5 py-1.5 text-right whitespace-nowrap">
         {formatNumber(Number(line.qtyMtr))}
       </td>
       <td className="px-2.5 py-1.5" />
+      <td className="px-2.5 py-1.5 font-medium whitespace-nowrap">
+        {TONE_LABEL[tone]}
+      </td>
       <td className="px-2.5 py-1.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={cn(
-              "rounded-pill px-2 py-0.5 text-[11px] font-semibold",
-              line.isCancelled
-                ? "bg-inset text-ink-muted"
-                : out
-                  ? "bg-success/10 text-success"
-                  : "bg-warning/10 text-warning",
-            )}
-          >
-            {line.isCancelled
-              ? "Cancelled"
-              : out
-                ? "Dispatched"
-                : "Not dispatched"}
-          </span>
-          {line.stages.map((s) => (
-            <span
-              key={s.stageKey}
-              title={`${s.label}: ${s.state.replace("_", " ")}`}
-              className={cn(
-                "size-2 rounded-full",
-                s.state === "done"
-                  ? "bg-success"
-                  : s.state === "overdue"
-                    ? "bg-danger"
-                    : s.state === "in_progress"
-                      ? "bg-accent"
-                      : "bg-line-strong",
-              )}
-            />
-          ))}
-        </div>
+        <StageChips lines={[line]} />
       </td>
     </tr>
   );

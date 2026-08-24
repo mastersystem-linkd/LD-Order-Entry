@@ -31,23 +31,19 @@ export function toneOfLines(lines: OrderStatusRow[]): RowTone {
   return "none";
 }
 
-// Row tint and the matching accent for the detail panel's header.
-export const TONE_ROW: Record<RowTone, string> = {
-  done: "bg-success/10 hover:bg-success/20",
-  progress: "bg-warning/10 hover:bg-warning/20",
-  none: "bg-danger/10 hover:bg-danger/20",
-  cancelled: "bg-inset hover:bg-line/40",
-};
-export const TONE_ROW_SELECTED: Record<RowTone, string> = {
-  done: "bg-success/25",
-  progress: "bg-warning/25",
-  none: "bg-danger/25",
-  cancelled: "bg-line/50",
+// Status is carried by the TEXT colour, not by a row background: tinting whole
+// rows turned a screen where most work is unfinished into a wall of red and
+// buried the data under it.
+export const TONE_TEXT: Record<RowTone, string> = {
+  done: "text-success",
+  progress: "text-warning",
+  none: "text-danger",
+  cancelled: "text-ink-muted",
 };
 export const TONE_HEAD: Record<RowTone, string> = {
-  done: "bg-success/15 border-success/30",
-  progress: "bg-warning/15 border-warning/30",
-  none: "bg-danger/15 border-danger/30",
+  done: "bg-success/10 border-success/30",
+  progress: "bg-warning/10 border-warning/30",
+  none: "bg-danger/10 border-danger/30",
   cancelled: "bg-inset border-line",
 };
 export const TONE_LABEL: Record<RowTone, string> = {
@@ -55,12 +51,6 @@ export const TONE_LABEL: Record<RowTone, string> = {
   progress: "In progress",
   none: "Not started",
   cancelled: "Cancelled",
-};
-export const TONE_TEXT: Record<RowTone, string> = {
-  done: "text-success",
-  progress: "text-warning",
-  none: "text-danger",
-  cancelled: "text-ink-muted",
 };
 
 export type QualityGroup = {

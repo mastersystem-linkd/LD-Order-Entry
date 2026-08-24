@@ -241,6 +241,9 @@ export function TrackerDetail({
                 {group.dispatched}/{group.lines.length} dispatched
               </span>
             </div>
+            <div className="mb-1.5 text-[11px] text-ink-muted">
+              ✓ dispatched · • not yet — click one to open it
+            </div>
             <div className="flex flex-wrap gap-1">
               {group.lines.map((l) => (
                 <ColourChip
