@@ -17,7 +17,11 @@ import { ColourChip, TrackerDetail } from "./tracker-detail";
 import {
   flattenLines,
   isDispatched,
+  toneOfLines,
   toQualityGroups,
+  TONE_LABEL,
+  TONE_ROW,
+  TONE_ROW_SELECTED,
   type QualityGroup,
 } from "./quality-groups";
 
@@ -79,15 +83,11 @@ export function OrderTracker({
   // The flat list the arrows walk — every colour, in the order shown.
   const lines = React.useMemo(() => flattenLines(groups), [groups]);
 
-  // Keep a selection alive as results change; default to the first colour so a
-  // search lands with the panel already filled in.
+  // Nothing is selected until a row is clicked — the table keeps the full width
+  // until then. A selection that falls out of the results is dropped.
   React.useEffect(() => {
-    if (lines.length === 0) {
-      setSelectedId(null);
-      return;
-    }
     setSelectedId((cur) =>
-      cur && lines.some((l) => l.lineId === cur) ? cur : lines[0].lineId,
+      cur && lines.some((l) => l.lineId === cur) ? cur : null,
     );
   }, [lines]);
 
@@ -98,6 +98,8 @@ export function OrderTracker({
   const selectedGroup = selected
     ? groups.find((g) => g.key === `${selected.orderId}|${selected.fabric}`)
     : undefined;
+
+  const hasSelection = index >= 0;
 
   const step = React.useCallback(
     (by: number) => {
@@ -112,7 +114,12 @@ export function OrderTracker({
   // user is not typing in the search box.
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSelectedId(null);
+        return;
+      }
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (!hasSelection) return;
       const el = e.target as HTMLElement | null;
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
       e.preventDefault();
@@ -120,7 +127,7 @@ export function OrderTracker({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step]);
+  }, [step, hasSelection]);
 
   function toggleGroup(key: string) {
     setExpanded((prev) => {
@@ -162,8 +169,31 @@ export function OrderTracker({
         </Button>
       </div>
 
-      <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
-        {/* LEFT — matches, grouped by quality */}
+      {/* What the row colours mean — the tint is the status, so say so once. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-soft">
+        <span className="font-medium text-ink-muted">Row colour</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-[3px] bg-success/40 ring-1 ring-success/40" />
+          Completed
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-[3px] bg-warning/40 ring-1 ring-warning/40" />
+          In progress
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-[3px] bg-danger/40 ring-1 ring-danger/40" />
+          Not started
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-[3px] bg-line-strong" />
+          Cancelled
+        </span>
+      </div>
+
+      {/* The table keeps the whole width. The detail panel floats over its
+          right-hand edge when a row is opened, so nothing is resized and
+          whatever it covers is still reachable by scrolling the table. */}
+      <div className="relative">
         <Card className="min-w-0 overflow-hidden p-0">
           {q.isLoading && !q.data ? (
             <p className="flex items-center gap-2 px-4 py-10 text-sm text-ink-soft">
@@ -258,18 +288,22 @@ export function OrderTracker({
           ) : null}
         </Card>
 
-        {/* RIGHT — the selected colour, always on screen */}
-        <Card className="min-w-0 overflow-hidden p-0 lg:sticky lg:top-3 lg:max-h-[calc(100vh-6rem)]">
-          <TrackerDetail
-            line={selected}
-            group={selectedGroup}
-            index={index < 0 ? 0 : index}
-            total={lines.length}
-            onPrev={() => step(-1)}
-            onNext={() => step(1)}
-            onSelectLine={setSelectedId}
-          />
-        </Card>
+        {hasSelection ? (
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-full max-w-[380px] p-2">
+            <div className="pointer-events-auto sticky top-2 flex max-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-card border border-line-strong bg-surface shadow-2xl">
+              <TrackerDetail
+                line={selected}
+                group={selectedGroup}
+                index={index}
+                total={lines.length}
+                onPrev={() => step(-1)}
+                onNext={() => step(1)}
+                onSelectLine={setSelectedId}
+                onClose={() => setSelectedId(null)}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -296,9 +330,10 @@ function QualityRows({
     <>
       <tr
         onClick={() => onSelect(group.lines[0].lineId)}
+        title={`${TONE_LABEL[group.tone]} — click for full details`}
         className={cn(
-          "cursor-pointer border-b border-line bg-surface transition-colors hover:bg-inset",
-          holdsSelection && "bg-accent/5 hover:bg-accent/5",
+          "cursor-pointer border-b border-line transition-colors",
+          holdsSelection ? TONE_ROW_SELECTED[group.tone] : TONE_ROW[group.tone],
         )}
       >
         <td
@@ -404,12 +439,14 @@ function ColourRow({
   onSelect: () => void;
 }) {
   const out = isDispatched(line);
+  const tone = toneOfLines([line]);
   return (
     <tr
       onClick={onSelect}
+      title={`${TONE_LABEL[tone]} — click for full details`}
       className={cn(
         "cursor-pointer border-b border-line transition-colors",
-        selected ? "bg-accent/5" : "bg-surface-2 hover:bg-inset",
+        selected ? TONE_ROW_SELECTED[tone] : TONE_ROW[tone],
       )}
     >
       <td

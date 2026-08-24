@@ -7,7 +7,14 @@ import { formatDate, formatNumber } from "@/lib/orders";
 import type { OrderStatusRow, StageCell } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { isDispatched, type QualityGroup } from "./quality-groups";
+import {
+  isDispatched,
+  toneOfLines,
+  TONE_HEAD,
+  TONE_LABEL,
+  TONE_TEXT,
+  type QualityGroup,
+} from "./quality-groups";
 
 // The seven stages as the operator names them, in the order the reference
 // screen lists them. `order_entry` and `stock_checking` read differently from
@@ -113,17 +120,21 @@ export function TrackerDetail({
   }
 
   const byKey = new Map(line.stages.map((s) => [s.stageKey, s]));
+  const tone = toneOfLines([line]);
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header + navigation */}
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
+      {/* Header + navigation, tinted to match the row this was opened from. */}
+      <div className={cn("flex items-center gap-2 border-b px-3 py-2.5", TONE_HEAD[tone])}>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-ink">
             {line.party}
           </div>
           <div className="num truncate text-xs text-ink-soft">
             Order {line.orderNo} · {line.fabric}
+          </div>
+          <div className={cn("text-[11px] font-semibold", TONE_TEXT[tone])}>
+            {TONE_LABEL[tone]}
           </div>
         </div>
         <span className="num shrink-0 text-[11px] text-ink-muted">
@@ -156,8 +167,9 @@ export function TrackerDetail({
             variant="ghost"
             size="icon"
             onClick={onClose}
-            aria-label="Close"
-            className="size-8 shrink-0 lg:hidden"
+            aria-label="Close details"
+            title="Close"
+            className="size-8 shrink-0"
           >
             <XIcon />
           </Button>
