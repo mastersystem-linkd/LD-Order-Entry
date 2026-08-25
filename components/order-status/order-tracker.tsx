@@ -69,7 +69,7 @@ export function OrderTracker({
   toolbar?: React.ReactNode;
 }) {
   const [searchInput, setSearchInput] = React.useState(initialSearch);
-  const search = useDebouncedValue(searchInput, 300);
+  const search = useDebouncedValue(searchInput, 200);
   const [page, setPage] = React.useState(1);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   // The same order no / challan / lot / haste / month / date filters the Orders
@@ -177,12 +177,15 @@ export function OrderTracker({
         setSelectedId(null);
         return;
       }
-      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-      if (!hasSelection) return;
+      const isNav =
+        e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Enter";
+      if (!isNav || !hasSelection) return;
       const el = e.target as HTMLElement | null;
-      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      // Never hijack a keystroke meant for a field or a focused control.
+      if (el && /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(el.tagName)) return;
+      if (el?.isContentEditable) return;
       e.preventDefault();
-      step(e.key === "ArrowRight" ? 1 : -1);
+      step(e.key === "ArrowLeft" || (e.key === "Enter" && e.shiftKey) ? -1 : 1);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -246,8 +249,11 @@ export function OrderTracker({
   const revealLine = React.useCallback(
     (line: OrderStatusRow, centre: boolean) => {
       const groupKey = `${line.orderId}|${line.fabric}`;
+      // Only the quality being looked at stays open. Leaving WALNUT expanded
+      // while the panel has moved on to Woodland is how the table and the panel
+      // start telling different stories.
       setExpanded((prev) =>
-        prev.has(groupKey) ? prev : new Set(prev).add(groupKey),
+        prev.size === 1 && prev.has(groupKey) ? prev : new Set([groupKey]),
       );
       // Let the expansion render before measuring where to scroll.
       requestAnimationFrame(() => {
@@ -309,10 +315,22 @@ export function OrderTracker({
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search order no or party name…"
+            placeholder="Search order no or party name — results update as you type"
             aria-label="Search order no or party name"
-            className="h-10 w-full pl-9"
+            className="h-10 w-full pr-24 pl-9"
           />
+          {/* Live feedback: a spinner while the search runs, then the count.
+              Without it a slow round trip reads as "nothing happened — do I
+              need to press Enter?". */}
+          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-ink-muted">
+            {q.isFetching ? (
+              <Spinner className="size-4" />
+            ) : search ? (
+              <span className="num">
+                {totalOrders} order{totalOrders === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </span>
         </div>
         {toolbar}
         <Button
