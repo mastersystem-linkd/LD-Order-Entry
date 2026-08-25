@@ -101,11 +101,11 @@ export function LoginForm({
             type="button"
             onClick={onGoogle}
             disabled={googleLoading || loading}
-            className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-surface px-4 py-3 text-[14.5px] font-semibold text-ink transition-colors hover:border-ink-soft disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2.5 rounded-[10px] border border-line-strong bg-surface px-4 py-3 text-[14.5px] font-semibold text-ink shadow-sm transition-all hover:-translate-y-px hover:border-ink-muted hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
           >
             {googleLoading ? <Spinner /> : <GoogleIcon />} Continue with Google
           </button>
-          <div className="my-5 flex items-center gap-3.5 text-[11px] font-medium tracking-wide text-ink-muted uppercase">
+          <div className="my-6 flex items-center gap-4 text-[10.5px] font-semibold tracking-[0.14em] text-ink-muted uppercase">
             <span className="h-px flex-1 bg-line" />
             or
             <span className="h-px flex-1 bg-line" />
@@ -116,7 +116,7 @@ export function LoginForm({
       {error ? (
         <p
           role="alert"
-          className="mb-4 rounded-[10px] bg-danger/10 px-3 py-2 text-sm text-danger"
+          className="mb-4 flex items-start gap-2 rounded-[10px] bg-danger/[0.08] px-3 py-2.5 text-[13.5px] leading-snug text-danger ring-1 ring-danger/20 ring-inset"
         >
           {error}
         </p>
@@ -124,7 +124,7 @@ export function LoginForm({
 
       <form onSubmit={onSubmit} className="flex flex-col">
         <div className="mb-4">
-          <Label htmlFor="email" className="mb-2 block">
+          <Label htmlFor="email" className="mb-2 block text-[13.5px] font-medium text-ink-soft">
             Email
           </Label>
           <Input
@@ -136,12 +136,12 @@ export function LoginForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="h-11 rounded-xl"
+            className="h-11 rounded-[10px] border-line-strong bg-surface-2 dark:border-white/10 dark:bg-[#0e1014] dark:focus-visible:border-accent dark:focus-visible:bg-[#0b0d10]"
           />
         </div>
 
         <div className="mb-1.5">
-          <Label htmlFor="password" className="mb-2 block">
+          <Label htmlFor="password" className="mb-2 block text-[13.5px] font-medium text-ink-soft">
             Password
           </Label>
           <div className="relative">
@@ -154,13 +154,13 @@ export function LoginForm({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="h-11 rounded-xl pr-11"
+              className="h-11 rounded-[10px] border-line-strong bg-surface-2 dark:border-white/10 dark:bg-[#0e1014] dark:focus-visible:border-accent dark:focus-visible:bg-[#0b0d10] pr-11"
             />
             <button
               type="button"
               onClick={() => setShowPw((v) => !v)}
               aria-label={showPw ? "Hide password" : "Show password"}
-              className="absolute top-1/2 right-2 grid -translate-y-1/2 place-items-center rounded-md p-1.5 text-ink-muted transition-colors hover:text-ink-soft"
+              className="absolute top-1/2 right-1.5 grid size-9 -translate-y-1/2 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-inset hover:text-ink"
             >
               {showPw ? (
                 <EyeOffIcon className="size-[18px]" />
@@ -192,7 +192,13 @@ export function LoginForm({
         <button
           type="submit"
           disabled={loading || googleLoading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-70"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, var(--a3) 0%, var(--a1) 55%, var(--a2) 100%)",
+            boxShadow:
+              "0 10px 26px -10px var(--glow), inset 0 1px 0 rgba(255,255,255,.22)",
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-3.5 text-[15px] font-semibold text-white transition-all hover:-translate-y-px hover:brightness-[1.06] active:translate-y-0 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
         >
           {loading ? (
             <>

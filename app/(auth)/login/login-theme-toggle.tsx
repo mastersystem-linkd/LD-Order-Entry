@@ -18,7 +18,7 @@ export function LoginThemeToggle() {
     <div
       role="group"
       aria-label="Colour theme"
-      className="inline-flex rounded-full border border-line bg-surface p-[3px] shadow-sm"
+      className="inline-flex rounded-pill border border-line-strong bg-surface/80 p-[3px] shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.04]"
     >
       {(["light", "dark"] as const).map((t) => (
         <button
@@ -27,10 +27,10 @@ export function LoginThemeToggle() {
           onClick={() => setTheme(t)}
           aria-pressed={active === t}
           className={cn(
-            "rounded-full px-3 py-1.5 text-[12px] font-semibold capitalize transition-colors",
+            "rounded-pill px-3.5 py-1.5 text-[11.5px] font-semibold capitalize transition-all",
             active === t
-              ? "bg-ink text-surface"
-              : "text-ink-muted hover:text-ink",
+              ? "bg-ink text-surface shadow-sm"
+              : "text-ink-muted hover:text-ink-soft",
           )}
         >
           {t}
