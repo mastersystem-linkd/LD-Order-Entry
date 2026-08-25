@@ -109,13 +109,13 @@ function Fact({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0 px-3 py-2">
-      <div className="text-[10px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
+    <div className="flex min-w-0 items-baseline justify-between gap-2 px-3 py-1.5">
+      <span className="shrink-0 text-[10px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
         {label}
-      </div>
-      <div className="mt-0.5 truncate text-[13px] font-semibold text-ink">
+      </span>
+      <span className="min-w-0 truncate text-right text-[12.5px] font-semibold text-ink">
         {children}
-      </div>
+      </span>
     </div>
   );
 }
@@ -341,31 +341,31 @@ export function TrackerDetail({
               const late = v.tone === "done" ? lateness(cell?.delayMinutes) : null;
               const last = i === STAGE_COLUMNS.length - 1;
               return (
-                <li key={c.key} className="relative flex gap-3 pb-3 last:pb-0">
+                <li key={c.key} className="relative flex gap-2.5 pb-2 last:pb-0">
                   {!last ? (
                     <span
                       aria-hidden
                       className={cn(
-                        "absolute top-6 left-[11px] h-full w-px",
+                        "absolute top-5 left-[9.5px] h-full w-px",
                         v.tone === "done" ? "bg-success/40" : "bg-line",
                       )}
                     />
                   ) : null}
                   <span
                     className={cn(
-                      "relative z-[1] mt-0.5 flex size-[23px] shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold",
+                      "relative z-[1] flex size-5 shrink-0 items-center justify-center rounded-full border-2 text-[9px] font-bold",
                       DOT[v.tone],
                     )}
                   >
                     {v.tone === "done" ? (
-                      <CheckIcon className="size-3" strokeWidth={3} />
+                      <CheckIcon className="size-2.5" strokeWidth={3.5} />
                     ) : (
                       i + 1
                     )}
                   </span>
-                  <span className="flex min-w-0 flex-1 items-start justify-between gap-2 border-b border-line pb-2.5">
+                  <span className="flex min-w-0 flex-1 items-start justify-between gap-2 border-b border-line pb-2">
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium text-ink">
+                      <span className="block truncate text-[12.5px] font-medium text-ink">
                         {c.full}
                       </span>
                       {cell?.plannedAt ? (
@@ -385,14 +385,13 @@ export function TrackerDetail({
                       >
                         {v.text}
                       </span>
-                      {v.sub ? (
+                      {v.sub || late ? (
                         <span className="num block text-[11px] font-normal text-ink-muted">
                           {v.sub}
-                        </span>
-                      ) : null}
-                      {late ? (
-                        <span className="num block text-[11px] font-medium text-warning">
-                          {late}
+                          {v.sub && late ? " · " : null}
+                          {late ? (
+                            <span className="font-medium text-warning">{late}</span>
+                          ) : null}
                         </span>
                       ) : null}
                     </span>
