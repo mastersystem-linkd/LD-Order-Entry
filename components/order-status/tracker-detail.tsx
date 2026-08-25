@@ -10,7 +10,7 @@ import {
   XIcon,
 } from "lucide-react";
 
-import { formatDate, formatNumber } from "@/lib/orders";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/orders";
 import type {
   OrderStatusGroup,
   OrderStatusRow,
@@ -50,7 +50,7 @@ function stageValue(key: string, cell: StageCell | undefined): StageShown {
   if (cell.state === "done")
     return {
       text: key === "order_entry" ? "Order received" : "Done",
-      sub: cell.date ? formatDate(cell.date) : undefined,
+      sub: cell.date ? formatDateTime(cell.date) : undefined,
       tone: "done",
     };
   if (cell.state === "overdue")
@@ -276,92 +276,6 @@ export function TrackerDetail({
           </p>
         ) : null}
 
-        <SectionLabel>Order</SectionLabel>
-        <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
-          <div className="divide-y divide-line">
-            <Row label="Order no">
-              <span className="num">{line.orderNo}</span>
-            </Row>
-            <Row label="OD date">{formatDate(line.odDate)}</Row>
-            <Row label="Entered on">{formatDate(line.createdAt)}</Row>
-            <Row label="Sales person">{line.salesPerson || "—"}</Row>
-            <Row label="Agent">{line.agent || "—"}</Row>
-            <Row label="Department">{line.department || "—"}</Row>
-            <Row label="Haste">{line.haste || "—"}</Row>
-            <Row label="Challan no">
-              <span className="num">{line.challanNo || "—"}</span>
-            </Row>
-            <Row label="Lot no">
-              <span className="num">{line.lotNo || "—"}</span>
-            </Row>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <SectionLabel>This design</SectionLabel>
-          <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
-            <div className="divide-y divide-line">
-              <Row label="Quality">{line.fabric}</Row>
-              <Row label="Design matching">
-                <span className="num">{line.design}</span>
-              </Row>
-              <Row label="Mtr / yard">
-                <span className="num">{formatNumber(Number(line.qtyMtr))}</span>
-              </Row>
-              <Row label="Value">
-                <span className="num">
-                  {line.lineTotal == null
-                    ? "—"
-                    : `₹${formatNumber(Number(line.lineTotal))}`}
-                </span>
-              </Row>
-              <Row label="Waiting on">
-                <span className={currentStage ? "text-accent" : "text-success"}>
-                  {currentStage ?? "All stages done"}
-                </span>
-              </Row>
-            </div>
-          </div>
-        </div>
-
-        {order ? (
-          <div className="mt-4">
-            <SectionLabel>Whole order {order.orderNo}</SectionLabel>
-            <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
-              <div className="divide-y divide-line">
-                <Row label="Qualities">
-                  <span className="num">{order.fabrics.length}</span>
-                </Row>
-                <Row label="Designs">
-                  <span className="num">{order.designCount}</span>
-                  {order.cancelledCount ? (
-                    <span className="num ml-1 text-[11px] font-normal text-danger">
-                      +{order.cancelledCount} cancelled
-                    </span>
-                  ) : null}
-                </Row>
-                <Row label="Total qty">
-                  <span className="num">{formatNumber(order.qtyTotal)}</span>
-                </Row>
-                <Row label="Total value">
-                  <span className="num">₹{formatNumber(order.grandTotal)}</span>
-                </Row>
-                <Row label="Dispatched">
-                  <span className="num">
-                    {orderDispatched}/{orderActive}
-                  </span>
-                  <span className="ml-1 text-[11px] font-normal text-ink-muted">
-                    designs
-                  </span>
-                </Row>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {/* The seven stages in order. The connector is drawn in the completed
-            colour only where the work has actually got to, so the run of green
-            reads as progress at a glance. */}
         <div className="mt-4">
           <SectionLabel>Progress</SectionLabel>
           <ol className="relative mt-2">
@@ -434,6 +348,95 @@ export function TrackerDetail({
             })}
           </ol>
         </div>
+
+        <SectionLabel>Order</SectionLabel>
+        <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
+          <div className="divide-y divide-line">
+            <Row label="Order no">
+              <span className="num">{line.orderNo}</span>
+            </Row>
+            <Row label="OD date">{formatDate(line.odDate)}</Row>
+            <Row label="Sales person">{line.salesPerson || "—"}</Row>
+            {/* Challan and lot only once they exist — a column of em-dashes is
+                what buried the stages in the first place. */}
+            {line.challanNo ? (
+              <Row label="Challan no">
+                <span className="num">{line.challanNo}</span>
+              </Row>
+            ) : null}
+            {line.lotNo ? (
+              <Row label="Lot no">
+                <span className="num">{line.lotNo}</span>
+              </Row>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <SectionLabel>This design</SectionLabel>
+          <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
+            <div className="divide-y divide-line">
+              <Row label="Quality">{line.fabric}</Row>
+              <Row label="Design matching">
+                <span className="num">{line.design}</span>
+              </Row>
+              <Row label="Mtr / yard">
+                <span className="num">{formatNumber(Number(line.qtyMtr))}</span>
+              </Row>
+              <Row label="Value">
+                <span className="num">
+                  {line.lineTotal == null
+                    ? "—"
+                    : `₹${formatNumber(Number(line.lineTotal))}`}
+                </span>
+              </Row>
+              <Row label="Waiting on">
+                <span className={currentStage ? "text-accent" : "text-success"}>
+                  {currentStage ?? "All stages done"}
+                </span>
+              </Row>
+            </div>
+          </div>
+        </div>
+
+        {order ? (
+          <div className="mt-4">
+            <SectionLabel>Whole order {order.orderNo}</SectionLabel>
+            <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
+              <div className="divide-y divide-line">
+                <Row label="Qualities">
+                  <span className="num">{order.fabrics.length}</span>
+                </Row>
+                <Row label="Designs">
+                  <span className="num">{order.designCount}</span>
+                  {order.cancelledCount ? (
+                    <span className="num ml-1 text-[11px] font-normal text-danger">
+                      +{order.cancelledCount} cancelled
+                    </span>
+                  ) : null}
+                </Row>
+                <Row label="Total qty">
+                  <span className="num">{formatNumber(order.qtyTotal)}</span>
+                </Row>
+                <Row label="Total value">
+                  <span className="num">₹{formatNumber(order.grandTotal)}</span>
+                </Row>
+                <Row label="Dispatched">
+                  <span className="num">
+                    {orderDispatched}/{orderActive}
+                  </span>
+                  <span className="ml-1 text-[11px] font-normal text-ink-muted">
+                    designs
+                  </span>
+                </Row>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* The seven stages in order. The connector is drawn in the completed
+            colour only where the work has actually got to, so the run of green
+            reads as progress at a glance. */}
 
         {group && group.lines.length > 1 ? (
           <div className="mt-4">

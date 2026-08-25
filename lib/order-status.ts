@@ -60,8 +60,6 @@ export type OrderStatusRow = {
   qtyMtr: string;
   lineTotal: string | null;
   salesPerson: string | null;
-  agent: string | null;
-  department: string | null;
   odDate: string;
   haste: string | null;
   challanNo: string | null;
@@ -83,8 +81,6 @@ export type OrderStatusGroup = {
   orderNo: string;
   party: string;
   salesPerson: string | null;
-  agent: string | null;
-  department: string | null;
   odDate: string;
   haste: string | null;
   challanNo: string | null;
@@ -387,8 +383,6 @@ export function aggregateOrderGroups(
       orderNo: first.orderNo,
       party: first.party,
       salesPerson: first.salesPerson,
-      agent: first.agent,
-      department: first.department,
       odDate: first.odDate,
       haste: first.haste,
       challanNo: first.challanNo,
