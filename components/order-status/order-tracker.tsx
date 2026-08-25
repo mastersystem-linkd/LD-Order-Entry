@@ -10,6 +10,7 @@ import type { OrderStatusList, OrderStatusRow } from "@/lib/order-status";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Pager } from "@/components/ui/pager";
 import { HScroll } from "@/components/ui/h-scroll";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -382,26 +383,14 @@ export function OrderTracker({
           {totalPages > 1 ? (
             <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2">
               <span className="num text-xs text-ink-soft">
-                {totalOrders} orders · page {safePage} of {totalPages}
+                {totalOrders} order{totalOrders === 1 ? "" : "s"}
               </span>
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
+              <Pager
+                page={safePage}
+                totalPages={totalPages}
+                onPage={setPage}
+                busy={q.isFetching}
+              />
             </div>
           ) : null}
         </Card>

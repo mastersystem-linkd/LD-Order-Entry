@@ -18,6 +18,7 @@ import { formatNumber, type OrderRow, type OrdersList } from "@/lib/orders";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Button } from "@/components/ui/button";
+import { Pager } from "@/components/ui/pager";
 import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -321,27 +322,13 @@ export function TrackingIndex() {
       </Reveal>
 
       {data && data.total_pages > 1 ? (
-        <div className="flex items-center justify-end gap-2 text-sm">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1 || list.isFetching}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Previous
-          </Button>
-          <span className="num">
-            {data.page} / {data.total_pages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= data.total_pages || list.isFetching}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
+        <Pager
+          className="justify-end"
+          page={data.page}
+          totalPages={data.total_pages}
+          onPage={setPage}
+          busy={list.isFetching}
+        />
       ) : null}
 
       {/* Order detail popup (used by the mobile card list). */}

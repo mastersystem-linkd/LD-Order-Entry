@@ -29,6 +29,7 @@ import {
 import type { Capability } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Pager } from "@/components/ui/pager";
 import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -832,27 +833,12 @@ export function OrderStatusBoard({
           <span className="num text-ink-soft">
             {total} order{total === 1 ? "" : "s"}
           </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={safePage <= 1 || q.isFetching}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <span className="num">
-              {safePage} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={safePage >= totalPages || q.isFetching}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
+          <Pager
+            page={safePage}
+            totalPages={totalPages}
+            onPage={setPage}
+            busy={q.isFetching}
+          />
         </div>
       ) : null}
 

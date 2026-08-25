@@ -32,6 +32,7 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { hasCap, type Capability } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
+import { Pager } from "@/components/ui/pager";
 import { HScroll } from "@/components/ui/h-scroll";
 import { Card, CardContent } from "@/components/ui/card";
 import { Reveal } from "@/components/ui/reveal";
@@ -617,27 +618,7 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
             {statusFilter ? " (filtered)" : ""}
           </span>
           {totalPages > 1 ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={safePage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              <span className="num">
-                {safePage} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
+            <Pager page={safePage} totalPages={totalPages} onPage={setPage} />
           ) : null}
         </div>
       ) : null}
