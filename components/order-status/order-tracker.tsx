@@ -69,6 +69,12 @@ export function OrderTracker({
   const dragOffset = React.useRef<{ dx: number; dy: number } | null>(null);
   // Briefly highlights the row the panel jumped to, so the eye can find it.
   const [flashId, setFlashId] = React.useState<string | null>(null);
+  // The table fills whatever is left of the window. A hard-coded
+  // `calc(100vh - Nrem)` cannot know how tall the header, the search bar (which
+  // wraps on narrow screens) and the legend actually came out, so it always
+  // leaves a band of dead space above the footer.
+  const cardRef = React.useRef<HTMLDivElement | null>(null);
+  const [bodyMax, setBodyMax] = React.useState<number>();
 
   React.useEffect(() => {
     setPage(1);
@@ -141,6 +147,30 @@ export function OrderTracker({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [step, hasSelection]);
+
+  React.useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const fit = () => {
+      // Measured against the document, not the viewport, so a page that happens
+      // to be scrolled when this runs does not produce a short table.
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      // Room for the pagination strip inside the card, the app footer, and a
+      // little breathing space beneath.
+      const RESERVE = 108;
+      setBodyMax(Math.max(240, window.innerHeight - top - RESERVE));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    // The toolbar above can change height (the search bar wraps, the legend
+    // rewraps), which moves the card's top.
+    const ro = new ResizeObserver(fit);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("resize", fit);
+      ro.disconnect();
+    };
+  }, []);
 
   // Drag the panel by its title bar. It is switched to explicit coordinates on
   // the first move so it stops being anchored to the right edge.
@@ -269,7 +299,7 @@ export function OrderTracker({
       {/* The table keeps the whole width. The detail panel floats over its
           right-hand edge when a row is opened, so nothing is resized and
           whatever it covers is still reachable by scrolling the table. */}
-      <div className="relative">
+      <div ref={cardRef} className="relative">
         <Card className="min-w-0 overflow-hidden p-0">
           {q.isLoading && !q.data ? (
             <p className="flex items-center gap-2 px-4 py-10 text-sm text-ink-soft">
@@ -282,7 +312,10 @@ export function OrderTracker({
                 : "No orders to show."}
             </p>
           ) : (
-            <HScroll bodyClassName="max-h-[calc(100vh-17rem)] overflow-auto">
+            <HScroll
+              bodyClassName="overflow-auto"
+              bodyStyle={{ maxHeight: bodyMax }}
+            >
               <table className="w-full min-w-[1180px] text-left text-sm">
                 <thead className="sticky top-0 z-[4] border-b border-line bg-surface">
                   <tr className="bg-surface text-[12px] font-bold tracking-[0.04em] text-ink uppercase">

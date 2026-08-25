@@ -14,11 +14,14 @@ import { cn } from "@/lib/utils";
 export function HScroll({
   children,
   bodyClassName,
+  bodyStyle,
   className,
 }: {
   children: React.ReactNode;
   /** Classes for the real scroll container (keep whatever it had: max-h, overflow-auto, …). */
   bodyClassName?: string;
+  /** Inline styles for the scroll container — e.g. a measured max-height. */
+  bodyStyle?: React.CSSProperties;
   className?: string;
 }) {
   const bodyRef = React.useRef<HTMLDivElement | null>(null);
@@ -76,6 +79,7 @@ export function HScroll({
         ref={bodyRef}
         onScroll={() => mirror(bodyRef.current, topRef.current)}
         className={cn("h-scrollbar", bodyClassName)}
+        style={bodyStyle}
       >
         {children}
       </div>
