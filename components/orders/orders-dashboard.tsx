@@ -427,7 +427,7 @@ export function OrdersDashboard({ caps }: { caps: Capability[] }) {
                     order-no column stay pinned so you never lose your place
                     while scrolling sideways. */}
                 <HScroll bodyClassName="max-h-[calc(100vh-19rem)] overflow-auto">
-                  <table className="w-full text-left text-sm text-ink">
+                  <table className="w-full min-w-[1240px] text-left text-sm text-ink">
                     <THead className="sticky top-0 z-20 bg-surface">
                   <tr>
                     <Th className="sticky left-0 z-10 bg-surface">Order no</Th>

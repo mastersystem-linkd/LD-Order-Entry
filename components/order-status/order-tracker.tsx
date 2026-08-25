@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, RefreshCwIcon, SearchIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  SlidersHorizontalIcon,
+  XIcon,
+} from "lucide-react";
 
 import { apiGet } from "@/lib/api-client";
 import { formatDate, formatNumber } from "@/lib/orders";
@@ -15,6 +21,13 @@ import { HScroll } from "@/components/ui/h-scroll";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  appendOrderFilterParams,
+  EMPTY_ORDER_FILTERS,
+  hasActiveOrderFilters,
+  OrderFilters,
+  type OrderFilterState,
+} from "@/components/orders/order-filters";
 import { TrackerDetail } from "./tracker-detail";
 import { StageCell, STAGE_COLUMNS, STAGE_COL_WIDTH } from "./stage-cell";
 import {
@@ -24,6 +37,7 @@ import {
   TONE_LABEL,
   TONE_TEXT,
   type QualityGroup,
+  type RowTone,
 } from "./quality-groups";
 
 // Widths of the three identifying columns, which stay pinned while the rest of
@@ -58,6 +72,14 @@ export function OrderTracker({
   const search = useDebouncedValue(searchInput, 300);
   const [page, setPage] = React.useState(1);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  // The same order no / challan / lot / haste / month / date filters the Orders
+  // table has — the need for them does not stop at the screen boundary.
+  const [filters, setFilters] =
+    React.useState<OrderFilterState>(EMPTY_ORDER_FILTERS);
+  const debouncedFilters = useDebouncedValue(filters, 300);
+  const [showFilters, setShowFilters] = React.useState(false);
+  // The status legend doubles as a filter: click "Completed" to see only those.
+  const [toneFilter, setToneFilter] = React.useState<RowTone | "">("");
   // Collapsed by default — one row per quality is the point. The colour chips
   // on that row already answer "what went out?", so opening it is optional.
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
@@ -79,22 +101,39 @@ export function OrderTracker({
 
   React.useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, debouncedFilters]);
 
   const q = useQuery({
-    queryKey: ["order-tracker", { search, page }],
+    queryKey: ["order-tracker", { search, page, filters: debouncedFilters }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (search) p.set("search", search);
+      appendOrderFilterParams(p, debouncedFilters);
       p.set("page", String(page));
       return apiGet<OrderStatusList>(`/api/order-status?${p}`);
     },
     placeholderData: (prev) => prev,
   });
 
-  const groups = React.useMemo(
+  const allGroups = React.useMemo(
     () => toQualityGroups(q.data?.groups ?? []),
     [q.data],
+  );
+  // How many rows on this page sit in each status — shown on the legend so the
+  // filter says what it will do before you click it.
+  const toneCounts = React.useMemo(() => {
+    const t: Record<RowTone, number> = {
+      done: 0,
+      progress: 0,
+      none: 0,
+      cancelled: 0,
+    };
+    for (const g of allGroups) t[g.tone] += 1;
+    return t;
+  }, [allGroups]);
+  const groups = React.useMemo(
+    () => (toneFilter ? allGroups.filter((g) => g.tone === toneFilter) : allGroups),
+    [allGroups, toneFilter],
   );
   // The flat list the arrows walk — every colour, in the order shown.
   const lines = React.useMemo(() => flattenLines(groups), [groups]);
@@ -277,6 +316,14 @@ export function OrderTracker({
         </div>
         {toolbar}
         <Button
+          variant={showFilters || hasActiveOrderFilters(filters) ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowFilters((v) => !v)}
+          className="shrink-0"
+        >
+          <SlidersHorizontalIcon /> Filters
+        </Button>
+        <Button
           variant="outline"
           size="icon"
           onClick={() => q.refetch()}
@@ -288,14 +335,63 @@ export function OrderTracker({
         </Button>
       </div>
 
-      {/* What the Status column's colours mean — say it once, plainly. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-        <span className="font-medium text-ink-muted">Status</span>
-        <span className="font-semibold text-success">Completed</span>
-        <span className="font-semibold text-warning">In progress</span>
-        <span className="font-semibold text-danger">Not started</span>
-        <span className="font-semibold text-ink-muted">Cancelled</span>
+      {/* The status key doubles as a filter — same colours, now clickable.
+          It narrows THIS page's rows; the counts say how many that is. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+        <span className="mr-0.5 font-medium text-ink-muted">Status</span>
+        {(
+          [
+            ["done", "text-success"],
+            ["progress", "text-warning"],
+            ["none", "text-danger"],
+            ["cancelled", "text-ink-muted"],
+          ] as [RowTone, string][]
+        ).map(([t, cls]) => {
+          const active = toneFilter === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setToneFilter(active ? "" : t)}
+              title={
+                active
+                  ? "Showing only these — click to clear"
+                  : `Show only ${TONE_LABEL[t].toLowerCase()} rows on this page`
+              }
+              className={cn(
+                "rounded-pill px-2 py-0.5 font-semibold transition-colors",
+                cls,
+                active
+                  ? "bg-inset ring-1 ring-line-strong ring-inset"
+                  : "hover:bg-inset",
+              )}
+            >
+              {TONE_LABEL[t]}
+              <span className="num ml-1 font-normal opacity-70">
+                {toneCounts[t]}
+              </span>
+            </button>
+          );
+        })}
+        {toneFilter ? (
+          <button
+            type="button"
+            onClick={() => setToneFilter("")}
+            className="inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-ink-soft hover:bg-inset"
+          >
+            <XIcon className="size-3" /> Clear
+          </button>
+        ) : null}
       </div>
+
+      {showFilters ? (
+        <OrderFilters
+          value={filters}
+          onChange={setFilters}
+          onClear={() => setFilters(EMPTY_ORDER_FILTERS)}
+        />
+      ) : null}
 
       {/* The table keeps the whole width. The detail panel floats over its
           right-hand edge when a row is opened, so nothing is resized and

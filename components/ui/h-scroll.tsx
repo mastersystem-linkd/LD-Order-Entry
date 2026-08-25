@@ -69,7 +69,9 @@ export function HScroll({
         onScroll={() => mirror(topRef.current, bodyRef.current)}
         aria-hidden
         className={cn(
-          "h-scrollbar overflow-x-auto overflow-y-hidden",
+          // A bare scrollbar reads as a hairline; the inset track and the
+          // rounded corners make it look like something you can grab.
+          "h-scrollbar overflow-x-auto overflow-y-hidden rounded-pill bg-inset/60",
           overflows ? "block" : "hidden",
         )}
       >

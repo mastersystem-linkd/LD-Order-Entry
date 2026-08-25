@@ -507,7 +507,7 @@ export function OrderStatusBoard({
           <Card data-size="sm" className="hidden lg:block">
             <CardContent className="px-0">
               <HScroll bodyClassName="max-h-[70vh] overflow-auto">
-                <table className="w-full border-collapse text-left text-sm">
+                <table className="w-full min-w-[1240px] border-collapse text-left text-sm">
                 <thead className="sticky top-0 z-20 bg-surface">
                   <tr className="border-b border-line">
                     <Th className="sticky left-0 z-30 bg-surface shadow-[1px_1px_0_var(--line)]">

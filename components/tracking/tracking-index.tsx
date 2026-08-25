@@ -199,7 +199,7 @@ export function TrackingIndex() {
             ) : (
               <>
               <HScroll className="hidden md:block" bodyClassName="overflow-x-auto">
-                <table className="w-full text-left text-sm text-ink">
+                <table className="w-full min-w-[1040px] text-left text-sm text-ink">
                   <THead>
                     <tr>
                       <Th>Order no</Th>
