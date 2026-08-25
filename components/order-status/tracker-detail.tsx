@@ -101,6 +101,25 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+function Fact({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0 px-3 py-2">
+      <div className="text-[10px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
+        {label}
+      </div>
+      <div className="mt-0.5 truncate text-[13px] font-semibold text-ink">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-[10px] font-semibold tracking-[0.09em] text-ink-muted uppercase">
@@ -276,6 +295,41 @@ export function TrackerDetail({
           </p>
         ) : null}
 
+        {/* Two fields to a row, in plain ink — the identifying facts, read
+            before anything else, so they sit above the timeline. */}
+        <div className="mb-4 grid grid-cols-2 divide-x divide-y divide-line overflow-hidden rounded-card border border-line bg-surface-2">
+          <Fact label="OD date">{formatDate(line.odDate)}</Fact>
+          <Fact label="Order no">
+            <span className="num">{line.orderNo}</span>
+          </Fact>
+          <Fact label="Sales person">{line.salesPerson || "—"}</Fact>
+          <Fact label="Quality">{line.fabric}</Fact>
+          <Fact label="Design no">
+            <span className="num">{line.design}</span>
+          </Fact>
+          <Fact label="Mtr / yard">
+            <span className="num">{formatNumber(Number(line.qtyMtr))}</span>
+          </Fact>
+          <Fact label="Value">
+            <span className="num">
+              {line.lineTotal == null
+                ? "—"
+                : `₹${formatNumber(Number(line.lineTotal))}`}
+            </span>
+          </Fact>
+          <Fact label="Waiting on">{currentStage ?? "All stages done"}</Fact>
+          {line.challanNo ? (
+            <Fact label="Challan no">
+              <span className="num">{line.challanNo}</span>
+            </Fact>
+          ) : null}
+          {line.lotNo ? (
+            <Fact label="Lot no">
+              <span className="num">{line.lotNo}</span>
+            </Fact>
+          ) : null}
+        </div>
+
         <div className="mt-4">
           <SectionLabel>Progress</SectionLabel>
           <ol className="relative mt-2">
@@ -347,56 +401,6 @@ export function TrackerDetail({
               );
             })}
           </ol>
-        </div>
-
-        <SectionLabel>Order</SectionLabel>
-        <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
-          <div className="divide-y divide-line">
-            <Row label="Order no">
-              <span className="num">{line.orderNo}</span>
-            </Row>
-            <Row label="OD date">{formatDate(line.odDate)}</Row>
-            <Row label="Sales person">{line.salesPerson || "—"}</Row>
-            {/* Challan and lot only once they exist — a column of em-dashes is
-                what buried the stages in the first place. */}
-            {line.challanNo ? (
-              <Row label="Challan no">
-                <span className="num">{line.challanNo}</span>
-              </Row>
-            ) : null}
-            {line.lotNo ? (
-              <Row label="Lot no">
-                <span className="num">{line.lotNo}</span>
-              </Row>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <SectionLabel>This design</SectionLabel>
-          <div className="mt-2 rounded-card border border-line bg-surface-2 px-3 py-1">
-            <div className="divide-y divide-line">
-              <Row label="Quality">{line.fabric}</Row>
-              <Row label="Design matching">
-                <span className="num">{line.design}</span>
-              </Row>
-              <Row label="Mtr / yard">
-                <span className="num">{formatNumber(Number(line.qtyMtr))}</span>
-              </Row>
-              <Row label="Value">
-                <span className="num">
-                  {line.lineTotal == null
-                    ? "—"
-                    : `₹${formatNumber(Number(line.lineTotal))}`}
-                </span>
-              </Row>
-              <Row label="Waiting on">
-                <span className={currentStage ? "text-accent" : "text-success"}>
-                  {currentStage ?? "All stages done"}
-                </span>
-              </Row>
-            </div>
-          </div>
         </div>
 
         {order ? (
