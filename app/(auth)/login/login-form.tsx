@@ -101,7 +101,7 @@ export function LoginForm({
             type="button"
             onClick={onGoogle}
             disabled={googleLoading || loading}
-            className="flex w-full items-center justify-center gap-2.5 rounded-[10px] border border-line-strong bg-surface px-4 py-3 text-[14.5px] font-semibold text-ink shadow-sm transition-all hover:-translate-y-px hover:border-ink-muted hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+            className="flex w-full items-center justify-center gap-2.5 rounded-[10px] border border-line-strong bg-surface px-4 py-3.5 text-[14.5px] font-semibold text-ink transition-colors hover:border-ink-muted hover:bg-inset disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
           >
             {googleLoading ? <Spinner /> : <GoogleIcon />} Continue with Google
           </button>
@@ -183,7 +183,7 @@ export function LoginForm({
           <button
             type="button"
             onClick={() => setShowHint((v) => !v)}
-            className="shrink-0 text-[12.5px] font-semibold text-accent hover:underline"
+            className="shrink-0 text-[12.5px] font-medium text-ink-muted transition-colors hover:text-ink-soft"
           >
             Forgot password?
           </button>
@@ -192,13 +192,8 @@ export function LoginForm({
         <button
           type="submit"
           disabled={loading || googleLoading}
-          style={{
-            backgroundImage:
-              "linear-gradient(180deg, var(--a3) 0%, var(--a1) 55%, var(--a2) 100%)",
-            boxShadow:
-              "0 10px 26px -10px var(--glow), inset 0 1px 0 rgba(255,255,255,.22)",
-          }}
-          className="flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-3.5 text-[15px] font-semibold text-white transition-all hover:-translate-y-px hover:brightness-[1.06] active:translate-y-0 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
+          style={{ boxShadow: "0 6px 18px -8px var(--glow)" }}
+          className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-accent px-4 py-3.5 text-[14.5px] font-semibold text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? (
             <>
