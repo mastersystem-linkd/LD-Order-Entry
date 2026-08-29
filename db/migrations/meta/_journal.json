@@ -22,6 +22,13 @@
       "when": 1787051666675,
       "tag": "0002_slippery_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787985194223,
+      "tag": "0003_crm_module",
+      "breakpoints": true
     }
   ]
 }

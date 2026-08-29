@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -10,6 +11,7 @@ import {
   PlusIcon,
   SettingsIcon,
   Trash2Icon,
+  UserCheckIcon,
   WorkflowIcon,
   XIcon,
   type LucideIcon,
@@ -25,6 +27,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "/orders": LayoutGridIcon,
   "/order-status": ListChecksIcon,
   "/tracking": WorkflowIcon,
+  "/crm": UserCheckIcon,
   "/trash": Trash2Icon,
   "/settings": SettingsIcon,
 };
@@ -99,28 +102,54 @@ export function MobileNav({
             const active = item.href === activeHref;
             const Icon = NAV_ICONS[item.href];
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-3 rounded-[10px] px-3 py-[11px] text-[14px] font-medium transition-colors duration-150",
-                  active
-                    ? "bg-accent text-white shadow-sm"
-                    : "text-ink-soft hover:bg-inset hover:text-ink",
-                )}
-              >
-                {Icon ? (
-                  <Icon
-                    className={cn(
-                      "size-[18px] shrink-0",
-                      active ? "text-white" : "text-ink-muted",
-                    )}
-                  />
+              <Fragment key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={onClose}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-3 rounded-[10px] px-3 py-[11px] text-[14px] font-medium transition-colors duration-150",
+                    active
+                      ? "bg-accent text-white shadow-sm"
+                      : "text-ink-soft hover:bg-inset hover:text-ink",
+                  )}
+                >
+                  {Icon ? (
+                    <Icon
+                      className={cn(
+                        "size-[18px] shrink-0",
+                        active ? "text-white" : "text-ink-muted",
+                      )}
+                    />
+                  ) : null}
+                  <span className="truncate">{item.label}</span>
+                </Link>
+                {/* Without this the sub-nav would exist on desktop only, and
+                    the CRM sections would be unreachable on a phone. */}
+                {item.children && active ? (
+                  <div className="mt-0.5 mb-1 ml-[26px] flex flex-col gap-px border-l border-line pl-3">
+                    {item.children.map((child) => {
+                      const on = pathname === child.href;
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={onClose}
+                          aria-current={on ? "page" : undefined}
+                          className={cn(
+                            "truncate rounded-[7px] px-2.5 py-[9px] text-[13.5px] font-medium transition-colors duration-150",
+                            on
+                              ? "bg-accent-soft font-semibold text-accent-deep"
+                              : "text-ink-soft hover:bg-inset hover:text-ink",
+                          )}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 ) : null}
-                <span className="truncate">{item.label}</span>
-              </Link>
+              </Fragment>
             );
           })}
         </nav>

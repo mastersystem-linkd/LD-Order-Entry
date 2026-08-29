@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -11,6 +12,7 @@ import {
   PlusIcon,
   SettingsIcon,
   Trash2Icon,
+  UserCheckIcon,
   WorkflowIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +27,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "/orders": LayoutGridIcon,
   "/order-status": ListChecksIcon,
   "/tracking": WorkflowIcon,
+  "/crm": UserCheckIcon,
   "/trash": Trash2Icon,
   "/settings": SettingsIcon,
 };
@@ -111,32 +114,60 @@ export function Sidebar({
           {items.map((item) => {
             const active = item.href === activeHref;
             const Icon = NAV_ICONS[item.href];
+            // A group's rail opens only while that section is the active one —
+            // an always-open sub-nav would push Settings off a short viewport.
+            const showChildren = !!item.children && active && !collapsed;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                title={item.label}
-                className={cn(
-                  "flex items-center gap-3 rounded-[10px] px-3 py-[9px] text-[13.5px] font-medium transition-colors duration-150",
-                  collapsed && "justify-center group-hover/sb:justify-start",
-                  active
-                    ? "bg-accent text-white shadow-sm"
-                    : "text-ink-soft hover:bg-inset hover:text-ink",
-                )}
-              >
-                {Icon ? (
-                  <Icon
-                    className={cn(
-                      "size-[18px] shrink-0",
-                      active ? "text-white" : "text-ink-muted",
-                    )}
-                  />
+              <Fragment key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  title={item.label}
+                  className={cn(
+                    "flex items-center gap-3 rounded-[10px] px-3 py-[9px] text-[13.5px] font-medium transition-colors duration-150",
+                    collapsed && "justify-center group-hover/sb:justify-start",
+                    active
+                      ? "bg-accent text-white shadow-sm"
+                      : "text-ink-soft hover:bg-inset hover:text-ink",
+                  )}
+                >
+                  {Icon ? (
+                    <Icon
+                      className={cn(
+                        "size-[18px] shrink-0",
+                        active ? "text-white" : "text-ink-muted",
+                      )}
+                    />
+                  ) : null}
+                  <span className={cn("truncate", collapsed && peekInline)}>
+                    {item.label}
+                  </span>
+                </Link>
+                {showChildren ? (
+                  <div className="mt-0.5 mb-1 ml-[26px] flex flex-col gap-px border-l border-line pl-3">
+                    {item.children!.map((child) => {
+                      // Exact match: the parent's own href is also a child, so a
+                      // prefix test would light every sibling on /crm/issues.
+                      const on = pathname === child.href;
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          aria-current={on ? "page" : undefined}
+                          className={cn(
+                            "truncate rounded-[7px] px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-150",
+                            on
+                              ? "bg-accent-soft font-semibold text-accent-deep"
+                              : "text-ink-soft hover:bg-inset hover:text-ink",
+                          )}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 ) : null}
-                <span className={cn("truncate", collapsed && peekInline)}>
-                  {item.label}
-                </span>
-              </Link>
+              </Fragment>
             );
           })}
         </nav>

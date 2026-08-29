@@ -17,6 +17,13 @@ function titleFor(pathname: string): string {
   if (pathname === "/orders/new") return "New order";
   if (/^\/orders\/[^/]+\/edit$/.test(pathname)) return "Edit order";
 
+  // Nested sections (CRM) name themselves: matching only top-level items would
+  // title every CRM page "CRM" instead of "Issues" / "Customers".
+  for (const item of NAV_ITEMS) {
+    const child = item.children?.find((c) => c.href === pathname);
+    if (child) return child.label;
+  }
+
   const match = NAV_ITEMS.filter(
     (i) => pathname === i.href || pathname.startsWith(i.href + "/"),
   ).sort((a, b) => b.href.length - a.href.length)[0];

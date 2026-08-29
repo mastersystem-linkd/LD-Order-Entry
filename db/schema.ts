@@ -5,11 +5,14 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgSchema,
+  smallint,
   text,
   timestamp,
   unique,
@@ -36,7 +39,16 @@ export const app = pgSchema(SCHEMA_NAME);
 
 // Roles (§1). Default VIEWER. MANAGER existed between migrations 0003 and 0006
 // but was dropped — its grants were identical to ADMIN's, so it added nothing.
-export const userRole = app.enum("user_role", ["ADMIN", "SALES", "OPS", "VIEWER"]);
+export const userRole = app.enum("user_role", [
+  "ADMIN",
+  "SALES",
+  "OPS",
+  "VIEWER",
+  // Post-delivery follow-up (§12). Added in migration 0004 — separately from
+  // the CRM tables (0003), because Postgres refuses to USE a new enum value in
+  // the same transaction that ADDs it, and 0004 seeds role_permissions rows.
+  "CRM",
+]);
 
 // Per-role capability grants — the admin-editable access matrix (Settings →
 // Access). A row (role, capability) with allowed=true means that role has that
@@ -287,6 +299,191 @@ export const lookupValues = app.table(
   ],
 );
 
+// ===========================================================================
+// CRM — post-delivery follow-up (§12). One-way dependency: these tables READ
+// orders; nothing in the order/stage path ever reads them. No column is added
+// to customer_orders or order_line_items — "has this order been followed up?"
+// is derived from the presence of a crm_followups row, exactly as CANCELLED
+// and deleted are derived from the lines.
+// NOTE: crm_* is NOT crr_*. crr_customers is the CRR customer master (§7).
+// ===========================================================================
+
+// crm_followups (one per order) ----------------------------------------------
+export const crmFollowups = app.table(
+  "crm_followups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // UNIQUE: one follow-up per order (§12.2). This is also what makes the
+    // on-read reconcile safe under concurrency — two simultaneous readers both
+    // insert, and onConflictDoNothing drops the loser.
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => customerOrders.id, { onDelete: "cascade" }),
+    // Denormalized so an issue raised against this follow-up still names the
+    // order after the order itself is purged (same rule as design_database).
+    orderNo: varchar("order_no", { length: 50 }).notNull(),
+    crrCustomerId: integer("crr_customer_id"),
+
+    status: varchar("status", { length: 20 }).notNull().default("DUE"),
+    // How we concluded it was delivered: 'received_lr' (proven) or
+    // 'dispatch_transit' (dispatch done + transit_days elapsed).
+    deliveryBasis: varchar("delivery_basis", { length: 20 }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    contactedAt: timestamp("contacted_at", { withTimezone: true }),
+    assignedTo: uuid("assigned_to").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
+    // Typed on the call. This app holds no phone book and never will.
+    contactPerson: varchar("contact_person", { length: 120 }),
+    contactPhone: varchar("contact_phone", { length: 30 }),
+
+    // Two fields, never one — the disagreement between them IS the finding.
+    // system_on_time is SLA-config-relative, not a performance figure (§12.3).
+    systemOnTime: boolean("system_on_time"),
+    customerSaysOnTime: boolean("customer_says_on_time"),
+    delayReason: varchar("delay_reason", { length: 30 }),
+
+    ratingDelivery: smallint("rating_delivery"),
+    ratingQuality: smallint("rating_quality"),
+    ratingPacking: smallint("rating_packing"),
+    ratingCoordination: smallint("rating_coordination"),
+    // Auto-suggested as the mean of the four, and overridable.
+    ratingOverall: smallint("rating_overall"),
+    ratingSource: varchar("rating_source", { length: 20 }),
+
+    reorderIntent: varchar("reorder_intent", { length: 20 })
+      .notNull()
+      .default("none"),
+    reorderNote: text("reorder_note"),
+
+    // Which lines were delivered when the call was made, so a LATER dispatch
+    // on the same order does not silently look followed-up. A UUID array
+    // snapshot — never queried by key, so jsonb needs no GIN index.
+    deliveredLineIds: jsonb("delivered_line_ids"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    notes: text("notes"),
+    isEscalated: boolean("is_escalated").notNull().default(false),
+
+    // 'system' when written by the reconcile; an email when written by a person.
+    createdBy: varchar("created_by", { length: 120 }),
+    completedBy: varchar("completed_by", { length: 120 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("uq_crm_followups_order").on(t.orderId),
+    index("idx_crm_followups_status").on(t.status),
+    index("idx_crm_followups_due_at").on(t.dueAt),
+    index("idx_crm_followups_crr_customer").on(t.crrCustomerId),
+    index("idx_crm_followups_rating_overall").on(t.ratingOverall),
+    // A follow-up cannot be COMPLETED without a score — the whole point of the
+    // call is the rating, and "done, unrated" would silently poison every
+    // average computed over this table.
+    check(
+      "ck_crm_followups_completed_rating",
+      sql`status <> 'COMPLETED' OR rating_overall IS NOT NULL`,
+    ),
+  ],
+);
+
+// crm_followup_attempts (every call, including the unanswered ones) ----------
+// Without these rows, "no complaints this month" is indistinguishable from
+// "nobody called anyone" — coverage is the honesty metric (§12.7).
+export const crmFollowupAttempts = app.table(
+  "crm_followup_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    followupId: uuid("followup_id")
+      .notNull()
+      .references(() => crmFollowups.id, { onDelete: "cascade" }),
+    attemptedAt: timestamp("attempted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    // 'call' | 'whatsapp' | 'visit' | 'email'
+    channel: varchar("channel", { length: 20 }).notNull(),
+    // 'connected' | 'no_answer' | 'busy' | 'wrong_number' | 'call_back_later'
+    outcome: varchar("outcome", { length: 30 }).notNull(),
+    note: text("note"),
+    createdBy: varchar("created_by", { length: 120 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("idx_crm_followup_attempts_followup").on(t.followupId)],
+);
+
+// crm_issues (a complaint points at a LINE, never at a text box) -------------
+// Because the issue carries order_line_item_id + the denormalized quality and
+// design, defect rate is computable by fabric, design, transport, sales person
+// and month. Issues outlive their follow-up.
+export const crmIssues = app.table(
+  "crm_issues",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    followupId: uuid("followup_id")
+      .notNull()
+      .references(() => crmFollowups.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id"),
+    orderLineItemId: uuid("order_line_item_id").references(
+      () => orderLineItems.id,
+      { onDelete: "set null" },
+    ),
+    // Denormalized so the issue survives a line purge.
+    quality: varchar("quality", { length: 100 }),
+    designNo: varchar("design_no", { length: 100 }),
+    category: varchar("category", { length: 30 }).notNull(),
+    severity: varchar("severity", { length: 10 }).notNull(),
+    // A shortage of 8 m and 800 m are not the same complaint.
+    qtyAffected: numeric("qty_affected", { precision: 10, scale: 2 }),
+    description: text("description"),
+    ownerDept: varchar("owner_dept", { length: 30 }),
+    status: varchar("status", { length: 20 }).notNull().default("OPEN"),
+    resolution: varchar("resolution", { length: 30 }),
+    resolutionNote: text("resolution_note"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: varchar("resolved_by", { length: 120 }),
+    createdBy: varchar("created_by", { length: 120 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("idx_crm_issues_status").on(t.status),
+    index("idx_crm_issues_category").on(t.category),
+    index("idx_crm_issues_owner_dept").on(t.ownerDept),
+    index("idx_crm_issues_order").on(t.orderId),
+    index("idx_crm_issues_followup").on(t.followupId),
+  ],
+);
+
+// crm_settings (single row) --------------------------------------------------
+// workflow_stages is the SLA config for the STAGES; this is the SLA config for
+// the CALL. Seeded by db/seed.ts; edited in Settings.
+export const crmSettings = app.table("crm_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // Days after dispatch before we assume the goods have landed, when no LR is
+  // ticked. Overridable per transport via transport_transit_days.
+  transitDaysDefault: integer("transit_days_default").notNull().default(3),
+  followupDueDays: integer("followup_due_days").notNull().default(2),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  escalateRatingAt: smallint("escalate_rating_at").notNull().default(2),
+  // Pauses the on-read reconcile without deleting anything already created.
+  autoCreateFollowups: boolean("auto_create_followups").notNull().default(true),
+  transportTransitDays: jsonb("transport_transit_days"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // Inferred row types for app use.
 export type User = typeof users.$inferSelect;
 export type CustomerOrder = typeof customerOrders.$inferSelect;
@@ -296,3 +493,7 @@ export type LineStageProgress = typeof lineStageProgress.$inferSelect;
 export type LookupValue = typeof lookupValues.$inferSelect;
 export type DesignDatabaseRow = typeof designDatabase.$inferSelect;
 export type CrrCustomer = typeof crrCustomers.$inferSelect;
+export type CrmFollowup = typeof crmFollowups.$inferSelect;
+export type CrmFollowupAttempt = typeof crmFollowupAttempts.$inferSelect;
+export type CrmIssue = typeof crmIssues.$inferSelect;
+export type CrmSettings = typeof crmSettings.$inferSelect;

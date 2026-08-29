@@ -42,6 +42,7 @@ async function main() {
     const cols = await sql<{ column_name: string }[]>`
       select column_name from information_schema.columns
        where table_schema = ${DEV} and table_name = ${t}
+         and is_generated = 'NEVER'
        order by ordinal_position`;
     if (cols.length === 0) {
       console.log(`  ${t.padEnd(20)} SKIPPED — no such table in ${DEV}`);

@@ -39,7 +39,7 @@ function Wordmark({ tone = "dark" }: { tone?: "dark" | "light" }) {
         <small
           className={
             onDark
-              ? "text-[10.5px] font-medium tracking-[0.14em] text-white/35 uppercase"
+              ? "text-[10.5px] font-medium tracking-[0.14em] text-white/55 uppercase"
               : "text-[10.5px] font-medium tracking-[0.14em] text-ink-muted uppercase"
           }
         >
@@ -106,7 +106,7 @@ export default async function LoginPage({
 
         {/* The message sits on the optical centre, not the geometric one. */}
         <div className="relative -mt-10 max-w-[460px]">
-          <p className="mb-7 text-[10.5px] font-semibold tracking-[0.22em] text-white/30 uppercase">
+          <p className="mb-7 text-[10.5px] font-semibold tracking-[0.22em] text-white/50 uppercase">
             Operations tracking
           </p>
 
@@ -116,7 +116,7 @@ export default async function LoginPage({
             always current.
           </h1>
 
-          <p className="mt-6 max-w-[380px] text-[15px] leading-[1.7] text-white/40">
+          <p className="mt-6 max-w-[380px] text-[15px] leading-[1.7] text-white/65">
             One place to capture an order and follow every design through all
             seven stages.
           </p>
@@ -125,7 +125,7 @@ export default async function LoginPage({
             {POINTS.map((t) => (
               <li
                 key={t}
-                className="flex items-start gap-3 text-[13.5px] leading-[1.5] text-white/50"
+                className="flex items-start gap-3 text-[13.5px] leading-[1.5] text-white/72"
               >
                 <span
                   aria-hidden
@@ -137,7 +137,7 @@ export default async function LoginPage({
           </ul>
         </div>
 
-        <div className="relative flex items-center justify-between font-mono text-[10.5px] tracking-[0.08em] text-white/25">
+        <div className="relative flex items-center justify-between font-mono text-[10.5px] tracking-[0.08em] text-white/45">
           <span>ELDEE GROUP</span>
           <span>v{version}</span>
         </div>
