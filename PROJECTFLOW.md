@@ -213,16 +213,20 @@ LD-Order-Entry/
 │
 ├── components/
 │   ├── app-shell/              sidebar · mobile-nav · header · footer · theme-toggle · mesh · app-shell
-│   ├── orders/                 order-form · orders-dashboard · order-detail · order-designs ·
-│   │                           order-filters · use-lookups
+│   ├── orders/                 order-form · orders-dashboard · orders-screen · order-detail ·
+│   │                           order-designs · order-filters · use-lookups
 │   ├── order-status/           order-status-board · status-drawer · column-picker
+│   │                           ── the TRACKING view, shared by Orders AND Order status:
+│   │                           order-tracker · tracker-detail · stage-cell ·
+│   │                           quality-groups · view-switch · order-status-screen
 │   ├── tracking/               tracking-index · tracking-board
-│   ├── dashboard/              dashboard-view · dashboard-charts
+│   ├── dashboard/              dashboard-view · dashboard-charts · monthly-report · on-time-gauge
 │   ├── trash/                  trash-view
 │   ├── settings/               settings-view · dropdown-master · design-db · time-tracking ·
 │   │                           users-manage · access-control
 │   └── ui/                     button · card · input · label · dialog · badge · status-badge ·
-│                               table · spinner · autocomplete · stat-card · sonner · reveal
+│                               table · spinner · autocomplete · stat-card · sonner · reveal ·
+│                               h-scroll (scrollbar above the header row) · pager (typed page no)
 │
 ├── lib/
 │   ├── db.ts                   The ONLY database connection point — exports `db` and `dbx`
@@ -235,7 +239,11 @@ LD-Order-Entry/
 │   ├── validation.ts           Every zod schema for write payloads
 │   ├── orders.ts               Client-facing order/trash types
 │   ├── order-status.ts         Order Status types + per-stage state derivation
+│   ├── order-status-query.ts   loadOrderStatus — the board/tracker query, out of the route
 │   ├── dashboard.ts            Dashboard payload type + date-range presets
+│   ├── dashboard-query.ts      loadDashboard — shared by the API route AND the page's SSR
+│   ├── monthly-report.ts       Month-by-month totals + first-order / first-use dates
+│   ├── months.ts               Month ↔ date-range helpers for the shared month filter
 │   ├── csv.ts                  Client-side CSV building and download
 │   ├── email.ts                normalizeEmail — applied on every read and write path
 │   ├── utils.ts                cn()
@@ -739,8 +747,24 @@ cannot see Settings at all.
 
 ### 10.1 Login
 
-`app/(auth)/login/` — a split-screen design: a fixed dark brand panel on desktop
-beside a theme-aware form panel.
+`app/(auth)/login/` — a split-screen design: a brand panel that stays **dark in
+both themes** (it is the near-black the app shell uses, so signing in previews
+the product) beside a theme-aware form panel.
+
+**Restraint is the spec.** The brand panel carries exactly three decoration
+layers — one smooth vertical ground, one large soft light low on the panel, one
+hairline seam. A 45° crosshatch "weave" texture and a second competing glow were
+both tried and **reverted**: at real screen sizes the crosshatch read as
+scratchy moiré and two glows read as a gradient demo. Likewise a row of seven
+stage chips, which wrapped onto a second line and left connector dashes dangling
+off each row; three plain product statements replaced them. The form column is
+capped at **380px with no card, border or shadow** — whitespace frames it.
+
+Dark-mode inputs are deliberately **sunken** here (`dark:bg-[#0e1014]` against
+the panel's `surface` `#16181c`) rather than the global `surface-2` `#1d2025`,
+which is *lighter* than the surface behind it. A raised field on a dark canvas
+is the generic-dark-mode tell. Scoped with `dark:` variants, so the app's own
+tokens are untouched.
 
 - `page.tsx` (server) redirects if already signed in, sanitises `callbackUrl`,
   and computes `googleEnabled`.
@@ -751,8 +775,15 @@ beside a theme-aware form panel.
 
 ### 10.2 Dashboard (`/`)
 
-`components/dashboard/dashboard-view.tsx` + `dashboard-charts.tsx`, fed by
-`GET /api/dashboard`.
+`components/dashboard/dashboard-view.tsx` + `dashboard-charts.tsx`.
+
+The aggregation lives in `lib/dashboard-query.ts` (`loadDashboard`), shared by
+`GET /api/dashboard` **and** by the page itself: `app/(app)/page.tsx` calls it
+during SSR and hands the result to the client query as `initialData`, so the
+first paint carries numbers instead of skeletons. As a client-only query the
+request could not start until ~300 kB of route JS had downloaded and hydrated.
+Recharts is now loaded with `next/dynamic`, and `OnTimeGauge` — raw SVG, no
+charting library — sits in its own file so it stays out of that chunk.
 
 Filters: a date-range preset (Today / 7d / 30d / This month / Custom) and a
 department filter (ALL / LD / LINKD).
@@ -817,7 +848,15 @@ Behaviours:
 
 ### 10.4 Orders list (`/orders`)
 
-`components/orders/orders-dashboard.tsx` (~1,050 lines).
+`components/orders/orders-screen.tsx` chooses between two views, remembered per
+user in `localStorage`:
+
+- **Tracking** (the default) — the shared order-tracking view described in
+  §10.6a. Someone asking "where is 1135?" should not have to know which screen
+  carries the answer, so it is offered on both.
+- **Orders** — the classic table below, unchanged, one click away.
+
+`components/orders/orders-dashboard.tsx` (~1,050 lines) is that table.
 
 - The list **fetches the entire matching set** with `all=1` (capped at 5,000)
   and paginates client-side. This is what makes the five KPI cards accurate
@@ -871,8 +910,18 @@ All of it in a single transaction.
 
 ### 10.6 Order status (`/order-status`)
 
-`components/order-status/` — a **read-only** board grouped by order, with
-`aggregateOrderGroups` doing the grouping client-side.
+`components/order-status/order-status-screen.tsx` offers the same two views as
+Orders, defaulting to **Tracking** (§10.6a). The classic **Board** below is one
+click away, and a deep link carrying a board filter (`?overall=`, `?stage=`,
+`?cancelled=1`, from the Dashboard KPIs) forces the Board, because that is what
+those links mean.
+
+`components/order-status/order-status-board.tsx` — a **read-only** board grouped
+by order. The grouping, the KPI counts, the overall/stage/cancelled refinement
+and the pagination all happen **server-side** now (`lib/order-status-query.ts`),
+using the same `aggregateOrderGroups` the client used to call. It previously
+requested every line with `all=1` and rolled ~4,100 of them up in the browser —
+a 5 MB response on every filter change, against ~500 KB for a page of 20 orders.
 
 - Rows expand to show the individual design lines.
 - Cancelled child rows are struck through; fully-cancelled parents are tagged
@@ -893,6 +942,44 @@ All of it in a single transaction.
 - A fully-cancelled group has `currentStageKey = null`, so it never leaks into
   the "At stage" filter.
 - The detail drawer (`status-drawer.tsx`) and CSV export stay line-level.
+
+### 10.6a The order tracking view (Orders **and** Order status)
+
+`components/order-status/order-tracker.tsx`, with `tracker-detail`,
+`stage-cell` and `quality-groups`. Built from operator feedback: searching an
+order returned one row per design, dispatch state needed a click per quality,
+and the quality name scrolled out of sight.
+
+- **Grouped by QUALITY, not by design.** Order 1135's 34 designs become 4 rows —
+  BARCODE - C-2, CORDRAY IMP, SUNRISE-2, CEBU 11059-B. Rows are collapsed by
+  default; the chevron opens one row per colour.
+- **A column per stage** (Entry · Stock · Rolling · Challan · Bill · Dispatch ·
+  LR), each cell showing how many of that quality's designs are through it
+  (`3/8`, or a tick when all are). Fixed-width and centred so the counts line up
+  down the page.
+- **Status is text, never a row background.** Green = every stage of every
+  design done, orange = something started, red = nothing started, grey = all
+  cancelled (`toneOfLines`), carried by the order no, party, quality, design and
+  mtr plus a plain-words Status column. Row *backgrounds* were tried and
+  reverted: with 42 not-started and 355 in-progress rows the screen became a
+  wall of red. The status key doubles as a filter.
+- **Order no / Party / Quality are pinned** while everything else scrolls
+  sideways.
+- **The detail panel is a floating window**, not a second column: 520px,
+  `position: fixed`, opened by clicking a row, draggable by its title bar
+  (double-click resets), closed with ✕ or Esc. The table keeps the full width
+  and whatever the panel covers stays reachable by scrolling.
+- It shows a two-up facts grid, then the **seven stages as a timeline** with
+  each stage's due date and, once done, the date and time it completed plus how
+  late it ran — `StageCell` gained `plannedAt` / `delayMinutes` for this; both
+  were already computed in `computeStages` but only reached the single-line
+  detail endpoint. Then whole-order totals, then the colour chips.
+- **Previous / Next** walk every design in display order; ← → and Enter do the
+  same (Shift+Enter goes back). Moving opens that quality, collapses the one you
+  left, and scrolls the row into view, so the table always agrees with the panel.
+- **"Colour" here means `design_no`.** This app has no colour field and
+  `remarks` is empty on every line, so the chips show design/matching numbers —
+  the same values the old AppSheet showed under DSGN-MATCHING.
 
 ### 10.7 Operations tracking (`/tracking`, `/tracking/:id`)
 
@@ -1130,14 +1217,15 @@ string, so TanStack Query and every mutation surface a clean message.
 
 | Method & path | Guard | Purpose |
 |---|---|---|
-| `GET /api/order-status` | `orders.view` | Line-level rows with per-stage state for the board. |
+| `GET /api/order-status` | `orders.view` | **One row per ORDER**, grouped, refined and paginated server-side (`lib/order-status-query.ts`). Each group carries its design lines with per-stage state, so expanding a row and the CSV export need no second request. Params: `search`, `party`, `fabric`, `overall`, `stage`, `cancelled=1`, `order_no`, `challan_no`, `lot_no`, `haste`, `from`, `to`, `page`, `all=1`. `overall`/`stage`/`cancelled` refine at ORDER level. |
 | `GET /api/order-status/:id` | `orders.view` | Detail for the drawer. |
 
 ### Dashboard, trash, health
 
 | Method & path | Guard | Purpose |
 |---|---|---|
-| `GET /api/dashboard` | any role | All dashboard aggregates, server-computed. |
+| `GET /api/dashboard` | any role | All dashboard aggregates, server-computed (`lib/dashboard-query.ts`). The Dashboard page also calls `loadDashboard` directly during SSR and hands the result to the client query as `initialData`, so the first paint carries numbers. |
+| `GET /api/reports/monthly` | any role | Month-by-month totals for the Dashboard's monthly report and the shared month filter, plus the oldest order date and the date the system was first used. |
 | `GET /api/trash` | `orders.edit` | Deleted orders + deleted designs. |
 | `GET /api/health` | **public** | Liveness probe: `{ ok, version, counts }`. `dynamic = "force-dynamic"`. |
 
@@ -1325,8 +1413,15 @@ variant maps Tailwind's `dark:` to it:
 | Shadow | `--shadow-sm/md/lg` |
 
 **Always prefer `text-ink` over a literal `black`** — that is what makes dark
-mode work without per-component overrides. `.num` applies JetBrains Mono with
-tabular figures for aligned numeric columns.
+mode work without per-component overrides.
+
+`.num` marks figures in data tables. It used to force **JetBrains Mono**:
+perfectly aligned, but it read as *code* on screens that are mostly money and
+quantities. It now uses the **platform UI sans with tabular figures**. It cannot
+simply inherit General Sans — that face has proportional digits ("1" is 306
+units against "8" at 593) and no `tnum` feature, so a rupee column would stagger
+row to row. Verified on Windows: Segoe UI and Arial both report `tnum` and
+equal-width digits; the same holds for SF Pro and Roboto.
 
 ### Stage colours
 
@@ -1399,8 +1494,20 @@ over a plain TCP socket, so that entire failure mode no longer exists and the
 
 - No raw SQL in application code, except narrow tagged `sql` fragments for
   aggregates such as `count(*) filter (where …)`.
-- Independent queries run concurrently with `Promise.all` — the orders list
-  fires its count, its page, and its cancellation aggregate in one round trip.
+- **Never put more queries in flight than the pool has connections** (`max: 5`).
+  Independent queries may run concurrently with `Promise.all`, but only in
+  waves that fit inside the pool — the orders list fires its count, its page and
+  its cancellation aggregate together (three), and `lib/dashboard-query.ts`
+  deliberately splits eleven queries into three waves of four or fewer.
+  Exceeding the pool does **not** simply queue: through Supavisor the surplus
+  waits on connections the pooler has already rotated and the request stalls for
+  minutes, or dies with `CONNECTION_CLOSED` / `canceling statement due to
+  statement timeout`. See §23.15 — this took the Dashboard down.
+- **Aggregate in SQL, not in JavaScript.** Every row returned crosses a network
+  whose latency dwarfs the query's own execution time. `/api/dashboard` once
+  pulled ~13,000 rows per load to render seven bars and a ten-row list; it now
+  returns ~180. `/api/orders` reduced ~29,000 stage rows to 4,130 by counting
+  in Postgres (`count(*) filter (…)`, `bool_or(…)`) instead of in a `Map`.
 - N+1 is avoided by fetching children with `inArray(...)` and grouping into
   `Map`s in memory.
 - `and()` drops `undefined` operands and returns `undefined` if none remain,
@@ -1586,6 +1693,17 @@ npx tsx verify-p2.ts        # dev server must already be running
 
 ---
 
+### `db/clone-to-dev.ts` — give local dev something to render
+
+`ld_order_entry_dev` starts empty, so `npm run dev` renders a blank app and
+every screen looks broken. This copies the live order book into the dev schema:
+it reads production, writes **only** into the dev schema, refuses to run when
+`DB_SCHEMA` is production, and is re-runnable (`ON CONFLICT DO NOTHING`).
+
+```bash
+npx tsx db/clone-to-dev.ts
+```
+
 ## 23. Known constraints and gotchas
 
 1. **Access changes apply on next login.** Capabilities are resolved into the
@@ -1612,7 +1730,16 @@ npx tsx verify-p2.ts        # dev server must already be running
 13. **Moving data between major Postgres versions needs care.** Neon ran 18.4 and
     Supabase runs 17.6; Postgres restores forwards only, so `pg_dump` was
     unusable and the rows were moved with `db/copy-to-supabase.ts` instead.
-14. **postgres.js re-serialises parameters using the type the server infers.**
+15. **The connection pool is a hard ceiling on concurrency, not a queue.**
+    `lib/db.ts` caps postgres.js at `max: 5`. Issuing more than five queries at
+    once through Supavisor's transaction pooler makes the request hang for
+    minutes or fail with `CONNECTION_CLOSED`. Reproduced against the live
+    pooler: the first call in a warm process succeeds and the next one hangs —
+    exactly how a warm serverless instance behaves. The pool is a **single
+    shared instance**, so one endpoint wedging it stalls every other screen in
+    that process; a slow Dashboard presented as a slow Orders, Order status and
+    Operations. Fan out in waves of ≤4.
+16. **postgres.js re-serialises parameters using the type the server infers.**
     Binding a text value to a `boolean` column silently stores FALSE, and to a
     `timestamptz` column truncates microseconds — with no error either time. The
     copy script therefore binds every value as `$n::text::<type>`.
@@ -1676,6 +1803,55 @@ it. Neon was never written to at any point and remains a complete backup.
 and a deploy triggered *before* the new code was pushed, so the old Neon driver
 went live pointed at a Supabase URL and the site returned 500s until the correct
 code was pushed. Environment variables and code must land together.
+
+---
+
+## 26. The performance work (2026-08-19)
+
+Recorded because the cause was nothing like the symptom.
+
+**The complaint was "the Dashboard is slow".** Every other screen was slow too —
+Orders, Order status and Operations all sat on "Loading…". Measured against the
+live database, the queries were not the problem: the heaviest ran in 40 ms and
+all of them together came to ~150 ms.
+
+**The cause was the connection pool.** `/api/dashboard` fired 14 queries in one
+`Promise.all` against a pool capped at `max: 5`. Through Supavisor's transaction
+pooler the surplus does not queue politely — it waits on connections the pooler
+has already rotated, and the request stalls for minutes or dies with
+`CONNECTION_CLOSED` / `canceling statement due to statement timeout`. The
+reproduction is stark: the **first** call in a warm process returns in 150 ms and
+the **next one hangs** — precisely how a warm serverless instance behaves.
+
+`lib/db.ts` exports a **single shared pool**, so one endpoint wedging it stalls
+every request in that process. That is why a slow Dashboard presented as a slow
+everything. The fix is a discipline, not a setting: fan out in waves of ≤4.
+
+**Three other things were wrong, and each was worth fixing on its own.**
+
+1. **Aggregating in JavaScript.** `/api/dashboard` pulled ~13,000 rows per load
+   — one per line item, plus one per overdue stage — to render seven bars and a
+   ten-row list. `/api/orders` pulled ~29,000 stage rows purely to count them.
+   Both now reduce in SQL: ~180 rows and 4,130 rows respectively.
+2. **A client-only fetch.** The Dashboard could not start its request until
+   ~300 kB of route JS had downloaded and hydrated. It is now prefetched during
+   SSR and handed to the client query as `initialData`; Recharts moved behind
+   `next/dynamic`, taking the route from 300 kB to 186 kB.
+3. **Grouping in the browser.** The Order status board asked for every line with
+   `all=1` and rolled ~4,100 of them up on each filter change — a 5 MB response,
+   against ~500 KB for a page of 20 orders once the grouping moved server-side.
+
+**Every change was checked for parity before it shipped**, by running the old
+and new code against production data and diffing the payloads: the Dashboard
+across six filter combinations, all 4,130 line statuses, and the Order status
+board across eleven filter combinations. Optimisations that quietly change
+numbers are worse than slow ones.
+
+**Still open:** the production `X-Vercel-Id` header reports the function
+executing in `iad1` (Washington DC) while the database is in `ap-south-1`
+(Mumbai). If that is right, every query crosses the planet and back, on top of
+everything above. Moving the function region to `bom1` is a small config change
+with a potentially large effect — untested, and it is a deployment decision.
 
 ---
 
