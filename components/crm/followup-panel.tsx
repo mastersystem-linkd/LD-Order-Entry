@@ -182,6 +182,7 @@ function Stage({
   done,
   open,
   disabled,
+  last,
   onToggle,
   children,
 }: {
@@ -192,27 +193,42 @@ function Stage({
   done?: boolean;
   open: boolean;
   disabled?: boolean;
+  /** The last stage draws no connecting rail below it. */
+  last?: boolean;
   onToggle: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-b border-line last:border-b-0">
+    <section className="relative">
+      {/* The rail. Five rows with numbers on them are a list; five rows joined
+          by a line are a process, and a coordinator should see at a glance
+          that this is one job with an order to it. */}
+      {!last ? (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute top-[38px] bottom-0 left-[30px] w-px",
+            done ? "bg-success/35" : "bg-line",
+          )}
+        />
+      ) : null}
+
       <button
         type="button"
         onClick={onToggle}
         disabled={disabled}
         aria-expanded={open}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-3 px-5 py-3 text-left transition-colors",
-          open ? "bg-accent-soft/60" : "hover:bg-surface-2",
+          "relative flex w-full cursor-pointer items-center gap-3 py-3 pr-4 pl-4 text-left transition-colors",
+          open ? "bg-accent-soft/50" : "hover:bg-surface-2",
           disabled && "cursor-not-allowed opacity-45",
         )}
       >
         <span
           className={cn(
-            "grid size-[22px] shrink-0 place-items-center rounded-md text-[11px] font-bold",
+            "z-10 grid size-[26px] shrink-0 place-items-center rounded-full text-[11.5px] font-bold ring-4 ring-surface transition-colors",
             done
-              ? "bg-success/15 text-success"
+              ? "bg-success text-white"
               : open
                 ? "bg-accent text-white"
                 : "bg-inset text-ink-soft",
@@ -221,17 +237,31 @@ function Stage({
           {done ? <CheckIcon className="size-3.5" /> : n}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[13.5px] font-semibold text-ink">{title}</span>
-          <span className="block truncate text-[12px] text-ink-soft">{summary}</span>
+          <span className="block text-[13.5px] leading-tight font-semibold text-ink">
+            {title}
+          </span>
+          <span
+            className={cn(
+              "mt-0.5 block truncate text-[12px]",
+              done ? "text-ink-soft" : "text-ink-soft/85",
+            )}
+          >
+            {summary}
+          </span>
         </span>
         <ChevronDownIcon
           className={cn(
-            "size-4 shrink-0 text-ink-soft transition-transform",
+            "size-4 shrink-0 text-ink-soft transition-transform duration-200",
             open && "rotate-180",
           )}
         />
       </button>
-      {open ? <div className="px-5 pt-1 pb-4">{children}</div> : null}
+
+      {/* Content sits under the rail, indented to the badge, so an open stage
+          is visibly PART of the step rather than a panel that replaced it. */}
+      {open ? (
+        <div className="relative pt-1 pr-4 pb-5 pl-[54px]">{children}</div>
+      ) : null}
     </section>
   );
 }
@@ -612,7 +642,7 @@ export function FollowupPanel({
         // before and during the call; right is what they FILL IN. Stacked
         // single-column below lg, which is what a phone gets.
         <div className="grid items-start lg:grid-cols-2 lg:divide-x lg:divide-line">
-          <div className="min-w-0">
+          <div className="min-w-0 bg-surface-2/40">
           <Section n={1} title="Context">
             <div className="grid grid-cols-2 gap-x-5 gap-y-3.5">
               <Fact k="Order no" v={<span className="num">{d.order.orderNo}</span>} />
@@ -639,7 +669,14 @@ export function FollowupPanel({
                 }
               />
               <Fact k="Sales person" v={d.order.salesPerson || "—"} />
-              <Fact k="Transport" v={d.order.transport || "—"} />
+              <Fact
+                k="Transport"
+                v={
+                  d.order.transport || (
+                    <span className="font-normal text-ink-soft">not recorded</span>
+                  )
+                }
+              />
               <Fact
                 wide
                 k="Qualities · designs"
@@ -773,7 +810,7 @@ export function FollowupPanel({
           {/* The five stages. One open at a time, each showing what it holds
               when closed, so progress through the call is visible without
               every control being on screen at once. */}
-          <div className="min-w-0 border-t border-line lg:border-t-0 lg:border-l">
+          <div className="min-w-0 border-t border-line py-1 lg:border-t-0 lg:border-l">
           {isUnreachable ? (
             <div className="border-b border-line bg-warning/8 px-5 py-4">
               <div className="flex items-start gap-2.5">
@@ -803,7 +840,7 @@ export function FollowupPanel({
 
           <Stage
             n={1}
-            title="Log attempt"
+            title="Did you reach them?"
             done={d.attempts.length > 0}
             open={stage === 1}
             onToggle={() => setStage(stage === 1 ? null : 1)}
@@ -917,7 +954,7 @@ export function FollowupPanel({
 
           <Stage
             n={2}
-            title="The call"
+            title="How was the delivery?"
             done={draft.customerSaysOnTime !== null}
             open={stage === 2}
             disabled={isUnreachable}
@@ -996,7 +1033,7 @@ export function FollowupPanel({
               column and the API already had and nothing ever offered. */}
           <Stage
             n={3}
-            title="Feedback"
+            title="Anything else they said?"
             done={!!draft.notes.trim()}
             open={stage === 3}
             disabled={isUnreachable}
@@ -1021,7 +1058,7 @@ export function FollowupPanel({
 
           <Stage
             n={4}
-            title="Ratings"
+            title="How do they rate us?"
             done={draft.overall !== null}
             open={stage === 4}
             disabled={isUnreachable}
@@ -1140,7 +1177,8 @@ export function FollowupPanel({
 
           <Stage
             n={5}
-            title="Next requirement"
+            last
+            title="Will they order again?"
             done={draft.reorder !== "none"}
             open={stage === 5}
             disabled={isUnreachable}
