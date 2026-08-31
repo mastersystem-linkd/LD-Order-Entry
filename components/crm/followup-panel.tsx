@@ -4,6 +4,7 @@ import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
+  ChevronDownIcon,
   PhoneOffIcon,
   RotateCcwIcon,
   CheckIcon,
@@ -60,6 +61,7 @@ type Detail = {
     ratingSource: string | null;
     reorderIntent: string;
     reorderNote: string | null;
+    notes: string | null;
     contactPerson: string | null;
     contactPhone: string | null;
     systemOnTime: boolean | null;
@@ -165,6 +167,75 @@ function Section({
   );
 }
 
+/**
+ * One step of the call, collapsed to a summary row until it is opened.
+ *
+ * The panel used to render all five steps at once, which put a whole
+ * conversation's worth of controls on screen and made the shortest step look
+ * as heavy as the longest. As stages, a coordinator sees PROGRESS at a glance
+ * — what is done, what is left — and works one thing at a time.
+ */
+function Stage({
+  n,
+  title,
+  summary,
+  done,
+  open,
+  disabled,
+  onToggle,
+  children,
+}: {
+  n: number;
+  title: string;
+  /** What this step currently holds, shown when it is closed. */
+  summary: React.ReactNode;
+  done?: boolean;
+  open: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border-b border-line last:border-b-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={disabled}
+        aria-expanded={open}
+        className={cn(
+          "flex w-full cursor-pointer items-center gap-3 px-5 py-3 text-left transition-colors",
+          open ? "bg-accent-soft/60" : "hover:bg-surface-2",
+          disabled && "cursor-not-allowed opacity-45",
+        )}
+      >
+        <span
+          className={cn(
+            "grid size-[22px] shrink-0 place-items-center rounded-md text-[11px] font-bold",
+            done
+              ? "bg-success/15 text-success"
+              : open
+                ? "bg-accent text-white"
+                : "bg-inset text-ink-soft",
+          )}
+        >
+          {done ? <CheckIcon className="size-3.5" /> : n}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13.5px] font-semibold text-ink">{title}</span>
+          <span className="block truncate text-[12px] text-ink-soft">{summary}</span>
+        </span>
+        <ChevronDownIcon
+          className={cn(
+            "size-4 shrink-0 text-ink-soft transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open ? <div className="px-5 pt-1 pb-4">{children}</div> : null}
+    </section>
+  );
+}
+
 function Fact({ k, v, wide }: { k: string; v: React.ReactNode; wide?: boolean }) {
   return (
     <div className={cn(wide && "col-span-2")}>
@@ -259,6 +330,8 @@ export function FollowupPanel({
     source: "customer" | "coordinator";
     reorder: ReorderIntent;
     reorderNote: string;
+    /** Free text for whatever the fixed fields do not cover (§12). */
+    notes: string;
     contactPerson: string;
     contactPhone: string;
   } | null>(null);
@@ -280,6 +353,7 @@ export function FollowupPanel({
       source: (f.ratingSource as "customer" | "coordinator") ?? "coordinator",
       reorder: (f.reorderIntent as ReorderIntent) ?? "none",
       reorderNote: f.reorderNote ?? "",
+      notes: f.notes ?? "",
       contactPerson: f.contactPerson ?? "",
       contactPhone: f.contactPhone ?? "",
     });
@@ -292,6 +366,7 @@ export function FollowupPanel({
         delayReason: f.delayReason,
         reorder: f.reorderIntent ?? "none",
         reorderNote: f.reorderNote ?? "",
+        notes: f.notes ?? "",
         contactPerson: f.contactPerson ?? "",
         contactPhone: f.contactPhone ?? "",
       }),
@@ -316,6 +391,12 @@ export function FollowupPanel({
     // override the moment it was set.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subsKey]);
+
+  const [stage, setStage] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!d || stage !== null) return;
+    setStage(d.attempts.length === 0 ? 1 : d.followup.ratingOverall === null ? 4 : null);
+  }, [d, stage]);
 
   const [channel, setChannel] = React.useState<AttemptChannel>("call");
   const [outcome, setOutcome] = React.useState<AttemptOutcome>("connected");
@@ -389,6 +470,7 @@ export function FollowupPanel({
         rating_source: draft?.source,
         reorder_intent: draft?.reorder,
         reorder_note: draft?.reorderNote || null,
+        notes: draft?.notes || null,
         contact_person: draft?.contactPerson || null,
         contact_phone: draft?.contactPhone || null,
       }),
@@ -411,6 +493,7 @@ export function FollowupPanel({
         delayReason: draft.delayReason,
         reorder: draft.reorder,
         reorderNote: draft.reorderNote,
+        notes: draft.notes,
         contactPerson: draft.contactPerson,
         contactPhone: draft.contactPhone,
       })
@@ -685,8 +768,51 @@ export function FollowupPanel({
               ) : null}
             </div>
           </Section>
+          </div>
 
-          <Section n={3} title="Log attempt" aside={`${d.attempts.length} logged`}>
+          {/* The five stages. One open at a time, each showing what it holds
+              when closed, so progress through the call is visible without
+              every control being on screen at once. */}
+          <div className="min-w-0 border-t border-line lg:border-t-0 lg:border-l">
+          {isUnreachable ? (
+            <div className="border-b border-line bg-warning/8 px-5 py-4">
+              <div className="flex items-start gap-2.5">
+                <PhoneOffIcon className="mt-0.5 size-4 shrink-0 text-warning" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-ink">
+                    Marked unreachable
+                  </div>
+                  <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
+                    No conversation happened, so there is nothing to answer,
+                    rate or promise. Anything already recorded is kept. Reopen
+                    if they call back.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2.5"
+                    disabled={!canEdit || busy}
+                    onClick={() => save.mutate("IN_PROGRESS")}
+                  >
+                    <RotateCcwIcon /> Reopen follow-up
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <Stage
+            n={1}
+            title="Log attempt"
+            done={d.attempts.length > 0}
+            open={stage === 1}
+            onToggle={() => setStage(stage === 1 ? null : 1)}
+            summary={
+              d.attempts.length === 0
+                ? "Nothing logged yet"
+                : `${d.attempts.length} logged · ${OUTCOME_LABEL[d.attempts[0].outcome as AttemptOutcome] ?? d.attempts[0].outcome}`
+            }
+          >
             <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface-2 p-2">
               <Segmented
                 size="sm"
@@ -787,37 +913,23 @@ export function FollowupPanel({
                 </Button>
               </div>
             ) : null}
-          </Section>
-          </div>
+          </Stage>
 
-          <div className="min-w-0 border-t border-line lg:border-t-0">
-          {isUnreachable ? (
-            <div className="border-b border-line bg-warning/8 px-5 py-4">
-              <div className="flex items-start gap-2.5">
-                <PhoneOffIcon className="mt-0.5 size-4 shrink-0 text-warning" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-ink">
-                    Marked unreachable
-                  </div>
-                  <p className="mt-1 text-[12.5px] leading-relaxed text-ink-soft">
-                    No conversation happened, so there is nothing to answer,
-                    rate or promise — the steps below are closed. Anything
-                    already recorded is kept. Reopen if they call back.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2.5"
-                    disabled={!canEdit || busy}
-                    onClick={() => save.mutate("IN_PROGRESS")}
-                  >
-                    <RotateCcwIcon /> Reopen follow-up
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <Section n={4} title="The call" muted={isUnreachable}>
+          <Stage
+            n={2}
+            title="The call"
+            done={draft.customerSaysOnTime !== null}
+            open={stage === 2}
+            disabled={isUnreachable}
+            onToggle={() => setStage(stage === 2 ? null : 2)}
+            summary={
+              draft.customerSaysOnTime === null
+                ? "On-time question not answered"
+                : draft.customerSaysOnTime
+                  ? `They said it arrived on time${d.issues.length ? ` · ${d.issues.length} issue${d.issues.length === 1 ? "" : "s"}` : ""}`
+                  : `They said it was late${d.issues.length ? ` · ${d.issues.length} issue${d.issues.length === 1 ? "" : "s"}` : ""}`
+            }
+          >
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-3 rounded-field bg-surface-2 px-3 py-2.5">
                 <span className="text-[12.5px] font-medium text-ink">
@@ -875,14 +987,54 @@ export function FollowupPanel({
                 onSaved();
               }}
             />
-          </Section>
+          </Stage>
 
-          <Section
-            n={5}
-            title="Ratings"
-            aside="press 1–5 with a row focused"
-            muted={isUnreachable}
+          {/* NEW. The fixed fields cannot anticipate everything a customer
+              says, and without somewhere to put the rest it goes unrecorded.
+              Optional by design — it must never stand between a coordinator
+              and finishing the call. Writes crm_followups.notes, which the
+              column and the API already had and nothing ever offered. */}
+          <Stage
+            n={3}
+            title="Feedback"
+            done={!!draft.notes.trim()}
+            open={stage === 3}
+            disabled={isUnreachable}
+            onToggle={() => setStage(stage === 3 ? null : 3)}
+            summary={
+              draft.notes.trim()
+                ? draft.notes.trim()
+                : "Optional — anything else they said"
+            }
           >
+            <textarea
+              rows={4}
+              value={draft.notes}
+              onChange={(e) => set("notes", e.target.value)}
+              placeholder="In their own words — what they praised, what annoyed them, anything the questions above did not cover."
+              className="w-full resize-y rounded-field border border-line bg-surface px-3 py-2 text-[12.5px] leading-relaxed text-ink outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]"
+            />
+            <p className="mt-1.5 text-[12px] text-ink-soft">
+              Saved with the follow-up and shown on the customer&rsquo;s history.
+            </p>
+          </Stage>
+
+          <Stage
+            n={4}
+            title="Ratings"
+            done={draft.overall !== null}
+            open={stage === 4}
+            disabled={isUnreachable}
+            onToggle={() => setStage(stage === 4 ? null : 4)}
+            summary={
+              draft.overall === null
+                ? `Not rated — ${d.criteria.length} criteria`
+                : `${exact !== null ? exact.toFixed(1) : draft.overall} out of 5 · ${Object.keys(draft.ratings).length} of ${d.criteria.length} scored`
+            }
+          >
+            <p className="mb-2 text-[12px] text-ink-soft">
+              Press 1&ndash;5 with a row focused.
+            </p>
             {d.criteria.length === 0 ? (
               <p className="py-2 text-[12.5px] text-ink-soft">
                 No rating criteria are configured. An admin can add them in
@@ -984,9 +1136,25 @@ export function FollowupPanel({
                 </Know>
               </div>
             ) : null}
-          </Section>
+          </Stage>
 
-          <Section n={6} title="Next requirement" muted={isUnreachable}>
+          <Stage
+            n={5}
+            title="Next requirement"
+            done={draft.reorder !== "none"}
+            open={stage === 5}
+            disabled={isUnreachable}
+            onToggle={() => setStage(stage === 5 ? null : 5)}
+            summary={
+              draft.reorder === "none"
+                ? "Nothing recorded"
+                : draft.reorder === "sample_requested"
+                  ? "Asked for a sample"
+                  : draft.reorder === "yes"
+                    ? "Buying again"
+                    : "Maybe buying again"
+            }
+          >
             {/* The commercial half of the call. A post-delivery conversation
                 reaches a customer at their warmest all quarter, so this is not
                 an afterthought — it is the line that pays for the call. */}
@@ -1019,7 +1187,7 @@ export function FollowupPanel({
                 </p>
               </>
             ) : null}
-          </Section>
+          </Stage>
           </div>
         </div>
       )}
