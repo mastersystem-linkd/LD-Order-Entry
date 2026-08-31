@@ -307,15 +307,25 @@ function Field({
   label,
   hint,
   wide,
+  span2,
   children,
 }: {
   label: string;
   hint?: string;
+  /** Full width of the row. */
   wide?: boolean;
+  /** Two columns — for the selects holding the longest values. */
+  span2?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("min-w-0", wide && "sm:col-span-2")}>
+    <div
+      className={cn(
+        "min-w-0",
+        wide && "sm:col-span-2 xl:col-span-3",
+        span2 && !wide && "xl:col-span-2",
+      )}
+    >
       <div className="mb-1 flex items-baseline gap-1.5">
         <span className="text-[11.5px] font-semibold tracking-[0.05em] text-ink uppercase">
           {label}
@@ -641,7 +651,7 @@ export function FollowupPanel({
         // Two columns once there is room. Left is what the coordinator READS
         // before and during the call; right is what they FILL IN. Stacked
         // single-column below lg, which is what a phone gets.
-        <div className="grid items-start lg:grid-cols-2 lg:divide-x lg:divide-line">
+        <div className="grid items-start lg:grid-cols-[336px_1fr] lg:divide-x lg:divide-line">
           <div className="min-w-0 bg-surface-2/40">
           <Section n={1} title="Context">
             <div className="grid grid-cols-2 gap-x-5 gap-y-3.5">
@@ -1358,7 +1368,7 @@ function IssueList({
             New issue
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="grid gap-x-3 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
             <Field label="What went wrong">
               <select
                 className={cn(selectCls, "w-full")}
@@ -1378,7 +1388,7 @@ function IssueList({
               </select>
             </Field>
 
-            <Field label="Which design">
+            <Field label="Which design" span2>
               <select
                 className={cn(selectCls, "w-full")}
                 value={lineId}
@@ -1439,7 +1449,7 @@ function IssueList({
               </select>
             </Field>
 
-            <Field label="Meters affected" hint="optional">
+            <Field label="Meters" hint="optional">
               <Input
                 className="h-8 w-full text-[12.5px]"
                 value={qty}
@@ -1449,7 +1459,7 @@ function IssueList({
               />
             </Field>
 
-            <Field label="What exactly happened" hint="optional" wide>
+            <Field label="What happened" hint="optional" wide>
               <Input
                 className="h-8 w-full text-[12.5px]"
                 value={desc}
