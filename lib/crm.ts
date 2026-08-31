@@ -499,3 +499,81 @@ export type FollowupList = {
   /** How many rows the reconcile created on this request (§12.9). */
   created: number;
 };
+
+// ---------------------------------------------------------------------------
+// Customers (§12.5.4, OE-P18)
+// ---------------------------------------------------------------------------
+
+/**
+ * A customer roll-up row. This is a VIEW over orders, follow-ups and issues —
+ * never a second customer master, and `name` is always a party name exactly as
+ * an operator typed it.
+ */
+export type CustomerRow = {
+  /** Grouping key: the CRR id when we have one, else the raw party name. */
+  key: string;
+  name: string;
+  /** Null when no order of this customer's has been resolved to CRR. */
+  crrCustomerId: number | null;
+  /** Other spellings folded into this row (only ever when crrCustomerId is set). */
+  aliases: string[];
+  orders12m: number;
+  value12m: string;
+  ordersAll: number;
+  /** Null until somebody has actually rated a delivered order. */
+  avgRating: number | null;
+  ratedCount: number;
+  /** Recent mean minus older mean; null when there is too little to compare. */
+  ratingTrend: number | null;
+  openIssues: number;
+  totalIssues: number;
+  lastContacted: string | null;
+  lastOrderDate: string | null;
+  reorderIntent: ReorderIntent | null;
+  followupsDue: number;
+};
+
+export type CustomerSort = "value" | "rating" | "issues" | "orders" | "name";
+
+export type CustomerList = {
+  rows: CustomerRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  kpis: {
+    customers: number;
+    linked: number;
+    unlinked: number;
+    rated: number;
+    atRisk: number;
+  };
+};
+
+/**
+ * The commercial read on a customer, in priority order. Deliberately returns
+ * exactly one label: a row with a bad rating AND a reorder ask is an at-risk
+ * customer first — chasing the reorder before fixing the complaint is how an
+ * account is lost.
+ */
+export type CustomerSignal = "at_risk" | "unhappy" | "reorder" | "sample" | "none";
+
+export function customerSignal(r: {
+  avgRating: number | null;
+  openIssues: number;
+  reorderIntent: ReorderIntent | null;
+}): CustomerSignal {
+  if (r.openIssues > 0 && r.avgRating !== null && r.avgRating <= 3) return "at_risk";
+  if (r.openIssues > 0) return "unhappy";
+  if (r.avgRating !== null && r.avgRating <= 2) return "at_risk";
+  if (r.reorderIntent === "sample_requested") return "sample";
+  if (r.reorderIntent === "yes" || r.reorderIntent === "maybe") return "reorder";
+  return "none";
+}
+
+export const CUSTOMER_SIGNAL_LABEL: Record<CustomerSignal, string> = {
+  at_risk: "At risk",
+  unhappy: "Open complaint",
+  reorder: "Reorder",
+  sample: "Sample asked",
+  none: "—",
+};

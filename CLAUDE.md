@@ -42,7 +42,7 @@ order-entry-system/
     api/                route handlers (JSON). orders/ · orders/[id]/{cancel,delete,tracking,lines/[lineId]} ·
                         order-status/ · tracking/stage · trash · dashboard · reports/monthly ·
                         crm/followups · crm/followups/[id] · crm/followups/[id]/attempts ·
-                        crm/issues · crm/issues/[id] · crm/settings ·
+                        crm/issues · crm/issues/[id] · crm/settings · crm/customers ·
                         export/orders · lookups · designs · design-database · stages · users ·
                         access · health · auth/[...nextauth]
   components/           app-shell/ · orders/ · order-status/ · tracking/ · dashboard/ · trash/ · settings/ · ui/
@@ -50,13 +50,13 @@ order-entry-system/
                         order-tracker · tracker-detail · stage-cell · quality-groups · view-switch
                         ui/ shared primitives: table · stat-card · h-scroll (top scrollbar) · pager ·
                         draggable-panel · segmented · star-rating · chip-bar
-                        crm/ — followup-queue · followup-panel · issues-board · crm-pill (§12)
+                        crm/ — followup-queue · followup-panel · issues-board · customers-view · crm-pill (§12)
   lib/                  db.ts · auth.ts · auth.config.ts · workflow.ts (stage + status + derivations) · rbac.ts ·
                         api.ts (guards) · validation.ts (zod) · orders.ts (client types) ·
                         order-status.ts (types + computeStages/aggregateOrderGroups) ·
                         order-status-query.ts (loadOrderStatus) · dashboard.ts ·
                         dashboard-query.ts (loadDashboard) · monthly-report.ts · months.ts ·
-                        crm.ts (all CRM derivations — §12) · crm-query.ts (loadFollowups + reconcile + loadIssues)
+                        crm.ts (all CRM derivations — §12) · crm-query.ts (loadFollowups + reconcile + loadIssues + loadCustomers)
   db/                   schema.ts (pgSchema "ld_order_entry") · migrations/ (0000 baseline +
                         _archive_neon_public/) · seed.ts · load-env.ts · copy-to-supabase.ts ·
                         clone-to-dev.ts (fills the dev schema for local work)
@@ -228,7 +228,7 @@ DON'T: manage stock/vendors/procurement here; auto-number `order_no`; write `lin
 - **OE-P15** — CRM follow-up queue: KPI cards that filter in place, priority ranking, filters, attempt logging.
 - **OE-P16** — the follow-up panel: ratings, on-time capture, reorder intent, inline issue creation.
 - **OE-P17** — `/crm/issues` board: filters (status/category/severity/department/search), a by-department / by-category breakdown rail that doubles as a filter, worst-first ordering (severity, then age), and inline resolve.
-- **OE-P18** — CRM customers roll-up + CRM analytics. *(not built)*
+- **OE-P18** — CRM **customers roll-up** (`/crm/customers`, `loadCustomers`) + **Settings → CRM** (`/api/crm/settings`, the tuning knobs that were SQL-only until now). **CRM analytics is still not built** — every chart on it needs completed follow-ups to plot, and there are none yet.
 
 
 ## 12. CRM module — post-delivery follow-up

@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   DatabaseIcon,
+  HeadsetIcon,
   ListIcon,
   ShieldCheckIcon,
   TimerIcon,
@@ -18,14 +19,23 @@ import { DesignDatabasePanel } from "@/components/settings/design-db";
 import { TimeTracking } from "@/components/settings/time-tracking";
 import { UsersManage } from "@/components/settings/users-manage";
 import { AccessControl } from "@/components/settings/access-control";
+import { CrmSettingsPanel } from "@/components/settings/crm-settings";
 import { TrashView } from "@/components/trash/trash-view";
 
-type Tab = "dropdowns" | "designs" | "sla" | "users" | "access" | "trash";
+type Tab =
+  | "dropdowns"
+  | "designs"
+  | "sla"
+  | "crm"
+  | "users"
+  | "access"
+  | "trash";
 
 const TABS: { key: Tab; label: string; icon: typeof ListIcon }[] = [
   { key: "dropdowns", label: "Dropdown Master", icon: ListIcon },
   { key: "designs", label: "Design Database", icon: DatabaseIcon },
   { key: "sla", label: "Time tracking", icon: TimerIcon },
+  { key: "crm", label: "CRM", icon: HeadsetIcon },
   { key: "users", label: "Users", icon: UsersIcon },
   { key: "access", label: "Access", icon: ShieldCheckIcon },
   { key: "trash", label: "Trash", icon: Trash2Icon },
@@ -65,6 +75,7 @@ export function SettingsView({ caps }: { caps: Capability[] }) {
         {tab === "dropdowns" ? <DropdownMaster /> : null}
         {tab === "designs" ? <DesignDatabasePanel /> : null}
         {tab === "sla" ? <TimeTracking /> : null}
+        {tab === "crm" ? <CrmSettingsPanel /> : null}
         {tab === "users" ? <UsersManage /> : null}
         {tab === "access" ? <AccessControl /> : null}
         {tab === "trash" ? <TrashView caps={caps} /> : null}

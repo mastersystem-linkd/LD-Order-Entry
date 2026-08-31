@@ -20,10 +20,14 @@ import {
 import { db } from "@/lib/db";
 import {
   CRM_DEFAULTS,
+  customerSignal,
   followupDueAt,
   followupPriority,
   priorityBand,
   type CrmConfig,
+  type CustomerList,
+  type CustomerRow,
+  type CustomerSort,
   type FollowupList,
   type FollowupRow,
   type FollowupSort,
@@ -38,7 +42,16 @@ import {
 } from "@/lib/crm";
 
 // Re-exported for server callers that already import this module.
-export type { FollowupList, FollowupRow, FollowupSort, IssueList, IssueRow };
+export type {
+  CustomerList,
+  CustomerRow,
+  CustomerSort,
+  FollowupList,
+  FollowupRow,
+  FollowupSort,
+  IssueList,
+  IssueRow,
+};
 import {
   crmFollowups,
   crmIssues,
@@ -622,5 +635,198 @@ export async function loadIssues(p: URLSearchParams): Promise<IssueList> {
     kpis,
     byDept: tally((r) => r.ownerDept),
     byCategory: tally((r) => r.category),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Customers (§12.5.4, OE-P18)
+// ---------------------------------------------------------------------------
+
+const CUSTOMER_PAGE_SIZE = 25;
+
+/**
+ * The customer roll-up. ONE statement on purpose — see the concurrency warning
+ * at the top of this file — with paging and sorting done in JS afterwards,
+ * exactly as loadIssues does.
+ *
+ * Grouping: `crr_customer_id` when the order carries one, otherwise the party
+ * name upper-cased. That is the §12.5.4 rule, and it has a consequence worth
+ * stating plainly: two spellings of one company where only one resolved to CRR
+ * appear as TWO rows. The fix is more CRR linkage, not fuzzier grouping here —
+ * deciding that two party names are one company is exactly the merge the SCOT
+ * alias guide (Rule 2) forbids us to make unilaterally.
+ *
+ * Every follow-up and issue figure is LEFT-joined, so a customer nobody has
+ * called yet reads as "no data" (null) and never as a zero rating.
+ */
+export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
+  const q = (p.get("q") ?? "").trim().toLowerCase();
+  const sort = (p.get("sort") ?? "value") as CustomerSort;
+  const rated = p.get("rated"); // "low" | "high" | null
+  const page = Math.max(1, Number(p.get("page") ?? 1) || 1);
+
+  const rows = await db.execute<{
+    key: string;
+    name: string;
+    crr_customer_id: number | null;
+    aliases: string[] | null;
+    orders_12m: number;
+    value_12m: string;
+    orders_all: number;
+    avg_rating: string | null;
+    rated_count: number;
+    rating_recent: string | null;
+    rating_older: string | null;
+    open_issues: number;
+    total_issues: number;
+    last_contacted: string | null;
+    last_order_date: string | null;
+    reorder_intent: string | null;
+    followups_due: number;
+  }>(sql`
+    with order_value as (
+      select o.id,
+             o.crr_customer_id,
+             o.party_name,
+             o.order_date,
+             coalesce(sum(li.line_total) filter (
+               where not li.is_cancelled and not li.is_deleted), 0) as value,
+             count(*) filter (where not li.is_deleted)              as live_lines
+      from ${customerOrders} o
+      join ${orderLineItems} li on li.order_id = o.id
+      group by o.id, o.crr_customer_id, o.party_name, o.order_date
+    ),
+    live as (select * from order_value where live_lines > 0),
+    grouped as (
+      select coalesce('crr:' || crr_customer_id::text, 'raw:' || upper(party_name)) as key,
+             min(crr_customer_id) as crr_customer_id,
+             (array_agg(party_name order by order_date desc))[1] as name,
+             array_agg(distinct party_name) as aliases,
+             count(*) filter (where order_date >= current_date - 365) as orders_12m,
+             coalesce(sum(value) filter (where order_date >= current_date - 365), 0) as value_12m,
+             count(*) as orders_all,
+             max(order_date) as last_order_date
+      from live group by 1
+    ),
+    ranked_fu as (
+      select f.rating_overall, f.contacted_at, f.status, f.reorder_intent,
+             coalesce('crr:' || o.crr_customer_id::text, 'raw:' || upper(o.party_name)) as key,
+             row_number() over (
+               partition by coalesce('crr:' || o.crr_customer_id::text, 'raw:' || upper(o.party_name))
+               order by f.contacted_at desc nulls last) as rn
+      from ${crmFollowups} f
+      join ${customerOrders} o on o.id = f.order_id
+    ),
+    fu as (
+      select key,
+             avg(rating_overall) as avg_rating,
+             count(*) filter (where rating_overall is not null) as rated_count,
+             avg(rating_overall) filter (where rn <= 3) as rating_recent,
+             avg(rating_overall) filter (where rn between 4 and 6) as rating_older,
+             max(contacted_at) as last_contacted,
+             count(*) filter (where status in ('DUE','IN_PROGRESS')) as followups_due,
+             (array_agg(reorder_intent order by contacted_at desc nulls last)
+               filter (where reorder_intent is not null and reorder_intent <> 'none'))[1]
+               as reorder_intent
+      from ranked_fu group by key
+    ),
+    iss as (
+      select coalesce('crr:' || o.crr_customer_id::text, 'raw:' || upper(o.party_name)) as key,
+             count(*) filter (where i.status in ('OPEN','IN_PROGRESS')) as open_issues,
+             count(*) as total_issues
+      from ${crmIssues} i
+      join ${customerOrders} o on o.id = i.order_id
+      group by 1
+    )
+    select g.key, g.name, g.crr_customer_id, g.aliases,
+           g.orders_12m, g.value_12m, g.orders_all, g.last_order_date,
+           fu.avg_rating, coalesce(fu.rated_count, 0) as rated_count,
+           fu.rating_recent, fu.rating_older,
+           fu.last_contacted, fu.reorder_intent,
+           coalesce(fu.followups_due, 0) as followups_due,
+           coalesce(iss.open_issues, 0)  as open_issues,
+           coalesce(iss.total_issues, 0) as total_issues
+    from grouped g
+    left join fu  on fu.key  = g.key
+    left join iss on iss.key = g.key
+  `);
+
+  const all: CustomerRow[] = rows.map((r) => {
+    const recent = r.rating_recent === null ? null : Number(r.rating_recent);
+    const older = r.rating_older === null ? null : Number(r.rating_older);
+    return {
+      key: r.key,
+      name: r.name,
+      crrCustomerId: r.crr_customer_id,
+      // Only meaningful on a CRR-grouped row; a raw row is one spelling by
+      // definition, so echoing it back as its own alias is noise.
+      aliases:
+        r.crr_customer_id !== null && r.aliases
+          ? r.aliases.filter((a) => a !== r.name)
+          : [],
+      orders12m: Number(r.orders_12m),
+      value12m: String(r.value_12m ?? "0"),
+      ordersAll: Number(r.orders_all),
+      avgRating: r.avg_rating === null ? null : Number(r.avg_rating),
+      ratedCount: Number(r.rated_count),
+      // Fewer than four rated follow-ups → no trend at all, rather than "flat".
+      ratingTrend:
+        recent === null || older === null
+          ? null
+          : Math.round((recent - older) * 100) / 100,
+      openIssues: Number(r.open_issues),
+      totalIssues: Number(r.total_issues),
+      lastContacted: r.last_contacted,
+      lastOrderDate: r.last_order_date,
+      reorderIntent: (r.reorder_intent as CustomerRow["reorderIntent"]) ?? null,
+      followupsDue: Number(r.followups_due),
+    };
+  });
+
+  const kpis = {
+    customers: all.length,
+    linked: all.filter((r) => r.crrCustomerId !== null).length,
+    unlinked: all.filter((r) => r.crrCustomerId === null).length,
+    rated: all.filter((r) => r.avgRating !== null).length,
+    atRisk: all.filter((r) => customerSignal(r) === "at_risk").length,
+  };
+
+  let out = all;
+  if (q) {
+    out = out.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        String(r.crrCustomerId ?? "").includes(q) ||
+        r.aliases.some((a) => a.toLowerCase().includes(q)),
+    );
+  }
+  // A rating filter can only match rated customers; unrated rows drop out
+  // rather than being silently treated as 0.
+  if (rated === "low") out = out.filter((r) => r.avgRating !== null && r.avgRating <= 3);
+  if (rated === "high") out = out.filter((r) => r.avgRating !== null && r.avgRating >= 4);
+
+  const cmp: Record<CustomerSort, (a: CustomerRow, b: CustomerRow) => number> = {
+    value: (a, b) => Number(b.value12m) - Number(a.value12m),
+    orders: (a, b) => b.orders12m - a.orders12m || Number(b.value12m) - Number(a.value12m),
+    issues: (a, b) => b.openIssues - a.openIssues || Number(b.value12m) - Number(a.value12m),
+    // Unrated customers sort last on a rating sort — they are not "worst".
+    rating: (a, b) =>
+      (a.avgRating ?? Infinity) - (b.avgRating ?? Infinity) ||
+      Number(b.value12m) - Number(a.value12m),
+    name: (a, b) => a.name.localeCompare(b.name),
+  };
+  out = [...out].sort(cmp[sort] ?? cmp.value);
+
+  const total = out.length;
+  const totalPages = Math.max(1, Math.ceil(total / CUSTOMER_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * CUSTOMER_PAGE_SIZE;
+
+  return {
+    rows: out.slice(start, start + CUSTOMER_PAGE_SIZE),
+    total,
+    page: safePage,
+    totalPages,
+    kpis,
   };
 }
