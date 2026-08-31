@@ -4,6 +4,8 @@ import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
+  PhoneOffIcon,
+  RotateCcwIcon,
   CheckIcon,
   PackageIcon,
   PlusIcon,
@@ -23,9 +25,12 @@ import {
   OWNER_DEPTS,
   overallRatingExact,
   deriveOverallRating,
+  isReachedOutcome,
+  STATUS_LABEL,
   type AttemptChannel,
   type AttemptOutcome,
   type DelayReason,
+  type FollowupStatus,
   type IssueCategory,
   type IssueSeverity,
   type OwnerDept,
@@ -125,22 +130,32 @@ function Section({
   n,
   title,
   aside,
+  muted,
   children,
 }: {
   n: number;
   title: string;
   aside?: React.ReactNode;
+  /** Rendered read-only — the step does not apply in the current state. */
+  muted?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-b border-line px-4 py-3.5 last:border-b-0">
-      <h3 className="mb-2.5 flex items-center gap-2 text-[10.5px] font-semibold tracking-[0.09em] text-ink-muted uppercase">
-        <span className="grid size-4 place-items-center rounded-[5px] bg-inset text-[9.5px] tracking-normal text-ink-soft">
+    <section
+      className={cn(
+        "border-b border-line px-5 py-4 last:border-b-0",
+        // A blocked section stays READABLE — greying it to nothing would hide
+        // what was already recorded. It simply stops accepting input.
+        muted && "pointer-events-none opacity-45 select-none",
+      )}
+    >
+      <h3 className="mb-3 flex items-center gap-2.5 text-[10.5px] font-semibold tracking-[0.1em] text-ink-muted uppercase">
+        <span className="grid size-[18px] shrink-0 place-items-center rounded-md bg-accent/10 text-[10px] font-bold tracking-normal text-accent">
           {n}
         </span>
-        {title}
+        <span className="text-ink-soft">{title}</span>
         {aside ? (
-          <span className="ml-auto text-[10px] font-medium tracking-normal normal-case">
+          <span className="ml-auto text-[10.5px] font-medium tracking-normal text-ink-muted normal-case">
             {aside}
           </span>
         ) : null}
@@ -153,10 +168,12 @@ function Section({
 function Fact({ k, v, wide }: { k: string; v: React.ReactNode; wide?: boolean }) {
   return (
     <div className={cn(wide && "col-span-2")}>
-      <div className="text-[10.5px] tracking-[0.05em] text-ink-muted uppercase">{k}</div>
+      <div className="text-[10px] font-medium tracking-[0.07em] text-ink-muted uppercase">
+        {k}
+      </div>
       {/* Deliberately plain ink: these are context, and colouring them would
           compete with the status information below. */}
-      <div className="text-[13px] font-medium text-ink">{v}</div>
+      <div className="mt-0.5 text-[13.5px] leading-snug font-semibold text-ink">{v}</div>
     </div>
   );
 }
@@ -173,13 +190,13 @@ function Know({
   return (
     <div
       className={cn(
-        "flex items-center gap-2.5 rounded-field px-2.5 py-2 text-[12.5px]",
-        tone === "bad" && "bg-danger/10 text-danger",
-        tone === "ok" && "bg-success/10 text-success",
-        tone === "plain" && "border border-line bg-surface-2 text-ink-soft",
+        "flex items-start gap-2.5 rounded-field border-l-[3px] px-3 py-2.5 text-[12.5px] leading-relaxed",
+        tone === "bad" && "border-l-danger bg-danger/8 text-danger",
+        tone === "ok" && "border-l-success bg-success/8 text-success",
+        tone === "plain" && "border-l-line-strong bg-surface-2 text-ink-soft",
       )}
     >
-      <span className="shrink-0 [&_svg]:size-3.5">{icon}</span>
+      <span className="mt-[1px] shrink-0 [&_svg]:size-3.5">{icon}</span>
       <span className="min-w-0">{children}</span>
     </div>
   );
@@ -333,7 +350,12 @@ export function FollowupPanel({
   //   * nothing has been tried yet — there is no silence to record.
   // It used to sit next to Save unconditionally, so a coordinator could log a
   // connected call and then mark the same follow-up unreachable.
-  const connected = (d?.attempts ?? []).some((a) => a.outcome === "connected");
+  // UNREACHABLE is a terminal-ish state: there was no conversation, so there
+  // is nothing to answer, rate or promise. Everything after "Log attempt" is
+  // blocked while it holds, and the way out is Reopen — not quietly filling in
+  // a call that never happened.
+  const isUnreachable = d?.followup.status === "UNREACHABLE";
+  const connected = (d?.attempts ?? []).some((a) => isReachedOutcome(a.outcome));
   const attempted = (d?.attempts ?? []).length > 0;
   const unreachableReason = connected
     ? "Someone answered on this order — it cannot be unreachable."
@@ -351,6 +373,32 @@ export function FollowupPanel({
           ? `Attempt ${d.followup.attemptCount} · ${row.daysWaiting} days since delivery`
           : "Loading…"
       }
+      // The two facts worth carrying in the chrome: where this follow-up
+      // stands, and what the order is worth — the second is why a coordinator
+      // decides how hard to chase it.
+      headerAside={
+        d ? (
+          <>
+            <span className="num hidden text-[13px] font-semibold text-accent-deep sm:block">
+              {`₹${formatNumber(row.orderValue)}`}
+            </span>
+            <Pill
+              tone={
+                d.followup.status === "COMPLETED"
+                  ? "done"
+                  : d.followup.status === "UNREACHABLE"
+                    ? "warn"
+                    : d.followup.status === "IN_PROGRESS"
+                      ? "progress"
+                      : "due"
+              }
+            >
+              {STATUS_LABEL[d.followup.status as FollowupStatus] ??
+                d.followup.status}
+            </Pill>
+          </>
+        ) : null
+      }
       onClose={onClose}
       footer={
         <>
@@ -365,15 +413,6 @@ export function FollowupPanel({
           </span>
           <div className="ml-auto flex items-center gap-2">
             <Button
-              variant="outline"
-              size="lg"
-              disabled={!canEdit || busy || unreachableReason !== null}
-              title={unreachableReason ?? "No answer after repeated attempts"}
-              onClick={() => save.mutate("UNREACHABLE")}
-            >
-              Unreachable
-            </Button>
-            <Button
               size="lg"
               disabled={!canEdit || busy}
               onClick={() => save.mutate(undefined)}
@@ -382,11 +421,13 @@ export function FollowupPanel({
             </Button>
             <Button
               size="lg"
-              disabled={!canEdit || busy || !draft?.overall}
+              disabled={!canEdit || busy || !draft?.overall || isUnreachable}
               title={
-                draft?.overall
-                  ? "Complete this follow-up"
-                  : "An overall rating is required to complete"
+                isUnreachable
+                  ? "Reopen the follow-up first — there was no call to complete"
+                  : draft?.overall
+                    ? "Complete this follow-up"
+                    : "An overall rating is required to complete"
               }
               onClick={() => save.mutate("COMPLETED")}
             >
@@ -407,7 +448,7 @@ export function FollowupPanel({
         <div className="grid items-start lg:grid-cols-2 lg:divide-x lg:divide-line">
           <div className="min-w-0">
           <Section n={1} title="Context">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-3.5">
               <Fact k="Order no" v={<span className="num">{d.order.orderNo}</span>} />
               <Fact
                 k="Order value"
@@ -520,7 +561,7 @@ export function FollowupPanel({
           </Section>
 
           <Section n={3} title="Log attempt" aside={`${d.attempts.length} logged`}>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface-2 p-2">
               <Segmented
                 size="sm"
                 ariaLabel="Channel"
@@ -553,6 +594,20 @@ export function FollowupPanel({
                 onClick={() => logAttempt.mutate()}
               >
                 <PlusIcon /> Log
+              </Button>
+
+              {/* Giving up belongs HERE, beside the attempts that justify it —
+                  not in the footer next to Save and Complete, where it read as
+                  a third way to finish a call that was never had. */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto text-warning"
+                disabled={!canEdit || busy || unreachableReason !== null}
+                title={unreachableReason ?? "No answer after repeated attempts"}
+                onClick={() => save.mutate("UNREACHABLE")}
+              >
+                <PhoneOffIcon /> Can&rsquo;t reach
               </Button>
             </div>
 
@@ -593,7 +648,33 @@ export function FollowupPanel({
           </div>
 
           <div className="min-w-0 border-t border-line lg:border-t-0">
-          <Section n={4} title="The call">
+          {isUnreachable ? (
+            <div className="border-b border-line bg-warning/8 px-5 py-4">
+              <div className="flex items-start gap-2.5">
+                <PhoneOffIcon className="mt-0.5 size-4 shrink-0 text-warning" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-ink">
+                    Marked unreachable
+                  </div>
+                  <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
+                    No conversation happened, so there is nothing to answer,
+                    rate or promise — the steps below are closed. Anything
+                    already recorded is kept. Reopen if they call back.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2.5"
+                    disabled={!canEdit || busy}
+                    onClick={() => save.mutate("IN_PROGRESS")}
+                  >
+                    <RotateCcwIcon /> Reopen follow-up
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <Section n={4} title="The call" muted={isUnreachable}>
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[12.5px] font-medium text-ink-soft">
@@ -653,7 +734,12 @@ export function FollowupPanel({
             />
           </Section>
 
-          <Section n={5} title="Ratings" aside="press 1–5 with a row focused">
+          <Section
+            n={5}
+            title="Ratings"
+            aside="press 1–5 with a row focused"
+            muted={isUnreachable}
+          >
             {d.criteria.length === 0 ? (
               <p className="py-2 text-[12.5px] text-ink-muted">
                 No rating criteria are configured. An admin can add them in
@@ -663,7 +749,7 @@ export function FollowupPanel({
               d.criteria.map((c) => (
                 <div
                   key={c.key}
-                  className="flex items-center justify-between gap-3 py-[7px]"
+                  className="-mx-2 flex items-center justify-between gap-3 rounded-field px-2 py-2 transition-colors hover:bg-surface-2"
                 >
                   <div className="min-w-0">
                     <span className="text-[12.5px] font-medium text-ink">
@@ -705,10 +791,10 @@ export function FollowupPanel({
               ))
             )}
 
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-field bg-inset px-3 py-2.5">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-card border border-line bg-inset px-3.5 py-3">
               <div>
-                <div className="text-[11px] text-ink-muted">
-                  Overall — suggested, editable
+                <div className="text-[10px] font-medium tracking-[0.07em] text-ink-muted uppercase">
+                  Overall &middot; suggested, editable
                 </div>
                 <div className="mt-0.5 flex items-center gap-2.5">
                   <StarPicker
@@ -717,7 +803,7 @@ export function FollowupPanel({
                     value={draft.overall}
                     onChange={(v) => set("overall", v)}
                   />
-                  <span className="num text-[13px] font-semibold text-ink">
+                  <span className="num text-[17px] leading-none font-semibold text-ink">
                     {exact !== null ? exact.toFixed(1) : "—"}
                   </span>
                 </div>
@@ -746,7 +832,7 @@ export function FollowupPanel({
             ) : null}
           </Section>
 
-          <Section n={6} title="Next requirement">
+          <Section n={6} title="Next requirement" muted={isUnreachable}>
             <Segmented
               size="sm"
               ariaLabel="Reorder intent"

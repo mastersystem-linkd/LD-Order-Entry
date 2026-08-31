@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 export function DraggablePanel({
   title,
   subtitle,
+  headerAside,
   onClose,
   footer,
   children,
@@ -28,6 +29,8 @@ export function DraggablePanel({
 }: {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
+  /** Sits right of the title, left of the close button — status, a value, a count. */
+  headerAside?: React.ReactNode;
   onClose: () => void;
   footer?: React.ReactNode;
   children: React.ReactNode;
@@ -102,31 +105,40 @@ export function DraggablePanel({
         onDoubleClick={() => setPos(null)}
         title="Drag to move · double-click to snap back"
         className={cn(
-          "flex cursor-grab touch-none items-center gap-2.5 border-b border-line px-4 py-3 select-none active:cursor-grabbing",
-          tinted && "bg-accent-soft",
+          "flex cursor-grab touch-none items-center gap-3 border-b border-line px-5 py-3.5 select-none active:cursor-grabbing",
+          // A soft vertical wash rather than a flat fill — the header reads as
+          // the top of a sheet instead of a coloured strip.
+          tinted &&
+            "bg-gradient-to-b from-accent-soft to-[color-mix(in_oklab,var(--accent-soft)_55%,var(--surface))]",
         )}
       >
         <GripHorizontalIcon
-          className={cn("size-4 shrink-0", tinted ? "text-accent-deep" : "text-ink-muted")}
+          className={cn(
+            "size-4 shrink-0 opacity-60",
+            tinted ? "text-accent-deep" : "text-ink-muted",
+          )}
         />
         <div className="min-w-0 flex-1">
           <div
             className={cn(
-              "truncate text-[13.5px] font-semibold",
+              "truncate text-[15px] leading-tight font-semibold tracking-[-0.01em]",
               tinted ? "text-accent-deep" : "text-ink",
             )}
           >
             {title}
           </div>
           {subtitle ? (
-            <div className="truncate text-[11.5px] text-ink-muted">{subtitle}</div>
+            <div className="mt-0.5 truncate text-[11.5px] text-ink-muted">{subtitle}</div>
           ) : null}
         </div>
+        {headerAside ? (
+          <div className="flex shrink-0 items-center gap-2">{headerAside}</div>
+        ) : null}
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="grid size-7 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-inset hover:text-ink"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-surface hover:text-ink"
         >
           <XIcon className="size-4" />
         </button>
@@ -135,7 +147,7 @@ export function DraggablePanel({
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
 
       {footer ? (
-        <div className="flex items-center gap-2 border-t border-line bg-surface-2 px-4 py-3">
+        <div className="flex items-center gap-2 border-t border-line bg-surface-2/80 px-5 py-3 backdrop-blur-sm">
           {footer}
         </div>
       ) : null}

@@ -179,6 +179,34 @@ async function main() {
     followupAttemptSchema.safeParse({ channel: "call", outcome: "no_answer" }).success,
   ]);
 
+  // --- UNREACHABLE closes the rest of the flow (§12.7) --------------------
+  const { canComplete } = await import("../lib/crm");
+  const { followupUpdateSchema } = await import("../lib/validation");
+
+  // A follow-up nobody spoke to has no rating, so it can never satisfy the
+  // COMPLETED rule — the UI blocks it, and this is the rule underneath.
+  checks.push(["an unrated follow-up cannot be completed", !canComplete(null)]);
+  checks.push(["a rated one can", canComplete(4)]);
+  checks.push([
+    "a rating outside 1-5 cannot complete one",
+    !canComplete(0) && !canComplete(6),
+  ]);
+
+  // Reopening is a real transition, not a special case: an UNREACHABLE row
+  // must be able to move back to IN_PROGRESS when the customer calls back.
+  checks.push([
+    "an unreachable follow-up can be reopened",
+    followupUpdateSchema.safeParse({ status: "IN_PROGRESS" }).success,
+  ]);
+  checks.push([
+    "marking unreachable needs no rating",
+    followupUpdateSchema.safeParse({ status: "UNREACHABLE" }).success,
+  ]);
+  checks.push([
+    "completing without an overall is still refused",
+    !followupUpdateSchema.safeParse({ status: "COMPLETED" }).success,
+  ]);
+
   console.log();
   let bad = 0;
   for (const [name, ok] of checks) {
