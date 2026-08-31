@@ -23,11 +23,10 @@ import {
 import { formatDate, formatNumber } from "@/lib/orders";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { HScroll } from "@/components/ui/h-scroll";
 import { Input } from "@/components/ui/input";
 import { Pager } from "@/components/ui/pager";
-import { Segmented } from "@/components/ui/segmented";
 import { Stars } from "@/components/ui/star-rating";
 import { StatCard } from "@/components/ui/stat-card";
 import { Table, Td, Th, THead } from "@/components/ui/table";
@@ -39,6 +38,15 @@ import { FollowupPanel } from "@/components/crm/followup-panel";
 // ₹40 K clean one.
 
 type Range = "today" | "7" | "30" | "month" | "all";
+
+const selectCls =
+  "h-9 rounded-field border border-line bg-surface px-2.5 text-[12.5px] font-medium text-ink outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
+
+const SORTS: { value: FollowupSort; label: string }[] = [
+  { value: "priority", label: "Worst first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "value", label: "Highest value" },
+];
 
 const RANGES: { value: Range; label: string }[] = [
   { value: "today", label: "Today" },
@@ -121,45 +129,6 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-2.5 shadow-sm">
-        {RANGES.map((r) => (
-          <button
-            key={r.value}
-            type="button"
-            onClick={() => setRange(r.value)}
-            className={cn(
-              "cursor-pointer rounded-pill px-3.5 py-1.5 text-[12.5px] font-medium transition-colors duration-150",
-              range === r.value
-                ? "bg-accent text-white"
-                : "text-ink-soft hover:bg-inset hover:text-ink",
-            )}
-          >
-            {r.label}
-          </button>
-        ))}
-
-        <div className="relative order-last ml-0 w-full min-w-0 sm:order-none sm:ml-1 sm:w-auto sm:min-w-[240px] sm:flex-1">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-soft" />
-          <Input
-            value={rawSearch}
-            onChange={(e) => setRawSearch(e.target.value)}
-            placeholder="Search order no or party…"
-            className="h-9 pl-8"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => q.refetch()}
-          title="Refresh"
-          aria-label="Refresh"
-          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-field border border-line bg-surface text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
-        >
-          <RefreshCwIcon className={cn("size-4", q.isFetching && "animate-spin")} />
-        </button>
-      </div>
-
       {/* KPI row — each card filters the list in place */}
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5">
         {cards.map((c) => (
@@ -188,6 +157,58 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
         ))}
       </div>
 
+      {/* Filters sit BELOW the KPIs: the tiles are the first read — what is
+          due, what is overdue — and a row of controls above them delayed that.
+          Five range chips and a three-way sort became two dropdowns, which is
+          one row on a phone rather than three. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-2.5 shadow-sm">
+        <select
+          className={selectCls}
+          value={range}
+          onChange={(e) => setRange(e.target.value as Range)}
+          aria-label="Date range"
+        >
+          {RANGES.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className={selectCls}
+          value={sort}
+          onChange={(e) => setSort(e.target.value as FollowupSort)}
+          aria-label="Sort"
+        >
+          {SORTS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <div className="relative order-last w-full min-w-0 sm:order-none sm:w-auto sm:min-w-[220px] sm:flex-1">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-soft" />
+          <Input
+            value={rawSearch}
+            onChange={(e) => setRawSearch(e.target.value)}
+            placeholder="Search order no or party…"
+            className="h-9 pl-8"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => q.refetch()}
+          title="Refresh"
+          aria-label="Refresh"
+          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-field border border-line bg-surface text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        >
+          <RefreshCwIcon className={cn("size-4", q.isFetching && "animate-spin")} />
+        </button>
+      </div>
+
       <Card>
         {/* One line. A title over a two-line paragraph above a card holding a
             single row spent a quarter of the screen explaining itself — the
@@ -206,20 +227,9 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
             className="hidden text-[11.5px] text-ink-soft sm:inline"
             title="Ranked by order value, our own delay and prior complaints — not by date."
           >
-            worst first · click a row to work it
+            click a row to work it
           </span>
-          <Segmented
-            size="sm"
-            className="ml-auto"
-            ariaLabel="Sort"
-            value={sort}
-            onChange={(v) => setSort(v)}
-            options={[
-              { value: "priority", label: "Priority" },
-              { value: "oldest", label: "Oldest" },
-              { value: "value", label: "Value" },
-            ]}
-          />
+
         </div>
 
         <CardContent className="px-0">
