@@ -44,6 +44,19 @@ const STAGES: {
 ];
 
 const LOOKUPS: Record<LookupCategory, string[]> = {
+  // The CRM's complaint categories (§12.5). Seeded, then owned by the
+  // business in Settings → CRM — a coordinator can add one mid-call.
+  CRM_ISSUE: [
+    "Late delivery",
+    "Damage in transit",
+    "Shortage in meters",
+    "Shade variation",
+    "Print defect",
+    "Wrong design",
+    "Packing",
+    "Billing / rate",
+    "Other",
+  ],
   PARTY: ["Shree Textiles", "Krishna Fabrics", "Rajesh Traders"],
   SALES_PERSON: ["Amit Shah", "Priya Nair", "Sunil Mehta"],
   AGENT: ["Mahesh Agency", "Verma Brothers"],

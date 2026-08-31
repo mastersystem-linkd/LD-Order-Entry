@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { jsonData, jsonError, requireCapability } from "@/lib/api";
 import { db } from "@/lib/db";
@@ -13,10 +13,14 @@ import { loadCrmConfig } from "@/lib/crm-query";
 import { followupUpdateSchema, firstZodError } from "@/lib/validation";
 import {
   crmFollowupAttempts,
+  crmFollowupRatings,
   crmFollowups,
   crmIssues,
+  crmRatingCriteria,
   customerOrders,
+  lineStageProgress,
   orderLineItems,
+  workflowStages,
 } from "@/db/schema";
 
 // GET /api/crm/followups/:id — everything the call panel needs in one round
@@ -72,7 +76,92 @@ export async function GET(
       .where(eq(crmIssues.followupId, id))
       .orderBy(asc(crmIssues.createdAt));
 
-    return jsonData({ followup: row.f, order: row.o, lines, attempts, issues });
+    // The scores given so far, plus the criteria to render them against.
+    // Both are needed: a score whose criterion has since been retired must
+    // still be shown, and an unscored active criterion must still appear.
+    const ratingRows = await db
+      .select({
+        key: crmFollowupRatings.criterionKey,
+        value: crmFollowupRatings.value,
+      })
+      .from(crmFollowupRatings)
+      .where(eq(crmFollowupRatings.followupId, id));
+    const ratings: Record<string, number> = {};
+    for (const r of ratingRows) ratings[r.key] = r.value;
+
+    const criteria = await db
+      .select()
+      .from(crmRatingCriteria)
+      .orderBy(asc(crmRatingCriteria.sortOrder), asc(crmRatingCriteria.label));
+
+    // Which stages actually missed their deadline, and by how much. Without
+    // this the panel could only say "our SLA says late" — true, unactionable,
+    // and impossible for a coordinator to check. The numbers let them see
+    // that dispatch ran 2 days over rather than guessing.
+    const sla = await db
+      .select({
+        stageKey: lineStageProgress.stageKey,
+        label: workflowStages.label,
+        offset: workflowStages.plannedOffsetDays,
+        worstDelay: sql<number>`max(${lineStageProgress.delayMinutes})`,
+        plannedAt: sql<string | null>`min(${lineStageProgress.plannedAt})`,
+        lastActual: sql<string | null>`max(${lineStageProgress.actualAt})`,
+        done: sql<number>`count(*) filter (where ${lineStageProgress.isDone})`,
+        total: sql<number>`count(*)`,
+      })
+      .from(lineStageProgress)
+      .innerJoin(
+        orderLineItems,
+        eq(orderLineItems.id, lineStageProgress.orderLineItemId),
+      )
+      .innerJoin(
+        workflowStages,
+        eq(workflowStages.stageKey, lineStageProgress.stageKey),
+      )
+      .where(
+        and(
+          eq(orderLineItems.orderId, row.f.orderId),
+          eq(orderLineItems.isDeleted, false),
+          eq(orderLineItems.isCancelled, false),
+        ),
+      )
+      .groupBy(
+        lineStageProgress.stageKey,
+        workflowStages.label,
+        workflowStages.plannedOffsetDays,
+        workflowStages.sortOrder,
+      )
+      .orderBy(asc(workflowStages.sortOrder));
+
+    return jsonData({
+      followup: row.f,
+      sla: sla.map((r) => ({
+        stageKey: r.stageKey,
+        label: r.label,
+        targetDays: r.offset,
+        lateMinutes: Number(r.worstDelay ?? 0) > 0 ? Number(r.worstDelay) : 0,
+        plannedAt: r.plannedAt,
+        actualAt: r.lastActual,
+        done: Number(r.done),
+        total: Number(r.total),
+      })),
+      order: row.o,
+      lines,
+      attempts,
+      issues,
+      ratings,
+      criteria: criteria
+        // Retired criteria stay visible only where a score was actually given
+        // against them, so old calls read correctly without cluttering new ones.
+        .filter((c) => c.isActive || ratings[c.key] !== undefined)
+        .map((c) => ({
+          key: c.key,
+          label: c.label,
+          hint: c.hint,
+          sortOrder: c.sortOrder,
+          isActive: c.isActive,
+        })),
+    });
   } catch (e) {
     console.error("GET /api/crm/followups/[id] failed:", e);
     return jsonError("Could not load the follow-up", 500);
@@ -102,17 +191,24 @@ export async function PATCH(
     const cur = existing[0];
     if (!cur) return jsonError("Follow-up not found", 404);
 
-    // The four sub-ratings after this patch, so the overall can be re-derived
-    // from the whole picture rather than from the field that happened to change.
-    const subs = {
-      delivery: p.rating_delivery !== undefined ? p.rating_delivery : cur.ratingDelivery,
-      quality: p.rating_quality !== undefined ? p.rating_quality : cur.ratingQuality,
-      packing: p.rating_packing !== undefined ? p.rating_packing : cur.ratingPacking,
-      coordination:
-        p.rating_coordination !== undefined
-          ? p.rating_coordination
-          : cur.ratingCoordination,
-    };
+    // Every sub-rating AFTER this patch, so the overall is re-derived from the
+    // whole picture rather than from whichever star happened to be clicked.
+    // Criteria are configurable rows now (§12.4), so this is a map, not four
+    // named fields.
+    const stored = await db
+      .select({
+        key: crmFollowupRatings.criterionKey,
+        value: crmFollowupRatings.value,
+      })
+      .from(crmFollowupRatings)
+      .where(eq(crmFollowupRatings.followupId, id));
+
+    const subs: Record<string, number | null> = {};
+    for (const r of stored) subs[r.key] = r.value;
+    for (const [k, v] of Object.entries(p.ratings ?? {})) {
+      if (v === null || v === undefined) delete subs[k];
+      else subs[k] = v;
+    }
     // An explicit overall always wins — it is the coordinator's override, and
     // rating_source records that it was theirs. Otherwise it follows the mean.
     const overall =
@@ -153,10 +249,6 @@ export async function PATCH(
             ? p.customer_says_on_time
             : cur.customerSaysOnTime,
         delayReason: p.delay_reason !== undefined ? p.delay_reason : cur.delayReason,
-        ratingDelivery: subs.delivery,
-        ratingQuality: subs.quality,
-        ratingPacking: subs.packing,
-        ratingCoordination: subs.coordination,
         ratingOverall: overall,
         ratingSource: p.rating_source !== undefined ? p.rating_source : cur.ratingSource,
         reorderIntent: p.reorder_intent ?? cur.reorderIntent,
@@ -177,7 +269,34 @@ export async function PATCH(
       .where(eq(crmFollowups.id, id))
       .returning();
 
-    return jsonData(updated);
+    // Persist the sub-scores. Written after the header so a rejected status
+    // change (an incomplete rating, say) cannot leave scores behind for a
+    // follow-up that did not move.
+    for (const [key, value] of Object.entries(p.ratings ?? {})) {
+      if (value === null || value === undefined) {
+        await db
+          .delete(crmFollowupRatings)
+          .where(
+            and(
+              eq(crmFollowupRatings.followupId, id),
+              eq(crmFollowupRatings.criterionKey, key),
+            ),
+          );
+      } else {
+        await db
+          .insert(crmFollowupRatings)
+          .values({ followupId: id, criterionKey: key, value })
+          .onConflictDoUpdate({
+            target: [
+              crmFollowupRatings.followupId,
+              crmFollowupRatings.criterionKey,
+            ],
+            set: { value },
+          });
+      }
+    }
+
+    return jsonData({ ...updated, ratings: subs });
   } catch (e) {
     console.error("PATCH /api/crm/followups/[id] failed:", e);
     return jsonError("Could not save the follow-up", 500);

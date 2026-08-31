@@ -4,7 +4,15 @@ import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react";
+
 import { apiGet, apiSend } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -61,6 +69,284 @@ const FIELDS: { key: NumKey; label: string; hint: string; min: number; max: numb
   },
 ];
 
+// ---------------------------------------------------------------------------
+// The two lists the call panel is built from (§12.4, §12.5). Both were fixed
+// vocabularies in code until migration 0005; neither could survive contact
+// with real calls, so they are managed here.
+// ---------------------------------------------------------------------------
+
+type Criterion = {
+  id: string;
+  key: string;
+  label: string;
+  hint: string | null;
+  sort_order: number;
+  is_active: boolean;
+};
+
+function RatingCriteria() {
+  const queryClient = useQueryClient();
+  const [label, setLabel] = React.useState("");
+  const [hint, setHint] = React.useState("");
+
+  const q = useQuery({
+    queryKey: ["crm-rating-criteria", "all"],
+    queryFn: () => apiGet<Criterion[]>("/api/crm/rating-criteria?all=1"),
+  });
+
+  const done = () => {
+    queryClient.invalidateQueries({ queryKey: ["crm-rating-criteria"] });
+    queryClient.invalidateQueries({ queryKey: ["crm-followup"] });
+  };
+
+  const add = useMutation({
+    mutationFn: () =>
+      apiSend("/api/crm/rating-criteria", "POST", {
+        label: label.trim(),
+        hint: hint.trim() || null,
+      }),
+    onSuccess: () => {
+      setLabel("");
+      setHint("");
+      done();
+      toast.success("Criterion added");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const toggle = useMutation({
+    mutationFn: (c: Criterion) =>
+      apiSend(`/api/crm/rating-criteria/${c.id}`, "PATCH", {
+        is_active: !c.is_active,
+      }),
+    onSuccess: done,
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const move = useMutation({
+    mutationFn: (v: { c: Criterion; to: number }) =>
+      apiSend(`/api/crm/rating-criteria/${v.c.id}`, "PATCH", { sort_order: v.to }),
+    onSuccess: done,
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rows = q.data ?? [];
+  const active = rows.filter((r) => r.is_active);
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between">
+        <CardTitle>Rating criteria</CardTitle>
+        <span className="text-xs text-ink-muted">{active.length} in use</span>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-xs text-ink-muted">
+          What every delivered order is scored on, 1–5, on the call panel. The
+          overall score is suggested as the mean of these and the coordinator
+          may override it.
+        </p>
+
+        {q.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-ink-muted">
+            <Spinner /> Loading…
+          </div>
+        ) : (
+          <>
+            {rows.map((c, i) => (
+              <div
+                key={c.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-field border border-line bg-surface-2 px-3 py-2",
+                  !c.is_active && "opacity-55",
+                )}
+              >
+                <div className="flex flex-col">
+                  <button
+                    type="button"
+                    aria-label="Move up"
+                    disabled={i === 0 || move.isPending}
+                    onClick={() => move.mutate({ c, to: Math.max(0, c.sort_order - 1) })}
+                    className="cursor-pointer text-ink-muted hover:text-ink disabled:opacity-30"
+                  >
+                    <ChevronUpIcon className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Move down"
+                    disabled={i === rows.length - 1 || move.isPending}
+                    onClick={() => move.mutate({ c, to: c.sort_order + 1 })}
+                    className="cursor-pointer text-ink-muted hover:text-ink disabled:opacity-30"
+                  >
+                    <ChevronDownIcon className="size-3.5" />
+                  </button>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">{c.label}</div>
+                  {c.hint ? (
+                    <div className="text-xs text-ink-muted">{c.hint}</div>
+                  ) : null}
+                </div>
+                {!c.is_active ? (
+                  <span className="rounded-pill bg-inset px-2 py-0.5 text-[10.5px] font-semibold text-ink-soft">
+                    retired
+                  </span>
+                ) : null}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={toggle.isPending}
+                  onClick={() => toggle.mutate(c)}
+                >
+                  {c.is_active ? "Retire" : "Restore"}
+                </Button>
+              </div>
+            ))}
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="New criterion, e.g. Billing accuracy"
+                className="h-9 min-w-[200px] flex-1"
+              />
+              <Input
+                value={hint}
+                onChange={(e) => setHint(e.target.value)}
+                placeholder="Short gloss (optional)"
+                className="h-9 min-w-[160px] flex-1"
+              />
+              <Button
+                disabled={!label.trim() || add.isPending}
+                onClick={() => add.mutate()}
+              >
+                {add.isPending ? <Spinner className="text-white" /> : null} Add
+              </Button>
+            </div>
+            <p className="text-xs text-ink-muted">
+              Retiring keeps every score already given and simply stops offering
+              the row on new calls — the same way a deactivated dropdown value
+              still reads correctly on the orders that used it. Nothing here is
+              ever hard-deleted.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function IssueCategories() {
+  const queryClient = useQueryClient();
+  const [value, setValue] = React.useState("");
+
+  const q = useQuery({
+    queryKey: ["lookups", "CRM_ISSUE", "all"],
+    queryFn: () =>
+      apiGet<{ id: string; value: string; is_active: boolean }[]>(
+        "/api/lookups?category=CRM_ISSUE&all=1",
+      ),
+  });
+
+  const done = () => {
+    queryClient.invalidateQueries({ queryKey: ["lookups", "CRM_ISSUE"] });
+    queryClient.invalidateQueries({ queryKey: ["crm-issues"] });
+  };
+
+  const add = useMutation({
+    mutationFn: () =>
+      apiSend("/api/lookups", "POST", {
+        category: "CRM_ISSUE",
+        value: value.trim(),
+      }),
+    onSuccess: () => {
+      setValue("");
+      done();
+      toast.success("Category added");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const retire = useMutation({
+    mutationFn: (r: { id: string; is_active: boolean }) =>
+      apiSend(`/api/lookups/${r.id}`, "PATCH", { is_active: !r.is_active }),
+    onSuccess: done,
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rows = q.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between">
+        <CardTitle>Complaint categories</CardTitle>
+        <span className="text-xs text-ink-muted">
+          {rows.filter((r) => r.is_active).length} in use
+        </span>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-xs text-ink-muted">
+          What a complaint can be filed under. A coordinator can also just type
+          a new one on the call — it is saved here automatically and offered to
+          everyone from the next call onward.
+        </p>
+
+        {q.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-ink-muted">
+            <Spinner /> Loading…
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {rows.map((r) => (
+                <span
+                  key={r.id}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-pill border border-line bg-surface-2 py-1 pr-1 pl-2.5 text-[12px]",
+                    !r.is_active && "opacity-50",
+                  )}
+                >
+                  {r.value}
+                  <button
+                    type="button"
+                    title={r.is_active ? "Retire" : "Restore"}
+                    disabled={retire.isPending}
+                    onClick={() => retire.mutate(r)}
+                    className="cursor-pointer rounded-full p-0.5 text-ink-muted hover:bg-inset hover:text-ink"
+                  >
+                    {r.is_active ? (
+                      <XIcon className="size-3" />
+                    ) : (
+                      <RotateCcwIcon className="size-3" />
+                    )}
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Input
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && value.trim()) add.mutate();
+                }}
+                placeholder="New category, e.g. Roll length short"
+                className="h-9 min-w-[220px] flex-1"
+              />
+              <Button
+                disabled={!value.trim() || add.isPending}
+                onClick={() => add.mutate()}
+              >
+                {add.isPending ? <Spinner className="text-white" /> : null} Add
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function CrmSettingsPanel() {
   const queryClient = useQueryClient();
   const [edited, setEdited] = React.useState<Record<string, string>>({});
@@ -109,6 +395,7 @@ export function CrmSettingsPanel() {
   const dirty = Object.keys(patch).length;
 
   return (
+    <div className="flex flex-col gap-5">
     <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
       <Card>
         <CardHeader className="flex-row items-center justify-between">
@@ -216,6 +503,12 @@ export function CrmSettingsPanel() {
           </p>
         </CardContent>
       </Card>
+    </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <RatingCriteria />
+        <IssueCategories />
+      </div>
     </div>
   );
 }

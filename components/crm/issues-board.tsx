@@ -14,8 +14,7 @@ import { toast } from "sonner";
 
 import { apiGet, apiSend } from "@/lib/api-client";
 import {
-  CATEGORY_LABEL,
-  ISSUE_CATEGORIES,
+  categoryLabel,
   ISSUE_RESOLUTIONS,
   ISSUE_SEVERITIES,
   ISSUE_STATUSES,
@@ -75,6 +74,14 @@ const RESOLUTION_LABEL: Record<IssueResolution, string> = {
 };
 
 export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
+  // Complaint categories are managed data now (Settings → CRM), so the filter
+  // is populated from the same list the call panel writes into.
+  const categoryList = useQuery({
+    queryKey: ["lookups", "CRM_ISSUE"],
+    queryFn: () => apiGet<{ value: string }[]>("/api/lookups?category=CRM_ISSUE"),
+  });
+  const categories = (categoryList.data ?? []).map((r) => r.value);
+
   const [status, setStatus] = React.useState<string>("OPEN_ANY");
   const [category, setCategory] = React.useState("");
   const [severity, setSeverity] = React.useState("");
@@ -136,9 +143,9 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           onChange={(e) => setCategory(e.target.value)}
         >
           <option value="">All categories</option>
-          {ISSUE_CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <option key={c} value={c}>
-              {CATEGORY_LABEL[c]}
+              {categoryLabel(c)}
             </option>
           ))}
         </select>
@@ -247,7 +254,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                   const label =
                     groupBy === "dept"
                       ? g.key
-                      : (CATEGORY_LABEL[g.key as keyof typeof CATEGORY_LABEL] ?? g.key);
+                      : categoryLabel(g.key);
                   return (
                     <li key={g.key}>
                       <button
@@ -430,7 +437,7 @@ function IssueRowView({
             <span className="text-ink-muted">Whole order</span>
           )}
         </Td>
-        <Td>{CATEGORY_LABEL[row.category]}</Td>
+        <Td>{categoryLabel(row.category)}</Td>
         <Td className="num text-right">
           {row.qtyAffected != null ? formatNumber(row.qtyAffected) : "—"}
         </Td>

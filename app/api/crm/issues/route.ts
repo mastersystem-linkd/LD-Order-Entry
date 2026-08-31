@@ -6,7 +6,12 @@ import { db } from "@/lib/db";
 import { loadCrmConfig, loadIssues } from "@/lib/crm-query";
 import { shouldEscalate } from "@/lib/crm";
 import { issueCreateSchema, firstZodError } from "@/lib/validation";
-import { crmFollowups, crmIssues, orderLineItems } from "@/db/schema";
+import {
+  crmFollowups,
+  crmIssues,
+  lookupValues,
+  orderLineItems,
+} from "@/db/schema";
 
 // GET /api/crm/issues — the complaint board (OE-P17).
 // Params: page · status (OPEN_ANY|OPEN|IN_PROGRESS|RESOLVED|REJECTED|ALL) ·
@@ -69,6 +74,15 @@ export async function POST(req: NextRequest) {
       quality = line.quality;
       designNo = line.designNo;
     }
+
+    // A category typed on the call that nobody has used before joins the
+    // master list, so the next coordinator is offered it instead of inventing
+    // a second spelling of the same complaint. Same idea as the party and
+    // fabric dropdowns learning from what people actually type.
+    await db
+      .insert(lookupValues)
+      .values({ category: "CRM_ISSUE", value: p.category })
+      .onConflictDoNothing();
 
     const [issue] = await db
       .insert(crmIssues)

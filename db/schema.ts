@@ -79,6 +79,12 @@ export const LOOKUP_CATEGORIES = [
   "HASTE",
   "TRANSPORT",
   "FABRIC",
+  // The CRM's complaint categories. A fixed enum could not survive contact
+  // with real calls — a customer complains about whatever they complain about
+  // — so these live here, are managed in Settings, and a coordinator can add
+  // one mid-call without a deploy. Same rule as fabric and design (§3.4):
+  // never block an unknown value.
+  "CRM_ISSUE",
 ] as const;
 export type LookupCategory = (typeof LOOKUP_CATEGORIES)[number];
 
@@ -353,10 +359,6 @@ export const crmFollowups = app.table(
     customerSaysOnTime: boolean("customer_says_on_time"),
     delayReason: varchar("delay_reason", { length: 30 }),
 
-    ratingDelivery: smallint("rating_delivery"),
-    ratingQuality: smallint("rating_quality"),
-    ratingPacking: smallint("rating_packing"),
-    ratingCoordination: smallint("rating_coordination"),
     // Auto-suggested as the mean of the four, and overridable.
     ratingOverall: smallint("rating_overall"),
     ratingSource: varchar("rating_source", { length: 20 }),
@@ -445,7 +447,7 @@ export const crmIssues = app.table(
     // Denormalized so the issue survives a line purge.
     quality: varchar("quality", { length: 100 }),
     designNo: varchar("design_no", { length: 100 }),
-    category: varchar("category", { length: 30 }).notNull(),
+    category: varchar("category", { length: 100 }).notNull(),
     severity: varchar("severity", { length: 10 }).notNull(),
     // A shortage of 8 m and 800 m are not the same complaint.
     qtyAffected: numeric("qty_affected", { precision: 10, scale: 2 }),
@@ -476,6 +478,68 @@ export const crmIssues = app.table(
 // crm_settings (single row) --------------------------------------------------
 // workflow_stages is the SLA config for the STAGES; this is the SLA config for
 // the CALL. Seeded by db/seed.ts; edited in Settings.
+// crm_rating_criteria — what we score a delivered order on (§12.4).
+//
+// These were four fixed columns (delivery / quality / packing / coordination).
+// That was wrong for the same reason a fixed issue list was: what matters
+// varies by trade and changes over time, and adding a criterion should not
+// need a migration. They are rows now, managed in Settings → CRM.
+//
+// `key` is the stable identifier stored on every rating; `label` is what the
+// coordinator reads and may be re-worded freely without detaching history.
+export const crmRatingCriteria = app.table(
+  "crm_rating_criteria",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: varchar("key", { length: 40 }).notNull(),
+    label: varchar("label", { length: 80 }).notNull(),
+    /** The small grey gloss under the label on the call panel. */
+    hint: varchar("hint", { length: 160 }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /**
+     * Retiring a criterion deactivates it rather than deleting it: scores
+     * already given against it stay readable, exactly as a deactivated
+     * dropdown value keeps working on the orders that used it.
+     */
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("uq_crm_rating_criteria_key").on(t.key)],
+);
+
+// crm_followup_ratings — one score per criterion per follow-up.
+//
+// rating_overall stays on crm_followups: it is the headline, it is indexed,
+// the completed-follow-up CHECK depends on it, and the customer roll-up reads
+// it. Only the sub-scores moved here.
+export const crmFollowupRatings = app.table(
+  "crm_followup_ratings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    followupId: uuid("followup_id")
+      .notNull()
+      .references(() => crmFollowups.id, { onDelete: "cascade" }),
+    /**
+     * The criterion's key, NOT a foreign key. A score is a historical fact:
+     * it must survive the criterion being deleted from the master list, the
+     * same way crm_issues denormalises quality and design_no so an issue
+     * survives a line purge.
+     */
+    criterionKey: varchar("criterion_key", { length: 40 }).notNull(),
+    value: smallint("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_crm_followup_ratings").on(t.followupId, t.criterionKey),
+    index("idx_crm_followup_ratings_followup").on(t.followupId),
+    check("ck_crm_followup_ratings_value", sql`value between 1 and 5`),
+  ],
+);
+
 export const crmSettings = app.table("crm_settings", {
   id: uuid("id").primaryKey().defaultRandom(),
   // Days after dispatch before we assume the goods have landed, when no LR is

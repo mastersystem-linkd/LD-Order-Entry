@@ -13,11 +13,10 @@ import { toast } from "sonner";
 
 import { apiGet, apiSend } from "@/lib/api-client";
 import {
-  CATEGORY_LABEL,
+  categoryLabel,
   CHANNEL_LABEL,
   DELAY_REASON_LABEL,
   DELAY_REASONS,
-  ISSUE_CATEGORIES,
   ISSUE_SEVERITIES,
   OUTCOME_LABEL,
   OWNER_DEPTS,
@@ -37,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DraggablePanel } from "@/components/ui/draggable-panel";
 import { Input } from "@/components/ui/input";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { Segmented } from "@/components/ui/segmented";
 import { StarPicker } from "@/components/ui/star-rating";
 import { Pill } from "@/components/crm/crm-pill";
@@ -50,10 +50,6 @@ type Detail = {
     status: string;
     customerSaysOnTime: boolean | null;
     delayReason: string | null;
-    ratingDelivery: number | null;
-    ratingQuality: number | null;
-    ratingPacking: number | null;
-    ratingCoordination: number | null;
     ratingOverall: number | null;
     ratingSource: string | null;
     reorderIntent: string;
@@ -66,6 +62,26 @@ type Detail = {
     attemptCount: number;
     isEscalated: boolean;
   };
+  /** Per-stage SLA outcome, so the panel can show numbers instead of a verdict. */
+  sla: {
+    stageKey: string;
+    label: string;
+    targetDays: number;
+    lateMinutes: number;
+    plannedAt: string | null;
+    actualAt: string | null;
+    done: number;
+    total: number;
+  }[];
+  /** Scores by criterion key (§12.4) — criteria are configurable rows now. */
+  ratings: Record<string, number>;
+  criteria: {
+    key: string;
+    label: string;
+    hint: string | null;
+    sortOrder: number;
+    isActive: boolean;
+  }[];
   order: {
     orderNo: string;
     orderDate: string;
@@ -193,10 +209,8 @@ export function FollowupPanel({
   const [draft, setDraft] = React.useState<{
     customerSaysOnTime: boolean | null;
     delayReason: DelayReason | null;
-    delivery: number | null;
-    quality: number | null;
-    packing: number | null;
-    coordination: number | null;
+    /** Scores by criterion key — the criteria are configurable rows (§12.4). */
+    ratings: Record<string, number>;
     overall: number | null;
     source: "customer" | "coordinator";
     reorder: ReorderIntent;
@@ -212,10 +226,7 @@ export function FollowupPanel({
     setDraft({
       customerSaysOnTime: f.customerSaysOnTime,
       delayReason: (f.delayReason as DelayReason | null) ?? null,
-      delivery: f.ratingDelivery,
-      quality: f.ratingQuality,
-      packing: f.ratingPacking,
-      coordination: f.ratingCoordination,
+      ratings: { ...d.ratings },
       overall: f.ratingOverall,
       source: (f.ratingSource as "customer" | "coordinator") ?? "coordinator",
       reorder: (f.reorderIntent as ReorderIntent) ?? "none",
@@ -230,23 +241,19 @@ export function FollowupPanel({
     v: NonNullable<typeof draft>[K],
   ) => setDraft((p) => (p ? { ...p, [k]: v } : p));
 
-  // The overall follows the four sub-ratings until the coordinator overrides it.
-  const subs = draft
-    ? {
-        delivery: draft.delivery,
-        quality: draft.quality,
-        packing: draft.packing,
-        coordination: draft.coordination,
-      }
-    : { delivery: null, quality: null, packing: null, coordination: null };
+  // The overall follows the sub-ratings until the coordinator overrides it.
+  const subs = draft?.ratings ?? {};
   const suggested = deriveOverallRating(subs);
   const exact = overallRatingExact(subs);
+  // Keyed on the scores themselves, not on four named fields — the criteria
+  // are configurable, so there is no fixed dependency list to write.
+  const subsKey = JSON.stringify(subs);
   React.useEffect(() => {
     setDraft((p) => (p ? { ...p, overall: suggested } : p));
     // Only when a SUB-rating changes — otherwise this would fight a manual
     // override the moment it was set.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft?.delivery, draft?.quality, draft?.packing, draft?.coordination]);
+  }, [subsKey]);
 
   const [channel, setChannel] = React.useState<AttemptChannel>("call");
   const [outcome, setOutcome] = React.useState<AttemptOutcome>("connected");
@@ -272,10 +279,7 @@ export function FollowupPanel({
         status,
         customer_says_on_time: draft?.customerSaysOnTime,
         delay_reason: draft?.delayReason,
-        rating_delivery: draft?.delivery,
-        rating_quality: draft?.quality,
-        rating_packing: draft?.packing,
-        rating_coordination: draft?.coordination,
+        ratings: draft?.ratings ?? {},
         rating_overall: draft?.overall,
         rating_source: draft?.source,
         reorder_intent: draft?.reorder,
@@ -292,6 +296,20 @@ export function FollowupPanel({
   });
 
   const busy = save.isPending || logAttempt.isPending;
+
+  // UNREACHABLE means "we tried and could not get them" (§12.7). Two things
+  // make it wrong to offer:
+  //   * somebody HAS answered — the customer is, demonstrably, reachable;
+  //   * nothing has been tried yet — there is no silence to record.
+  // It used to sit next to Save unconditionally, so a coordinator could log a
+  // connected call and then mark the same follow-up unreachable.
+  const connected = (d?.attempts ?? []).some((a) => a.outcome === "connected");
+  const attempted = (d?.attempts ?? []).length > 0;
+  const unreachableReason = connected
+    ? "Someone answered on this order — it cannot be unreachable."
+    : !attempted
+      ? "Log at least one failed attempt first."
+      : null;
   const highIssue = (d?.issues ?? []).some((i) => i.severity === "HIGH");
 
   return (
@@ -319,7 +337,8 @@ export function FollowupPanel({
             <Button
               variant="outline"
               size="lg"
-              disabled={!canEdit || busy}
+              disabled={!canEdit || busy || unreachableReason !== null}
+              title={unreachableReason ?? "No answer after repeated attempts"}
               onClick={() => save.mutate("UNREACHABLE")}
             >
               Unreachable
@@ -352,7 +371,11 @@ export function FollowupPanel({
           Loading…
         </div>
       ) : (
-        <>
+        // Two columns once there is room. Left is what the coordinator READS
+        // before and during the call; right is what they FILL IN. Stacked
+        // single-column below lg, which is what a phone gets.
+        <div className="grid items-start lg:grid-cols-2 lg:divide-x lg:divide-line">
+          <div className="min-w-0">
           <Section n={1} title="Context">
             <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
               <Fact k="Order no" v={<span className="num">{d.order.orderNo}</span>} />
@@ -396,16 +419,62 @@ export function FollowupPanel({
 
           <Section n={2} title="What we already know">
             <div className="flex flex-col gap-1.5">
-              {d.followup.systemOnTime === false ? (
-                <Know tone="bad" icon={<AlertTriangleIcon />}>
-                  Our SLA says this ran <strong>late</strong> — note this is
-                  measured against the configured deadline, not transit reality.
-                </Know>
-              ) : (
-                <Know tone="ok" icon={<CheckIcon />}>
-                  Our SLA says every stage was inside its deadline.
-                </Know>
-              )}
+              {(() => {
+                // "Our SLA" is the Time-tracking config in Settings: each stage
+                // has a target measured in days from the ORDER DATE. Saying
+                // only "late" or "on time" told the coordinator nothing they
+                // could repeat to a customer, so the stages that actually
+                // missed are named with their numbers.
+                const late = (d.sla ?? [])
+                  .filter((r) => r.lateMinutes > 0)
+                  .sort((a, b) => b.lateMinutes - a.lateMinutes);
+                const days = (m: number) => Math.round((m / 1440) * 10) / 10;
+                if (late.length === 0) {
+                  const worked = (d.sla ?? []).filter((r) => r.done > 0);
+                  return (
+                    <Know tone="ok" icon={<CheckIcon />}>
+                      {worked.length === 0 ? (
+                        <>
+                          No stage has been ticked yet, so there is{" "}
+                          <strong>nothing to judge</strong> against our
+                          deadlines.
+                        </>
+                      ) : (
+                        <>
+                          Every stage so far met its deadline — the target is{" "}
+                          <strong>
+                            {(d.sla ?? []).find((r) => r.stageKey === "dispatch")
+                              ?.targetDays ?? "—"}{" "}
+                            days
+                          </strong>{" "}
+                          from the order date to dispatch.
+                        </>
+                      )}
+                    </Know>
+                  );
+                }
+                const worst = late[0];
+                return (
+                  <Know tone="bad" icon={<AlertTriangleIcon />}>
+                    <strong>{worst.label}</strong> ran{" "}
+                    <strong>{days(worst.lateMinutes)} days late</strong> against
+                    a {worst.targetDays}-day target
+                    {late.length > 1 ? (
+                      <>
+                        {" "}
+                        ({late.length} stages missed:{" "}
+                        {late
+                          .slice(0, 3)
+                          .map((r) => `${r.label} +${days(r.lateMinutes)}d`)
+                          .join(", ")}
+                        {late.length > 3 ? "…" : ""})
+                      </>
+                    ) : null}
+                    . Measured against the deadline configured in Settings, not
+                    transit reality — expect the customer to disagree.
+                  </Know>
+                );
+              })()}
               {row.hadOutOfStock ? (
                 <Know tone="plain" icon={<PackageIcon />}>
                   A design was <strong>out of stock</strong> at stock checking.
@@ -469,7 +538,9 @@ export function FollowupPanel({
               </p>
             )}
           </Section>
+          </div>
 
+          <div className="min-w-0 border-t border-line lg:border-t-0">
           <Section n={4} title="The call">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-3">
@@ -531,26 +602,56 @@ export function FollowupPanel({
           </Section>
 
           <Section n={5} title="Ratings" aside="press 1–5 with a row focused">
-            {(
-              [
-                ["delivery", "Delivery", "timeliness, handling"],
-                ["quality", "Quality", "fabric, print, shade"],
-                ["packing", "Packing", "condition on arrival"],
-                ["coordination", "Coordination", "our communication"],
-              ] as const
-            ).map(([key, label, hint]) => (
-              <div key={key} className="flex items-center justify-between py-[7px]">
-                <div>
-                  <span className="text-[12.5px] font-medium text-ink">{label}</span>
-                  <span className="ml-1.5 text-[10px] text-ink-muted">{hint}</span>
+            {d.criteria.length === 0 ? (
+              <p className="py-2 text-[12.5px] text-ink-muted">
+                No rating criteria are configured. An admin can add them in
+                Settings → CRM.
+              </p>
+            ) : (
+              d.criteria.map((c) => (
+                <div
+                  key={c.key}
+                  className="flex items-center justify-between gap-3 py-[7px]"
+                >
+                  <div className="min-w-0">
+                    <span className="text-[12.5px] font-medium text-ink">
+                      {c.label}
+                    </span>
+                    {c.hint ? (
+                      <span className="ml-1.5 text-[10px] text-ink-muted">
+                        {c.hint}
+                      </span>
+                    ) : null}
+                    {/* A retired criterion only appears when this call already
+                        scored it, so the old score stays readable. */}
+                    {!c.isActive ? (
+                      <span className="ml-1.5 text-[10px] text-ink-muted italic">
+                        retired
+                      </span>
+                    ) : null}
+                  </div>
+                  <StarPicker
+                    label={c.label}
+                    value={draft.ratings[c.key] ?? null}
+                    onChange={(v) =>
+                      setDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              ratings: (() => {
+                                const next = { ...prev.ratings };
+                                if (v === null) delete next[c.key];
+                                else next[c.key] = v;
+                                return next;
+                              })(),
+                            }
+                          : prev,
+                      )
+                    }
+                  />
                 </div>
-                <StarPicker
-                  label={label}
-                  value={draft[key]}
-                  onChange={(v) => set(key, v)}
-                />
-              </div>
-            ))}
+              ))
+            )}
 
             <div className="mt-2 flex items-center justify-between gap-3 rounded-field bg-inset px-3 py-2.5">
               <div>
@@ -621,7 +722,8 @@ export function FollowupPanel({
               </>
             ) : null}
           </Section>
-        </>
+          </div>
+        </div>
       )}
     </DraggablePanel>
   );
@@ -644,7 +746,23 @@ function IssueList({
 }) {
   const [adding, setAdding] = React.useState(false);
   const [lineId, setLineId] = React.useState("");
-  const [category, setCategory] = React.useState<IssueCategory>("DAMAGE_TRANSIT");
+  const [category, setCategory] = React.useState<IssueCategory>("");
+
+  // Complaint categories are managed data (Settings → CRM), not a fixed enum:
+  // a customer complains about whatever they complain about. The list is
+  // fetched here and a genuinely new value typed on the call is added to the
+  // master by the issues API, so it is offered on the very next call.
+  const categoryList = useQuery({
+    queryKey: ["lookups", "CRM_ISSUE"],
+    queryFn: () => apiGet<{ value: string }[]>("/api/lookups?category=CRM_ISSUE"),
+  });
+  const categories = React.useMemo(
+    () => (categoryList.data ?? []).map((r) => r.value),
+    [categoryList.data],
+  );
+  React.useEffect(() => {
+    if (!category && categories.length) setCategory(categories[0]);
+  }, [categories, category]);
   const [severity, setSeverity] = React.useState<IssueSeverity>("MEDIUM");
   const [dept, setDept] = React.useState<OwnerDept>("TRANSPORT");
   const [qty, setQty] = React.useState("");
@@ -684,7 +802,7 @@ function IssueList({
               {i.severity === "HIGH" ? "High" : i.severity === "MEDIUM" ? "Medium" : "Low"}
             </Pill>
             <strong className="text-[12.5px] text-ink">
-              {CATEGORY_LABEL[i.category as IssueCategory] ?? i.category}
+              {categoryLabel(i.category)}
             </strong>
             <span className="ml-auto text-[11px] text-ink-muted">Issue #{n + 1}</span>
           </div>
@@ -727,17 +845,17 @@ function IssueList({
                   </option>
                 ))}
             </select>
-            <select
-              className={selectCls}
+            {/* Free text with suggestions, not a closed list: if the customer
+                names something nobody anticipated it must still be recordable.
+                The issues API adds a genuinely new value to the master list,
+                so it is offered on the very next call. */}
+            <Autocomplete
               value={category}
-              onChange={(e) => setCategory(e.target.value as IssueCategory)}
-            >
-              {ISSUE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_LABEL[c]}
-                </option>
-              ))}
-            </select>
+              onValueChange={setCategory}
+              suggestions={categories}
+              placeholder="What went wrong?"
+              className="h-9"
+            />
             <select
               className={selectCls}
               value={severity}

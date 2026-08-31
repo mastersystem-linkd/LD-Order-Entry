@@ -64,18 +64,28 @@ export const ATTEMPT_OUTCOMES = [
 ] as const;
 export type AttemptOutcome = (typeof ATTEMPT_OUTCOMES)[number];
 
-export const ISSUE_CATEGORIES = [
-  "LATE_DELIVERY",
-  "DAMAGE_TRANSIT",
-  "SHORTAGE_MTR",
-  "SHADE_VARIATION",
-  "PRINT_DEFECT",
-  "WRONG_DESIGN",
-  "PACKING",
-  "BILLING_RATE",
-  "OTHER",
+/**
+ * Complaint categories are DATA, not a union. A fixed list could not survive
+ * contact with real calls — customers complain about whatever they complain
+ * about — so a category is free text, drawn from lookup_values("CRM_ISSUE"),
+ * managed in Settings → CRM, and addable mid-call. Same rule as fabric and
+ * design (§3.4): never block an unknown value.
+ *
+ * These are the values the module ships with, seeded on first run. Nothing in
+ * the code may assume the list still looks like this.
+ */
+export const DEFAULT_ISSUE_CATEGORIES = [
+  "Late delivery",
+  "Damage in transit",
+  "Shortage in meters",
+  "Shade variation",
+  "Print defect",
+  "Wrong design",
+  "Packing",
+  "Billing / rate",
+  "Other",
 ] as const;
-export type IssueCategory = (typeof ISSUE_CATEGORIES)[number];
+export type IssueCategory = string;
 
 export const ISSUE_SEVERITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 export type IssueSeverity = (typeof ISSUE_SEVERITIES)[number];
@@ -109,7 +119,13 @@ export const ISSUE_RESOLUTIONS = [
 export type IssueResolution = (typeof ISSUE_RESOLUTIONS)[number];
 
 /** Human labels. The UI must never invent its own wording for these. */
-export const CATEGORY_LABEL: Record<IssueCategory, string> = {
+/**
+ * Kept as a function, not a map: the stored category IS its own label now.
+ * Legacy rows written before categories became data still carry the old
+ * SCREAMING_SNAKE keys, so those are humanised on the way out rather than
+ * rewritten in the database.
+ */
+const LEGACY_CATEGORY_LABEL: Record<string, string> = {
   LATE_DELIVERY: "Late delivery",
   DAMAGE_TRANSIT: "Damage in transit",
   SHORTAGE_MTR: "Shortage in meters",
@@ -120,6 +136,17 @@ export const CATEGORY_LABEL: Record<IssueCategory, string> = {
   BILLING_RATE: "Billing / rate",
   OTHER: "Other",
 };
+
+export function categoryLabel(c: string): string {
+  // The stored category IS its own label now. Rows written before categories
+  // became data carry SCREAMING_SNAKE keys, so those are rendered as they
+  // always were rather than rewritten in the database — "DAMAGE_TRANSIT" read
+  // "Damage in transit", which no general rule recovers.
+  if (LEGACY_CATEGORY_LABEL[c]) return LEGACY_CATEGORY_LABEL[c];
+  if (!/^[A-Z][A-Z0-9_]*$/.test(c)) return c;
+  const s = c.replace(/_/g, " ").toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export const STATUS_LABEL: Record<FollowupStatus, string> = {
   DUE: "Due",
@@ -264,12 +291,39 @@ export function followupDueAt(deliveredAt: Date, dueDays: number): Date {
 // Ratings (§12.4)
 // ---------------------------------------------------------------------------
 
-export type SubRatings = {
-  delivery: number | null;
-  quality: number | null;
-  packing: number | null;
-  coordination: number | null;
+/**
+ * Scores by criterion key. These were four fixed fields (delivery / quality /
+ * packing / coordination); they are configurable rows now (§12.4), so nothing
+ * here may name a specific criterion.
+ */
+export type SubRatings = Record<string, number | null | undefined>;
+
+/** A rating criterion as configured in Settings → CRM. */
+export type RatingCriterion = {
+  key: string;
+  label: string;
+  hint: string | null;
+  sortOrder: number;
+  isActive: boolean;
 };
+
+/** The criteria the module ships with, seeded on first run. */
+export const DEFAULT_RATING_CRITERIA: {
+  key: string;
+  label: string;
+  hint: string;
+}[] = [
+  { key: "delivery", label: "Delivery", hint: "timeliness, handling" },
+  { key: "quality", label: "Quality", hint: "fabric, print, shade" },
+  { key: "packing", label: "Packing", hint: "condition on arrival" },
+  { key: "coordination", label: "Coordination", hint: "our communication" },
+];
+
+function givenScores(r: SubRatings): number[] {
+  return Object.values(r).filter(
+    (v): v is number => typeof v === "number" && v >= 1 && v <= 5,
+  );
+}
 
 /**
  * The suggested overall — the mean of whichever sub-ratings were given, rounded
@@ -280,9 +334,7 @@ export type SubRatings = {
  * `rating_source` records who the number actually came from.
  */
 export function deriveOverallRating(r: SubRatings): number | null {
-  const given = [r.delivery, r.quality, r.packing, r.coordination].filter(
-    (v): v is number => typeof v === "number" && v >= 1 && v <= 5,
-  );
+  const given = givenScores(r);
   if (given.length === 0) return null;
   const mean = given.reduce((a, b) => a + b, 0) / given.length;
   return Math.min(5, Math.max(1, Math.round(mean)));
@@ -290,9 +342,7 @@ export function deriveOverallRating(r: SubRatings): number | null {
 
 /** The un-rounded mean, for display beside the stars ("3.3"). */
 export function overallRatingExact(r: SubRatings): number | null {
-  const given = [r.delivery, r.quality, r.packing, r.coordination].filter(
-    (v): v is number => typeof v === "number" && v >= 1 && v <= 5,
-  );
+  const given = givenScores(r);
   if (given.length === 0) return null;
   return given.reduce((a, b) => a + b, 0) / given.length;
 }

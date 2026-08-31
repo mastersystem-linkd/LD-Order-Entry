@@ -82,9 +82,18 @@ export function DraggablePanel({
       onPointerMove={onDragMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
-      style={pos ? { left: pos.x, top: pos.y } : { right: 24, top: 104 }}
+      // Centred until dragged. It used to be pinned top-right at 560px, which
+      // on a wide screen put a tall form in the corner with the two-column
+      // sections wrapping and the ratings below the fold. Centred and wider,
+      // the whole call fits with far less scrolling, and it can still be
+      // dragged aside to read the queue underneath.
+      style={
+        pos
+          ? { left: pos.x, top: pos.y }
+          : { left: "50%", top: "6rem", transform: "translateX(-50%)" }
+      }
       className={cn(
-        "fixed z-30 flex max-h-[calc(100vh-8rem)] w-[min(94vw,560px)] flex-col overflow-hidden rounded-card border border-line-strong bg-surface shadow-2xl",
+        "fixed z-30 flex max-h-[calc(100vh-9rem)] w-[min(96vw,860px)] flex-col overflow-hidden rounded-card border border-line-strong bg-surface shadow-2xl",
         className,
       )}
     >

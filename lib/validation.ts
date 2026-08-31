@@ -6,7 +6,6 @@ import {
   ATTEMPT_OUTCOMES,
   DELAY_REASONS,
   FOLLOWUP_STATUSES,
-  ISSUE_CATEGORIES,
   ISSUE_RESOLUTIONS,
   ISSUE_SEVERITIES,
   ISSUE_STATUSES,
@@ -188,10 +187,9 @@ export const followupUpdateSchema = z
     contact_phone: z.string().trim().max(30).optional().nullable(),
     customer_says_on_time: z.boolean().optional().nullable(),
     delay_reason: z.enum(DELAY_REASONS).optional().nullable(),
-    rating_delivery: star.optional().nullable(),
-    rating_quality: star.optional().nullable(),
-    rating_packing: star.optional().nullable(),
-    rating_coordination: star.optional().nullable(),
+    // Scores by criterion key (§12.4). Criteria are configurable rows, so
+    // this cannot be a fixed set of named fields. A null clears one.
+    ratings: z.record(z.string().max(40), star.nullable()).optional(),
     rating_overall: star.optional().nullable(),
     rating_source: z.enum(RATING_SOURCES).optional().nullable(),
     reorder_intent: z.enum(REORDER_INTENTS).optional(),
@@ -227,7 +225,10 @@ export type FollowupAttemptInput = z.infer<typeof followupAttemptSchema>;
 export const issueCreateSchema = z.object({
   followup_id: z.string().uuid(),
   order_line_item_id: z.string().uuid().optional().nullable(),
-  category: z.enum(ISSUE_CATEGORIES),
+  // Free text, drawn from lookup_values("CRM_ISSUE") — a customer complains
+  // about whatever they complain about, and an unknown value is never blocked
+  // (§3.4). The API adds a genuinely new one to the master list.
+  category: z.string().trim().min(1, "A category is required").max(100),
   severity: z.enum(ISSUE_SEVERITIES),
   owner_dept: z.enum(OWNER_DEPTS).optional().nullable(),
   qty_affected: z.coerce.number().min(0).max(99999999).optional().nullable(),
@@ -238,7 +239,7 @@ export type IssueCreateInput = z.infer<typeof issueCreateSchema>;
 // PATCH /api/crm/issues/:id — triage and resolution.
 export const issueUpdateSchema = z
   .object({
-    category: z.enum(ISSUE_CATEGORIES).optional(),
+    category: z.string().trim().min(1).max(100).optional(),
     severity: z.enum(ISSUE_SEVERITIES).optional(),
     owner_dept: z.enum(OWNER_DEPTS).optional().nullable(),
     qty_affected: z.coerce.number().min(0).max(99999999).optional().nullable(),
@@ -254,6 +255,26 @@ export const issueUpdateSchema = z
     path: ["resolution"],
   });
 export type IssueUpdateInput = z.infer<typeof issueUpdateSchema>;
+
+// Rating criteria (§12.4) — ADMIN, Settings → CRM. `key` is accepted on
+// create only and frozen thereafter: crm_followup_ratings references it, so
+// re-keying would orphan every score already given.
+export const ratingCriterionCreateSchema = z.object({
+  label: z.string().trim().min(1, "A name is required").max(80),
+  hint: z.string().trim().max(160).optional().nullable().transform((v) => (v ? v : null)),
+  key: z.string().trim().max(40).optional(),
+});
+export type RatingCriterionCreateInput = z.infer<typeof ratingCriterionCreateSchema>;
+
+export const ratingCriterionUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80).optional(),
+    hint: z.string().trim().max(160).optional().nullable().transform((v) => (v ? v : null)),
+    sort_order: z.coerce.number().int().min(0).max(999).optional(),
+    is_active: z.boolean().optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "Nothing to update" });
+export type RatingCriterionUpdateInput = z.infer<typeof ratingCriterionUpdateSchema>;
 
 // PATCH /api/crm/settings — ADMIN only, like every other Settings surface.
 export const crmSettingsUpdateSchema = z
