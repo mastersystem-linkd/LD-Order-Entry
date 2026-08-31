@@ -229,7 +229,7 @@ DON'T: manage stock/vendors/procurement here; auto-number `order_no`; write `lin
 - **OE-P15** — CRM follow-up queue: KPI cards that filter in place, priority ranking, filters, attempt logging.
 - **OE-P16** — the follow-up panel: ratings, on-time capture, reorder intent, inline issue creation.
 - **OE-P17** — `/crm/issues` board: filters (status/category/severity/department/search), a by-department / by-category breakdown rail that doubles as a filter, worst-first ordering (severity, then age), and inline resolve.
-- **OE-P18** — CRM **customers roll-up** (`/crm/customers`, `loadCustomers`) + **Settings → CRM** (`/api/crm/settings`, the tuning knobs that were SQL-only until now). **CRM analytics is still not built** — every chart on it needs completed follow-ups to plot, and there are none yet.
+- **OE-P18** — CRM **customers roll-up** (`/crm/customers`, `loadCustomers`) + **Settings → CRM** (`/api/crm/settings`, the tuning knobs that were SQL-only until now). **CRM analytics** (`/crm/analytics`, `loadCrmAnalytics`) — coverage, the follow-up funnel, the SLA-vs-customer 2×2, sub-scores by criterion, the rating trend, complaint Pareto by category/department/transport, resolution TAT and reorder signals. Built on the rule that **an unworked queue must LOOK unworked**: every panel would otherwise render a convincing zero, so each states what it still needs, and coverage sits first because it qualifies every other number on the page. `null` and `0` are kept strictly apart — an unrated queue reports null, never 0.0, because a zero reads as "they scored us zero". Plain CSS bars, not Recharts: a Pareto reads better as bars, and the page stays out of the chart chunk.
 
 
 ## 12. CRM module — post-delivery follow-up

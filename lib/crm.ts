@@ -674,3 +674,53 @@ export const CUSTOMER_SIGNAL_LABEL: Record<CustomerSignal, string> = {
   sample: "Sample asked",
   none: "—",
 };
+
+// ---------------------------------------------------------------------------
+// Analytics (§12.5.5, OE-P18)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the CRM analytics screen plots.
+ *
+ * Nullable figures are deliberate. A coverage of `null` means no follow-up
+ * exists to measure, which is a different statement from 0% — and on a screen
+ * whose whole purpose is telling "no complaints" apart from "nobody called",
+ * conflating the two would be the one unforgivable bug.
+ */
+export type CrmAnalytics = {
+  window: { from: string | null; to: string | null };
+  coverage: { followups: number; contacted: number; pct: number | null };
+  funnel: {
+    due: number;
+    inProgress: number;
+    completed: number;
+    unreachable: number;
+    notRequired: number;
+  };
+  ratings: {
+    rated: number;
+    avgOverall: number | null;
+    escalated: number;
+    trend: { month: string; avg: number; n: number }[];
+    /** By criterion — configurable, so never a fixed four (§12.4). */
+    subs: { key: string; label: string; avg: number; n: number }[];
+  };
+  /** The SLA calibration 2x2 (§12.3) — the disagreement IS the finding. */
+  onTime: {
+    bothOnTime: number;
+    bothLate: number;
+    weLateTheyFine: number;
+    weOnTimeTheyNot: number;
+  };
+  complaints: {
+    total: number;
+    open: number;
+    byCategory: { key: string; count: number }[];
+    byDept: { key: string; count: number }[];
+    byTransport: { key: string; count: number }[];
+    medianTatDays: number | null;
+    ratePer100: number | null;
+  };
+  reorder: { yes: number; maybe: number; sample: number };
+  sampleSize: number;
+};

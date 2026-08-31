@@ -10,6 +10,7 @@ import {
   count,
   eq,
   gte,
+  isNotNull,
   isNull,
   lte,
   or,
@@ -24,6 +25,7 @@ import {
   followupDueAt,
   followupPriority,
   priorityBand,
+  type CrmAnalytics,
   type CrmConfig,
   type CustomerList,
   type CustomerRow,
@@ -53,8 +55,10 @@ export type {
   IssueRow,
 };
 import {
+  crmFollowupRatings,
   crmFollowups,
   crmIssues,
+  crmRatingCriteria,
   crmSettings,
   customerOrders,
   lineStageProgress,
@@ -858,5 +862,190 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
     page: safePage,
     totalPages,
     kpis,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CRM analytics (§12.5.5, OE-P18)
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything the analytics screen plots, in FOUR sequential statements — see
+ * the concurrency warning at the top of this file. Sequential, not a
+ * Promise.all: the pool holds five connections for the whole process.
+ *
+ * Every figure here is derived from work a coordinator actually did. With an
+ * unworked queue they are all legitimately zero or null, and the screen says
+ * so rather than drawing a convincing flat line. `sampleSize` exists for
+ * exactly that: it lets the UI distinguish "nothing is wrong" from "nobody has
+ * looked yet", which are the two readings a blank chart could carry.
+ */
+export async function loadCrmAnalytics(
+  p: URLSearchParams,
+): Promise<CrmAnalytics> {
+  const from = (p.get("from") ?? "").trim() || null;
+  const to = (p.get("to") ?? "").trim() || null;
+
+  // Window on the follow-up's delivery date — the event the call is about.
+  const win = sql`
+    (${from}::date is null or ${crmFollowups.deliveredAt} >= ${from}::date)
+    and (${to}::date is null or ${crmFollowups.deliveredAt} < (${to}::date + interval '1 day'))`;
+
+  // ---- 1. Headline counts, the on-time 2x2, and reorder intent ------------
+  const [head] = await db
+    .select({
+      followups: count(),
+      contacted: sql<number>`count(*) filter (where ${crmFollowups.contactedAt} is not null)`,
+      completed: sql<number>`count(*) filter (where ${crmFollowups.status} = 'COMPLETED')`,
+      unreachable: sql<number>`count(*) filter (where ${crmFollowups.status} = 'UNREACHABLE')`,
+      due: sql<number>`count(*) filter (where ${crmFollowups.status} = 'DUE')`,
+      inProgress: sql<number>`count(*) filter (where ${crmFollowups.status} = 'IN_PROGRESS')`,
+      notRequired: sql<number>`count(*) filter (where ${crmFollowups.status} = 'NOT_REQUIRED')`,
+      escalated: sql<number>`count(*) filter (where ${crmFollowups.isEscalated})`,
+      rated: sql<number>`count(*) filter (where ${crmFollowups.ratingOverall} is not null)`,
+      avgOverall: sql<string | null>`avg(${crmFollowups.ratingOverall})`,
+      // The SLA calibration 2x2 (§12.3). Where these disagree is the finding.
+      bothOnTime: sql<number>`count(*) filter (where ${crmFollowups.systemOnTime} and ${crmFollowups.customerSaysOnTime})`,
+      bothLate: sql<number>`count(*) filter (where ${crmFollowups.systemOnTime} = false and ${crmFollowups.customerSaysOnTime} = false)`,
+      weLateTheyFine: sql<number>`count(*) filter (where ${crmFollowups.systemOnTime} = false and ${crmFollowups.customerSaysOnTime})`,
+      weOnTimeTheyNot: sql<number>`count(*) filter (where ${crmFollowups.systemOnTime} and ${crmFollowups.customerSaysOnTime} = false)`,
+      reorderYes: sql<number>`count(*) filter (where ${crmFollowups.reorderIntent} = 'yes')`,
+      reorderMaybe: sql<number>`count(*) filter (where ${crmFollowups.reorderIntent} = 'maybe')`,
+      reorderSample: sql<number>`count(*) filter (where ${crmFollowups.reorderIntent} = 'sample_requested')`,
+    })
+    .from(crmFollowups)
+    .where(win);
+
+  // ---- 2. Rating trend by month, plus the sub-scores ----------------------
+  // Sub-scores join through crm_rating_criteria because criteria are
+  // configurable now (§12.4) — nothing here may name delivery/quality/etc.
+  const trend = await db
+    .select({
+      month: sql<string>`to_char(date_trunc('month', ${crmFollowups.contactedAt}), 'YYYY-MM')`,
+      avg: sql<string>`avg(${crmFollowups.ratingOverall})`,
+      n: count(),
+    })
+    .from(crmFollowups)
+    .where(and(win, isNotNull(crmFollowups.ratingOverall), isNotNull(crmFollowups.contactedAt)))
+    .groupBy(sql`date_trunc('month', ${crmFollowups.contactedAt})`)
+    .orderBy(sql`date_trunc('month', ${crmFollowups.contactedAt})`);
+
+  const subs = await db
+    .select({
+      key: crmFollowupRatings.criterionKey,
+      label: sql<string | null>`max(${crmRatingCriteria.label})`,
+      avg: sql<string>`avg(${crmFollowupRatings.value})`,
+      n: count(),
+    })
+    .from(crmFollowupRatings)
+    .innerJoin(crmFollowups, eq(crmFollowups.id, crmFollowupRatings.followupId))
+    .leftJoin(crmRatingCriteria, eq(crmRatingCriteria.key, crmFollowupRatings.criterionKey))
+    .where(win)
+    .groupBy(crmFollowupRatings.criterionKey);
+
+  // ---- 3. Complaints: by category, by department, by transport -----------
+  const issues = await db
+    .select({
+      category: crmIssues.category,
+      dept: crmIssues.ownerDept,
+      transport: customerOrders.transport,
+      status: crmIssues.status,
+      createdAt: crmIssues.createdAt,
+      resolvedAt: crmIssues.resolvedAt,
+    })
+    .from(crmIssues)
+    .innerJoin(crmFollowups, eq(crmFollowups.id, crmIssues.followupId))
+    .innerJoin(customerOrders, eq(customerOrders.id, crmFollowups.orderId))
+    .where(win);
+
+  const tally = (pick: (r: (typeof issues)[number]) => string | null) => {
+    const m = new Map<string, number>();
+    for (const r of issues) {
+      const k = pick(r);
+      if (!k) continue;
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count);
+  };
+
+  // Median, not mean: one complaint left open for a year would drag a mean
+  // into uselessness and hide that most are closed in a week.
+  const closed = issues
+    .filter((r) => r.resolvedAt)
+    .map(
+      (r) =>
+        (new Date(r.resolvedAt as unknown as string).getTime() -
+          new Date(r.createdAt as unknown as string).getTime()) /
+        86_400_000,
+    )
+    .sort((a, b) => a - b);
+  const medianTat =
+    closed.length === 0
+      ? null
+      : Math.round(closed[Math.floor(closed.length / 2)] * 10) / 10;
+
+  const followups = Number(head?.followups ?? 0);
+  const contacted = Number(head?.contacted ?? 0);
+
+  return {
+    window: { from, to },
+    // The honesty metric (§9). Coverage is the FIRST thing to read: with it
+    // low, every other figure on this page describes a handful of calls.
+    coverage: {
+      followups,
+      contacted,
+      pct: followups === 0 ? null : Math.round((contacted / followups) * 1000) / 10,
+    },
+    funnel: {
+      due: Number(head?.due ?? 0),
+      inProgress: Number(head?.inProgress ?? 0),
+      completed: Number(head?.completed ?? 0),
+      unreachable: Number(head?.unreachable ?? 0),
+      notRequired: Number(head?.notRequired ?? 0),
+    },
+    ratings: {
+      rated: Number(head?.rated ?? 0),
+      avgOverall: head?.avgOverall == null ? null : Number(head.avgOverall),
+      escalated: Number(head?.escalated ?? 0),
+      trend: trend.map((r) => ({
+        month: r.month,
+        avg: Math.round(Number(r.avg) * 100) / 100,
+        n: Number(r.n),
+      })),
+      subs: subs
+        .map((r) => ({
+          key: r.key,
+          label: r.label ?? r.key,
+          avg: Math.round(Number(r.avg) * 100) / 100,
+          n: Number(r.n),
+        }))
+        .sort((a, b) => a.avg - b.avg),
+    },
+    onTime: {
+      bothOnTime: Number(head?.bothOnTime ?? 0),
+      bothLate: Number(head?.bothLate ?? 0),
+      weLateTheyFine: Number(head?.weLateTheyFine ?? 0),
+      weOnTimeTheyNot: Number(head?.weOnTimeTheyNot ?? 0),
+    },
+    complaints: {
+      total: issues.length,
+      open: issues.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS").length,
+      byCategory: tally((r) => r.category),
+      byDept: tally((r) => r.dept),
+      byTransport: tally((r) => r.transport),
+      medianTatDays: medianTat,
+      // Per 100 delivered orders — a raw count just ranks your busiest
+      // transporter first, which is not a quality signal.
+      ratePer100: followups === 0 ? null : Math.round((issues.length / followups) * 1000) / 10,
+    },
+    reorder: {
+      yes: Number(head?.reorderYes ?? 0),
+      maybe: Number(head?.reorderMaybe ?? 0),
+      sample: Number(head?.reorderSample ?? 0),
+    },
+    /** How much work these numbers rest on — 0 means nobody has called yet. */
+    sampleSize: Number(head?.completed ?? 0),
   };
 }
