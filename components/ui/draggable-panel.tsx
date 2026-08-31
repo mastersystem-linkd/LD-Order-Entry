@@ -96,7 +96,7 @@ export function DraggablePanel({
           : { left: "50%", top: "6rem", transform: "translateX(-50%)" }
       }
       className={cn(
-        "fixed z-30 flex max-h-[calc(100vh-9rem)] w-[min(96vw,860px)] flex-col overflow-hidden rounded-card border border-line-strong bg-surface shadow-2xl",
+        "fixed z-30 flex max-h-[calc(100vh-9rem)] w-[min(96vw,860px)] flex-col overflow-hidden rounded-card border border-line-strong bg-surface shadow-[0_24px_64px_-16px_rgba(16,20,40,0.35),0_2px_8px_rgba(16,20,40,0.10)] ring-1 ring-black/[0.03]",
         className,
       )}
     >

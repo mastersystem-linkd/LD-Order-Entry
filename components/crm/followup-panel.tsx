@@ -264,6 +264,11 @@ export function FollowupPanel({
   } | null>(null);
 
   const d = q.data;
+  // The draft exactly as it arrived, so "unsaved changes" is a fact rather
+  // than a permanent warning. Saying "nothing is saved until you press Save"
+  // on an untouched panel trains people to ignore the line that matters.
+  const [pristine, setPristine] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     if (!d) return;
     const f = d.followup;
@@ -278,6 +283,19 @@ export function FollowupPanel({
       contactPerson: f.contactPerson ?? "",
       contactPhone: f.contactPhone ?? "",
     });
+    setPristine(
+      JSON.stringify({
+        ratings: { ...d.ratings },
+        overall: f.ratingOverall,
+        source: f.ratingSource ?? "coordinator",
+        onTime: f.customerSaysOnTime,
+        delayReason: f.delayReason,
+        reorder: f.reorderIntent ?? "none",
+        reorderNote: f.reorderNote ?? "",
+        contactPerson: f.contactPerson ?? "",
+        contactPhone: f.contactPhone ?? "",
+      }),
+    );
   }, [d]);
 
   const set = <K extends keyof NonNullable<typeof draft>>(
@@ -368,6 +386,21 @@ export function FollowupPanel({
 
   const busy = save.isPending || logAttempt.isPending;
 
+  const current = draft
+    ? JSON.stringify({
+        ratings: draft.ratings,
+        overall: draft.overall,
+        source: draft.source,
+        onTime: draft.customerSaysOnTime,
+        delayReason: draft.delayReason,
+        reorder: draft.reorder,
+        reorderNote: draft.reorderNote,
+        contactPerson: draft.contactPerson,
+        contactPhone: draft.contactPhone,
+      })
+    : null;
+  const dirty = pristine !== null && current !== null && pristine !== current;
+
   // UNREACHABLE means "we tried and could not get them" (§12.7). Two things
   // make it wrong to offer:
   //   * somebody HAS answered — the customer is, demonstrably, reachable;
@@ -428,11 +461,17 @@ export function FollowupPanel({
         <>
           <span className="text-[11.5px] text-ink-muted">
             {d?.followup.isEscalated ? (
-              <span className="font-semibold text-danger">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-danger">
+                <AlertTriangleIcon className="size-3.5" />
                 Flagged for principal review
               </span>
+            ) : dirty ? (
+              <span className="inline-flex items-center gap-1.5 font-medium text-warning">
+                <span className="size-1.5 rounded-full bg-warning" />
+                Unsaved changes
+              </span>
             ) : (
-              "Nothing is saved until you press Save"
+              "Attempts and issues save immediately; the rest needs Save"
             )}
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -620,19 +659,6 @@ export function FollowupPanel({
                 <PlusIcon /> Log
               </Button>
 
-              {/* Giving up belongs HERE, beside the attempts that justify it —
-                  not in the footer next to Save and Complete, where it read as
-                  a third way to finish a call that was never had. */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto text-warning"
-                disabled={!canEdit || busy || unreachableReason !== null}
-                title={unreachableReason ?? "No answer after repeated attempts"}
-                onClick={() => save.mutate("UNREACHABLE")}
-              >
-                <PhoneOffIcon /> Can&rsquo;t reach
-              </Button>
             </div>
 
             {/* A visit was made by somebody, and "who went?" is the first
@@ -668,6 +694,28 @@ export function FollowupPanel({
                 unmeasurable without them.
               </p>
             )}
+
+            {/* Giving up belongs HERE, under the attempts that justify it —
+                not in the footer beside Save and Complete, where it read as a
+                third way to finish a call that was never had. It is the
+                CONCLUSION drawn from the log, so it sits below it. */}
+            {!isUnreachable ? (
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-2.5">
+                <span className="text-[11px] text-ink-muted">
+                  {unreachableReason ?? "Tried enough times?"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-warning hover:bg-warning/10"
+                  disabled={!canEdit || busy || unreachableReason !== null}
+                  title={unreachableReason ?? "No answer after repeated attempts"}
+                  onClick={() => save.mutate("UNREACHABLE")}
+                >
+                  <PhoneOffIcon /> Can&rsquo;t reach
+                </Button>
+              </div>
+            ) : null}
           </Section>
           </div>
 
@@ -699,9 +747,9 @@ export function FollowupPanel({
             </div>
           ) : null}
           <Section n={4} title="The call" muted={isUnreachable}>
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[12.5px] font-medium text-ink-soft">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3 rounded-field bg-surface-2 px-3 py-2.5">
+                <span className="text-[12.5px] font-medium text-ink">
                   Did it reach on time, from our side?
                 </span>
                 <Segmented
@@ -724,8 +772,8 @@ export function FollowupPanel({
               </div>
 
               {draft.customerSaysOnTime === false ? (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[12.5px] font-medium text-ink-soft">
+                <div className="flex items-center justify-between gap-3 rounded-field bg-surface-2 px-3 py-2.5">
+                  <span className="text-[12.5px] font-medium text-ink">
                     Reason for the delay
                   </span>
                   <select
@@ -773,10 +821,10 @@ export function FollowupPanel({
               d.criteria.map((c) => (
                 <div
                   key={c.key}
-                  className="-mx-2 flex items-center justify-between gap-3 rounded-field px-2 py-2 transition-colors hover:bg-surface-2"
+                  className="-mx-2 flex items-center justify-between gap-3 rounded-field px-2 py-2 transition-colors not-last:border-b not-last:border-line/60 hover:bg-surface-2"
                 >
                   <div className="min-w-0">
-                    <span className="text-[12.5px] font-medium text-ink">
+                    <span className="text-[13px] font-medium text-ink">
                       {c.label}
                     </span>
                     {c.hint ? (
@@ -792,8 +840,18 @@ export function FollowupPanel({
                       </span>
                     ) : null}
                   </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className={cn(
+                        "num w-3 text-right text-[12px] font-semibold tabular-nums",
+                        draft.ratings[c.key] ? "text-ink" : "text-transparent",
+                      )}
+                    >
+                      {draft.ratings[c.key] ?? 0}
+                    </span>
                   <StarPicker
                     label={c.label}
+                    size={17}
                     value={draft.ratings[c.key] ?? null}
                     onChange={(v) =>
                       setDraft((prev) =>
@@ -811,6 +869,7 @@ export function FollowupPanel({
                       )
                     }
                   />
+                  </div>
                 </div>
               ))
             )}
@@ -820,14 +879,14 @@ export function FollowupPanel({
                 <div className="text-[10px] font-medium tracking-[0.07em] text-ink-muted uppercase">
                   Overall &middot; suggested, editable
                 </div>
-                <div className="mt-0.5 flex items-center gap-2.5">
+                <div className="mt-1 flex items-center gap-3">
                   <StarPicker
                     label="Overall"
                     size={19}
                     value={draft.overall}
                     onChange={(v) => set("overall", v)}
                   />
-                  <span className="num text-[17px] leading-none font-semibold text-ink">
+                  <span className="num text-[22px] leading-none font-semibold tracking-[-0.02em] text-ink">
                     {exact !== null ? exact.toFixed(1) : "—"}
                   </span>
                 </div>
@@ -857,6 +916,12 @@ export function FollowupPanel({
           </Section>
 
           <Section n={6} title="Next requirement" muted={isUnreachable}>
+            {/* The commercial half of the call. A post-delivery conversation
+                reaches a customer at their warmest all quarter, so this is not
+                an afterthought — it is the line that pays for the call. */}
+            <p className="mb-2 text-[12px] text-ink-soft">
+              Are they buying again?
+            </p>
             <Segmented
               size="sm"
               ariaLabel="Reorder intent"
