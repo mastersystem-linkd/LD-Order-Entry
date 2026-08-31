@@ -840,7 +840,7 @@ export function FollowupPanel({
 
           <Stage
             n={1}
-            title="Did you reach them?"
+            title="Follow-up call attempt"
             done={d.attempts.length > 0}
             open={stage === 1}
             onToggle={() => setStage(stage === 1 ? null : 1)}
@@ -954,23 +954,28 @@ export function FollowupPanel({
 
           <Stage
             n={2}
-            title="How was the delivery?"
+            title="Issues or complaints"
             done={draft.customerSaysOnTime !== null}
             open={stage === 2}
             disabled={isUnreachable}
             onToggle={() => setStage(stage === 2 ? null : 2)}
-            summary={
-              draft.customerSaysOnTime === null
-                ? "On-time question not answered"
-                : draft.customerSaysOnTime
-                  ? `They said it arrived on time${d.issues.length ? ` · ${d.issues.length} issue${d.issues.length === 1 ? "" : "s"}` : ""}`
-                  : `They said it was late${d.issues.length ? ` · ${d.issues.length} issue${d.issues.length === 1 ? "" : "s"}` : ""}`
-            }
+            summary={(() => {
+              // The stage is named for complaints, so the summary leads with
+              // them; the on-time answer follows, since late delivery is
+              // itself the most common complaint.
+              const n = d.issues.length;
+              const raised =
+                n === 0 ? "No issues raised" : `${n} issue${n === 1 ? "" : "s"} raised`;
+              if (draft.customerSaysOnTime === null) {
+                return n === 0 ? "Nothing recorded yet" : raised;
+              }
+              return `${raised} · they said it ${draft.customerSaysOnTime ? "arrived on time" : "was late"}`;
+            })()}
           >
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-3 rounded-field bg-surface-2 px-3 py-2.5">
                 <span className="text-[12.5px] font-medium text-ink">
-                  Did it reach on time, from our side?
+                  Did it reach on time?
                 </span>
                 <Segmented
                   size="sm"
@@ -1033,7 +1038,7 @@ export function FollowupPanel({
               column and the API already had and nothing ever offered. */}
           <Stage
             n={3}
-            title="Anything else they said?"
+            title="Feedback"
             done={!!draft.notes.trim()}
             open={stage === 3}
             disabled={isUnreachable}
@@ -1058,7 +1063,7 @@ export function FollowupPanel({
 
           <Stage
             n={4}
-            title="How do they rate us?"
+            title="Ratings"
             done={draft.overall !== null}
             open={stage === 4}
             disabled={isUnreachable}
@@ -1178,14 +1183,14 @@ export function FollowupPanel({
           <Stage
             n={5}
             last
-            title="Will they order again?"
+            title="New requirement"
             done={draft.reorder !== "none"}
             open={stage === 5}
             disabled={isUnreachable}
             onToggle={() => setStage(stage === 5 ? null : 5)}
             summary={
               draft.reorder === "none"
-                ? "Nothing recorded"
+                ? "None"
                 : draft.reorder === "sample_requested"
                   ? "Asked for a sample"
                   : draft.reorder === "yes"
