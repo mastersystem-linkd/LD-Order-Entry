@@ -62,6 +62,7 @@ type Detail = {
     reorderIntent: string;
     reorderNote: string | null;
     notes: string | null;
+    completedBy: string | null;
     contactPerson: string | null;
     contactPhone: string | null;
     systemOnTime: boolean | null;
@@ -631,6 +632,11 @@ export function FollowupPanel({
                 <span className="size-1.5 rounded-full bg-warning" />
                 Unsaved changes
               </span>
+            ) : d?.followup.status === "COMPLETED" ? (
+              <span className="inline-flex items-center gap-1.5 font-medium text-success">
+                <CheckIcon className="size-3.5" />
+                Completed{d.followup.completedBy ? ` by ${d.followup.completedBy}` : ""}
+              </span>
             ) : (
               "Attempts and issues save immediately; the rest needs Save"
             )}
@@ -643,20 +649,35 @@ export function FollowupPanel({
             >
               Save
             </Button>
-            <Button
-              size="lg"
-              disabled={!canEdit || busy || !draft?.overall || isUnreachable}
-              title={
-                isUnreachable
-                  ? "Reopen the follow-up first — there was no call to complete"
-                  : draft?.overall
-                    ? "Complete this follow-up"
-                    : "An overall rating is required to complete"
-              }
-              onClick={() => save.mutate("COMPLETED")}
-            >
-              Complete
-            </Button>
+            {/* Offering "Complete" on a follow-up that is already completed is
+                an action with nothing to do. Once it is done the button
+                becomes the only thing still worth offering: putting it back. */}
+            {d?.followup.status === "COMPLETED" ? (
+              <Button
+                variant="outline"
+                size="lg"
+                disabled={!canEdit || busy}
+                title="Put this back in the queue — the customer called again, or something was recorded wrongly"
+                onClick={() => save.mutate("IN_PROGRESS")}
+              >
+                <RotateCcwIcon /> Reopen
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                disabled={!canEdit || busy || !draft?.overall || isUnreachable}
+                title={
+                  isUnreachable
+                    ? "Reopen the follow-up first — there was no call to complete"
+                    : draft?.overall
+                      ? "Complete this follow-up"
+                      : "An overall rating is required to complete"
+                }
+                onClick={() => save.mutate("COMPLETED")}
+              >
+                Complete
+              </Button>
+            )}
           </div>
         </>
       }

@@ -139,7 +139,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
           </button>
         ))}
 
-        <div className="relative ml-1 min-w-[240px] flex-1">
+        <div className="relative order-last ml-0 w-full min-w-0 sm:order-none sm:ml-1 sm:w-auto sm:min-w-[240px] sm:flex-1">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-soft" />
           <Input
             value={rawSearch}
@@ -161,7 +161,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {/* KPI row — each card filters the list in place */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1 [&>*]:w-[46vw] [&>*]:shrink-0 [&>*]:snap-start sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-0 sm:[&>*]:w-auto xl:grid-cols-5">
         {cards.map((c) => (
           <button
             key={c.key}
