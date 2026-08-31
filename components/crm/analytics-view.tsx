@@ -19,31 +19,18 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import {
+  CHART_BODY,
   CHART_COLOURS,
-  CoverageGauge,
+  CountBars,
+  CoverageMeter,
+  IntentTiles,
   OnTimeQuadrant,
   QueueBar,
 } from "@/components/crm/crm-charts-lite";
 
 const chartFallback = <div className="min-h-[188px]" />;
-const RatingRadar = dynamic(
-  () => import("@/components/crm/crm-charts").then((m) => m.RatingRadar),
-  { ssr: false, loading: () => chartFallback },
-);
 const RatingTrend = dynamic(
   () => import("@/components/crm/crm-charts").then((m) => m.RatingTrend),
-  { ssr: false, loading: () => chartFallback },
-);
-const ComplaintPareto = dynamic(
-  () => import("@/components/crm/crm-charts").then((m) => m.ComplaintPareto),
-  { ssr: false, loading: () => chartFallback },
-);
-const ShareDonut = dynamic(
-  () => import("@/components/crm/crm-charts").then((m) => m.ShareDonut),
-  { ssr: false, loading: () => chartFallback },
-);
-const RankedBars = dynamic(
-  () => import("@/components/crm/crm-charts").then((m) => m.RankedBars),
   { ssr: false, loading: () => chartFallback },
 );
 
@@ -72,7 +59,7 @@ const inputCls =
 /** A panel that has nothing to plot yet, and says why rather than drawing zero. */
 function Awaiting({ need }: { need: string }) {
   return (
-    <div className="flex min-h-[132px] items-center justify-center px-5 py-6 text-center">
+    <div className={cn("flex items-center justify-center px-5 pb-5 text-center", CHART_BODY)}>
       <p className="max-w-[280px] text-[12px] leading-relaxed text-ink-muted">
         {need}
       </p>
@@ -92,12 +79,12 @@ function Panel({
   className?: string;
 }) {
   return (
-    <Card className={cn("overflow-hidden p-0", className)}>
+    <Card className={cn("flex h-full flex-col overflow-hidden p-0", className)}>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-4 py-2.5 sm:px-5">
         <CardTitle className="text-[15px]">{title}</CardTitle>
         {note ? <span className="text-[11px] text-ink-muted">{note}</span> : null}
       </div>
-      <CardContent className="px-0 pt-0 pb-0">{children}</CardContent>
+      <CardContent className="flex-1 px-0 pt-0 pb-0">{children}</CardContent>
     </Card>
   );
 }
@@ -209,10 +196,10 @@ export function CrmAnalyticsView() {
         </div>
       ) : null}
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid items-stretch gap-3 lg:grid-cols-2">
         <Panel title="Coverage" note="the honesty metric — how many were actually called">
           {d && d.coverage.pct !== null ? (
-            <CoverageGauge
+            <CoverageMeter
               pct={d.coverage.pct}
               contacted={d.coverage.contacted}
               followups={d.coverage.followups}
@@ -264,7 +251,15 @@ export function CrmAnalyticsView() {
 
         <Panel title="Where the score is lost" note="by criterion, worst first">
           {d && d.ratings.subs.length > 0 ? (
-            <RatingRadar subs={d.ratings.subs} />
+            <CountBars
+              tone="warning"
+              outOf={5}
+              rows={d.ratings.subs.map((x) => ({
+                key: x.key,
+                label: x.label,
+                value: x.avg,
+              }))}
+            />
           ) : (
             <Awaiting need="Needs rated calls. Criteria are configured in Settings → CRM, so this chart follows whatever you decided to measure." />
           )}
@@ -286,11 +281,11 @@ export function CrmAnalyticsView() {
 
         <Panel title="What keeps happening" note="complaints by category">
           {d && d.complaints.byCategory.length > 0 ? (
-            <ComplaintPareto
-              data={d.complaints.byCategory.map((c) => ({
+            <CountBars
+              rows={d.complaints.byCategory.map((c) => ({
                 key: c.key,
                 label: categoryLabel(c.key),
-                count: c.count,
+                value: c.count,
               }))}
             />
           ) : (
@@ -300,12 +295,11 @@ export function CrmAnalyticsView() {
 
         <Panel title="Who has to act" note="complaints by department">
           {d && d.complaints.byDept.length > 0 ? (
-            <ShareDonut
-              centreLabel="complaints"
-              data={d.complaints.byDept.map((c) => ({
+            <CountBars
+              rows={d.complaints.byDept.map((c) => ({
                 key: c.key,
                 label: DEPT_LABEL[c.key] ?? c.key,
-                count: c.count,
+                value: c.count,
               }))}
             />
           ) : (
@@ -315,11 +309,11 @@ export function CrmAnalyticsView() {
 
         <Panel title="Complaints by transport" note="who is damaging the goods">
           {d && d.complaints.byTransport.length > 0 ? (
-            <RankedBars
-              data={d.complaints.byTransport.map((c) => ({
+            <CountBars
+              rows={d.complaints.byTransport.map((c) => ({
                 key: c.key,
                 label: c.key,
-                count: c.count,
+                value: c.count,
               }))}
             />
           ) : (
@@ -330,13 +324,12 @@ export function CrmAnalyticsView() {
         <Panel title="Reorder signals" note="the commercial case for calling">
           {d && d.reorder.yes + d.reorder.maybe + d.reorder.sample > 0 ? (
             <>
-              <ShareDonut
-                centreLabel="signals"
-                data={[
-                  { key: "yes", label: "Buying again", count: d.reorder.yes },
-                  { key: "maybe", label: "Maybe", count: d.reorder.maybe },
-                  { key: "sample", label: "Sample asked", count: d.reorder.sample },
-                ].filter((r) => r.count > 0)}
+              <IntentTiles
+                rows={[
+                  { key: "yes", label: "Buying again", value: d.reorder.yes, tone: "text-success" },
+                  { key: "maybe", label: "Maybe", value: d.reorder.maybe, tone: "text-warning" },
+                  { key: "sample", label: "Asked for a sample", value: d.reorder.sample, tone: "text-accent" },
+                ]}
               />
               <p className="flex items-center gap-1.5 px-4 pb-4 text-[11.5px] text-ink-muted sm:px-5">
                 <ArrowRightIcon className="size-3.5" />
