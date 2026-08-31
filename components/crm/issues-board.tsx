@@ -50,6 +50,24 @@ const STATUS_TABS = [
 const selectCls =
   "h-9 rounded-field border border-line bg-surface px-2.5 text-[12.5px] text-ink outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
 
+// The department that has to act. The raw enum (OPS / DISPATCH / ACCOUNTS)
+// is shouted and ambiguous in a cell on its own.
+const DEPT_LABEL: Record<string, string> = {
+  OPS: "Operations",
+  DISPATCH: "Dispatch",
+  DESIGN: "Design",
+  ACCOUNTS: "Accounts",
+  TRANSPORT: "Transport",
+  SALES: "Sales",
+};
+
+function money(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return "—";
+  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
+  if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
+  return `₹${formatNumber(n)}`;
+}
+
 const SEVERITY_TONE = { HIGH: "late", MEDIUM: "warn", LOW: "due" } as const;
 const SEVERITY_LABEL = { HIGH: "High", MEDIUM: "Medium", LOW: "Low" } as const;
 const STATUS_TONE = {
@@ -167,10 +185,10 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
         </select>
 
         <select className={selectCls} value={dept} onChange={(e) => setDept(e.target.value)}>
-          <option value="">All departments</option>
+          <option value="">Anyone&rsquo;s to fix</option>
           {OWNER_DEPTS.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {DEPT_LABEL[d] ?? d}
             </option>
           ))}
         </select>
@@ -239,7 +257,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
               value={groupBy}
               onChange={setGroupBy}
               options={[
-                { value: "dept", label: "By department" },
+                { value: "dept", label: "By who fixes it" },
                 { value: "category", label: "By category" },
               ]}
             />
@@ -256,7 +274,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                     groupBy === "dept" ? dept === g.key : category === g.key;
                   const label =
                     groupBy === "dept"
-                      ? g.key
+                      ? (DEPT_LABEL[g.key] ?? g.key)
                       : categoryLabel(g.key);
                   return (
                     <li key={g.key}>
@@ -288,8 +306,8 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           <div className="px-4 pt-4 pb-3 sm:px-5">
             <CardTitle className="text-[17px]">Complaints</CardTitle>
             <CardDescription className="text-[11.5px]">
-              Each issue points at a quality and design, so defect rate is
-              computable by fabric, transport and salesperson.
+              Worst first — severity, then how long it has been open. Click a
+              row to resolve it.
               {data ? <span className="num"> {data.total} shown.</span> : null}
             </CardDescription>
           </div>
@@ -299,14 +317,16 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
               <Table>
                 <THead className="bg-inset">
                   <tr>
-                    <Th>Order</Th>
-                    <Th>Party</Th>
-                    <Th>Quality / design</Th>
-                    <Th>Category</Th>
-                    <Th className="text-right">Mtr</Th>
+                    <Th>Order &middot; party</Th>
+                    <Th>Complaint</Th>
+                    <Th>Fabric &middot; design</Th>
+                    <Th className="text-right">Affected</Th>
+                    <Th className="text-right">Order value</Th>
                     <Th>Severity</Th>
-                    <Th>Owner</Th>
-                    <Th className="text-right">Age</Th>
+                    {/* Not "Owner" — that read as the transport company
+                        rather than the department that has to fix it. */}
+                    <Th>Whose to fix</Th>
+                    <Th className="text-right">Open</Th>
                     <Th>Status</Th>
                   </tr>
                 </THead>
@@ -424,43 +444,111 @@ function IssueRowView({
       <tr
         onClick={onToggle}
         className={cn(
-          "cursor-pointer border-b border-line transition-colors",
+          "group cursor-pointer border-b border-line transition-colors",
           open ? "bg-accent-soft" : "hover:bg-surface-2",
         )}
       >
-        <Td className="num font-semibold">{row.orderNo}</Td>
-        <Td className="max-w-[220px] truncate">{row.partyName}</Td>
+        {/* Order and party are ONE fact — which order, for whom. Two columns
+            spent half the width on repeating the same identity. */}
+        <Td>
+          <div className="num text-[13px] font-semibold text-ink">{row.orderNo}</div>
+          <div className="max-w-[190px] truncate text-[11.5px] text-ink-muted">
+            {row.partyName}
+          </div>
+        </Td>
+
+        {/* The complaint itself. The board previously showed the category and
+            hid the description entirely — so a list of complaints never said
+            what anyone actually complained about. */}
+        <Td className="max-w-[300px]">
+          <div className="truncate text-[13px] font-medium text-ink">
+            {categoryLabel(row.category)}
+          </div>
+          {row.description ? (
+            <div
+              className="truncate text-[11.5px] text-ink-soft"
+              title={row.description}
+            >
+              {row.description}
+            </div>
+          ) : (
+            <div className="text-[11.5px] text-ink-muted italic">
+              no detail recorded
+            </div>
+          )}
+        </Td>
+
         <Td>
           {row.quality ? (
             <>
-              <div className="font-medium text-ink">{row.quality}</div>
+              <div className="max-w-[150px] truncate text-[12.5px] font-medium text-ink">
+                {row.quality}
+              </div>
               <div className="num text-[11.5px] text-ink-muted">{row.designNo}</div>
             </>
           ) : (
-            <span className="text-ink-muted">Whole order</span>
+            <span className="text-[12px] text-ink-muted">Whole order</span>
           )}
         </Td>
-        <Td>{categoryLabel(row.category)}</Td>
-        <Td className="num text-right">
-          {row.qtyAffected != null ? formatNumber(row.qtyAffected) : "—"}
-        </Td>
-        <Td>
-          <Pill tone={SEVERITY_TONE[row.severity]}>{SEVERITY_LABEL[row.severity]}</Pill>
-        </Td>
-        <Td>
-          {row.ownerDept ? (
-            <span className="rounded-md bg-inset px-1.5 py-0.5 text-[10.5px] font-semibold text-ink-soft">
-              {row.ownerDept}
-            </span>
+
+        <Td className="num text-right whitespace-nowrap">
+          {row.qtyAffected != null ? (
+            <span className="font-medium">{formatNumber(row.qtyAffected)} m</span>
           ) : (
             <span className="text-ink-muted">—</span>
           )}
         </Td>
-        <Td className="num text-right text-ink-soft">{row.ageDays} d</Td>
+
+        {/* What the complaint puts at risk. A shortage on a ₹40k order and one
+            on a ₹18L order are not the same problem. */}
+        <Td className="num text-right whitespace-nowrap">
+          {row.orderValue > 0 ? (
+            <span className="font-semibold">{money(row.orderValue)}</span>
+          ) : (
+            <span className="text-ink-muted">—</span>
+          )}
+        </Td>
+
+        <Td>
+          <Pill tone={SEVERITY_TONE[row.severity]}>{SEVERITY_LABEL[row.severity]}</Pill>
+        </Td>
+
+        {/* "Owner: TRANSPORT" read as the transport company. It is the
+            department that has to FIX it, so the column says so. */}
+        <Td>
+          {row.ownerDept ? (
+            <span className="inline-flex items-center rounded-md bg-inset px-2 py-[3px] text-[10.5px] font-semibold tracking-wide text-ink-soft">
+              {DEPT_LABEL[row.ownerDept] ?? row.ownerDept}
+            </span>
+          ) : (
+            <span className="text-ink-muted">unassigned</span>
+          )}
+        </Td>
+
+        <Td className="num text-right whitespace-nowrap">
+          <span
+            className={cn(
+              "font-medium",
+              !closed && row.ageDays >= 14
+                ? "text-danger"
+                : !closed && row.ageDays >= 7
+                  ? "text-warning"
+                  : "text-ink-soft",
+            )}
+          >
+            {row.ageDays}d
+          </span>
+        </Td>
+
         <Td>
           <Pill tone={STATUS_TONE[row.status]} dot={false}>
             {STATUS_TEXT[row.status]}
           </Pill>
+          {row.resolution ? (
+            <div className="mt-0.5 text-[10.5px] text-ink-muted">
+              {RESOLUTION_LABEL[row.resolution]}
+            </div>
+          ) : null}
         </Td>
       </tr>
 
