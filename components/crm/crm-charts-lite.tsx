@@ -17,8 +17,12 @@ import { cn } from "@/lib/utils";
 // radar turned four scores into a diamond nobody could read a number off.
 // Where a shape adds nothing over a labelled bar, it is a labelled bar.
 
-/** Every chart body is this tall, so panels in a row line up. */
-export const CHART_BODY = "min-h-[176px]";
+/**
+ * Shared body height so panels in a row line up. It is a FLOOR, not a fixed
+ * height — a panel with one bar in it should not be as tall as a chart, and
+ * the grid stretches cards to their row anyway.
+ */
+export const CHART_BODY = "min-h-[152px]";
 
 /**
  * Coverage — one number against a target. A big figure and a track, not a
@@ -96,7 +100,7 @@ export function QueueBar({
           ) : null,
         )}
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
         {parts.map((p) => (
           <span key={p.key} className="inline-flex items-center gap-1.5 text-[12px]">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
@@ -225,26 +229,6 @@ export function CountBars({
             {outOf ? r.value.toFixed(1) : formatCount(r.value)}
             {suffix ?? ""}
           </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Three plain figures. A donut over three numbers is decoration, not a chart. */
-export function IntentTiles({
-  rows,
-}: {
-  rows: { key: string; label: string; value: number; tone: string }[];
-}) {
-  return (
-    <div className={cn("grid grid-cols-3 gap-2.5 px-4 pb-5 sm:px-5", CHART_BODY, "items-center")}>
-      {rows.map((r) => (
-        <div key={r.key} className="rounded-field border border-line bg-surface-2 px-3 py-4 text-center">
-          <div className={cn("num text-[26px] leading-none font-semibold", r.tone)}>
-            {formatCount(r.value)}
-          </div>
-          <div className="mt-1.5 text-[11px] leading-tight text-ink-muted">{r.label}</div>
         </div>
       ))}
     </div>

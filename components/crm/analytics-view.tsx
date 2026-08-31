@@ -3,9 +3,8 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowRightIcon,
-  ClockIcon,
   PhoneCallIcon,
+  ShoppingBagIcon,
   StarIcon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -17,13 +16,13 @@ import { categoryLabel, type CrmAnalytics } from "@/lib/crm";
 import { formatCount } from "@/lib/orders";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
+import { Segmented } from "@/components/ui/segmented";
 import { StatCard } from "@/components/ui/stat-card";
 import {
   CHART_BODY,
   CHART_COLOURS,
   CountBars,
   CoverageMeter,
-  IntentTiles,
   OnTimeQuadrant,
   QueueBar,
 } from "@/components/crm/crm-charts-lite";
@@ -60,7 +59,7 @@ const inputCls =
 function Awaiting({ need }: { need: string }) {
   return (
     <div className={cn("flex items-center justify-center px-5 pb-5 text-center", CHART_BODY)}>
-      <p className="max-w-[280px] text-[12px] leading-relaxed text-ink-muted">
+      <p className="max-w-[300px] text-[12px] leading-relaxed text-balance text-ink-muted">
         {need}
       </p>
     </div>
@@ -70,19 +69,23 @@ function Awaiting({ need }: { need: string }) {
 function Panel({
   title,
   note,
+  aside,
   children,
   className,
 }: {
   title: string;
   note?: string;
+  /** A control that belongs to this panel, right-aligned in its header. */
+  aside?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <Card className={cn("flex h-full flex-col overflow-hidden p-0", className)}>
-      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-4 py-2.5 sm:px-5">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-2.5 sm:px-5">
         <CardTitle className="text-[15px]">{title}</CardTitle>
         {note ? <span className="text-[11px] text-ink-muted">{note}</span> : null}
+        {aside ? <div className="ml-auto">{aside}</div> : null}
       </div>
       <CardContent className="flex-1 px-0 pt-0 pb-0">{children}</CardContent>
     </Card>
@@ -106,6 +109,27 @@ export function CrmAnalyticsView() {
 
   const d = q.data;
   const worked = (d?.sampleSize ?? 0) > 0;
+
+  // One complaints panel, sliced three ways — the same "who has to act vs what
+  // keeps happening" toggle the issues board uses, rather than three panels
+  // drawing the same short list.
+  const [slice, setSlice] = React.useState<"category" | "dept" | "transport">(
+    "category",
+  );
+  const sliceRows = React.useMemo(() => {
+    if (!d) return [];
+    const pick =
+      slice === "category"
+        ? d.complaints.byCategory.map((c) => ({ key: c.key, label: categoryLabel(c.key), value: c.count }))
+        : slice === "dept"
+          ? d.complaints.byDept.map((c) => ({ key: c.key, label: DEPT_LABEL[c.key] ?? c.key, value: c.count }))
+          : d.complaints.byTransport.map((c) => ({ key: c.key, label: c.key, value: c.count }));
+    return pick;
+  }, [d, slice]);
+
+  const onTimeTotal = d
+    ? d.onTime.bothOnTime + d.onTime.bothLate + d.onTime.weLateTheyFine + d.onTime.weOnTimeTheyNot
+    : 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -141,11 +165,15 @@ export function CrmAnalyticsView() {
         />
         <StatCard
           className="py-2.5 sm:py-3"
-          icon={<ClockIcon />}
-          label="Median resolution"
-          value={d?.complaints.medianTatDays != null ? `${d.complaints.medianTatDays} d` : "—"}
-          sub={d?.complaints.medianTatDays == null ? "nothing resolved yet" : undefined}
-          tone="slate"
+          icon={<ShoppingBagIcon />}
+          label="Reorder signals"
+          value={d ? formatCount(d.reorder.yes + d.reorder.maybe + d.reorder.sample) : "—"}
+          sub={
+            d
+              ? `${formatCount(d.reorder.yes)} buying again · ${formatCount(d.reorder.sample)} asked for a sample`
+              : undefined
+          }
+          tone="green"
         />
       </div>
 
@@ -196,8 +224,15 @@ export function CrmAnalyticsView() {
         </div>
       ) : null}
 
+      {/* SIX panels, one per question worth asking. There were nine, and three
+          of them — complaints by category, by department, by transport — were
+          the same list grouped three ways, each drawing a single bar. They are
+          one panel with a toggle now, the way the issues board already does
+          it. Reorder intent lost its panel too: three numbers are a KPI tile,
+          not a chart. */}
       <div className="grid items-stretch gap-3 lg:grid-cols-2">
-        <Panel title="Coverage" note="the honesty metric — how many were actually called">
+        {/* 1 — are we even calling anyone? Qualifies every other panel. */}
+        <Panel title="Coverage" note="the honesty metric">
           {d && d.coverage.pct !== null ? (
             <CoverageMeter
               pct={d.coverage.pct}
@@ -209,6 +244,7 @@ export function CrmAnalyticsView() {
           )}
         </Panel>
 
+        {/* 2 — where is the work? */}
         <Panel title="Where the queue stands" note="every follow-up in range">
           {d && d.coverage.followups > 0 ? (
             <QueueBar
@@ -225,46 +261,29 @@ export function CrmAnalyticsView() {
           )}
         </Panel>
 
-        <Panel
-          title="Our SLA vs the customer"
-          note="where these disagree is the finding"
-        >
-          {d &&
-          d.onTime.bothOnTime +
-            d.onTime.bothLate +
-            d.onTime.weLateTheyFine +
-            d.onTime.weOnTimeTheyNot >
-            0 ? (
-            <>
-              <OnTimeQuadrant data={d.onTime} />
-              <p className="px-4 pb-4 text-[11.5px] leading-relaxed text-ink-muted sm:px-5">
-                A large “late · they were fine” bar means the deadlines in
-                Settings → Time tracking are tighter than the promise you
-                actually make. Fix the config before reading anything into the
-                on-time figure.
-              </p>
-            </>
+        {/* 3 — is our deadline honest? The one panel a bar cannot replace. */}
+        <Panel title="Our deadline vs the customer" note="the disagreement is the finding">
+          {d && onTimeTotal > 0 ? (
+            <OnTimeQuadrant data={d.onTime} />
           ) : (
-            <Awaiting need="Needs completed calls where the customer answered the on-time question. This is the chart that calibrates the SLA, so it is worth the wait." />
+            <Awaiting need="Needs completed calls where the customer answered the on-time question. This is the panel that tells you whether the deadlines in Settings are the promise you actually make." />
           )}
         </Panel>
 
-        <Panel title="Where the score is lost" note="by criterion, worst first">
+        {/* 4 — what are we losing marks on? Maps straight to a department. */}
+        <Panel title="Where the score is lost" note="average out of 5, worst first">
           {d && d.ratings.subs.length > 0 ? (
             <CountBars
               tone="warning"
               outOf={5}
-              rows={d.ratings.subs.map((x) => ({
-                key: x.key,
-                label: x.label,
-                value: x.avg,
-              }))}
+              rows={d.ratings.subs.map((x) => ({ key: x.key, label: x.label, value: x.avg }))}
             />
           ) : (
-            <Awaiting need="Needs rated calls. Criteria are configured in Settings → CRM, so this chart follows whatever you decided to measure." />
+            <Awaiting need="Needs rated calls. The criteria come from Settings → CRM, so this follows whatever you decided to measure." />
           )}
         </Panel>
 
+        {/* 5 — getting better or worse? */}
         <Panel title="Rating trend" note="monthly average of the overall score">
           {d && d.ratings.trend.length > 1 ? (
             <RatingTrend data={d.ratings.trend} />
@@ -272,73 +291,47 @@ export function CrmAnalyticsView() {
             <Awaiting
               need={
                 d && d.ratings.trend.length === 1
-                  ? "One month of ratings so far — a trend needs at least two to compare."
-                  : "Needs rated calls across two or more months before a trend means anything."
+                  ? "One month of ratings so far — a trend needs two to compare."
+                  : "Needs rated calls across two or more months."
               }
             />
           )}
         </Panel>
 
-        <Panel title="What keeps happening" note="complaints by category">
-          {d && d.complaints.byCategory.length > 0 ? (
-            <CountBars
-              rows={d.complaints.byCategory.map((c) => ({
-                key: c.key,
-                label: categoryLabel(c.key),
-                value: c.count,
-              }))}
+        {/* 6 — what is going wrong, sliced three ways in ONE panel. */}
+        <Panel
+          title="What is going wrong"
+          note={
+            d && d.complaints.medianTatDays != null
+              ? `${d.complaints.total} complaints · median ${d.complaints.medianTatDays}d to close`
+              : d
+                ? `${d.complaints.total} complaints · none closed yet`
+                : undefined
+          }
+          aside={
+            <Segmented
+              size="sm"
+              ariaLabel="Group complaints by"
+              value={slice}
+              onChange={setSlice}
+              options={[
+                { value: "category", label: "What" },
+                { value: "dept", label: "Who fixes" },
+                { value: "transport", label: "Transport" },
+              ]}
             />
+          }
+        >
+          {d && sliceRows.length > 0 ? (
+            <CountBars rows={sliceRows} />
           ) : (
-            <Awaiting need="No complaints recorded in this range. With coverage still low that means nobody asked, not that nobody complained." />
-          )}
-        </Panel>
-
-        <Panel title="Who has to act" note="complaints by department">
-          {d && d.complaints.byDept.length > 0 ? (
-            <CountBars
-              rows={d.complaints.byDept.map((c) => ({
-                key: c.key,
-                label: DEPT_LABEL[c.key] ?? c.key,
-                value: c.count,
-              }))}
+            <Awaiting
+              need={
+                d && d.complaints.total === 0
+                  ? "No complaints recorded in this range. With coverage this low that means nobody asked, not that nobody complained."
+                  : "No complaint in this range carries that detail."
+              }
             />
-          ) : (
-            <Awaiting need="Needs complaints with a department assigned." />
-          )}
-        </Panel>
-
-        <Panel title="Complaints by transport" note="who is damaging the goods">
-          {d && d.complaints.byTransport.length > 0 ? (
-            <CountBars
-              rows={d.complaints.byTransport.map((c) => ({
-                key: c.key,
-                label: c.key,
-                value: c.count,
-              }))}
-            />
-          ) : (
-            <Awaiting need="Needs complaints on orders that name a transport. This chart is only possible because an issue points at a line, not at a text box." />
-          )}
-        </Panel>
-
-        <Panel title="Reorder signals" note="the commercial case for calling">
-          {d && d.reorder.yes + d.reorder.maybe + d.reorder.sample > 0 ? (
-            <>
-              <IntentTiles
-                rows={[
-                  { key: "yes", label: "Buying again", value: d.reorder.yes, tone: "text-success" },
-                  { key: "maybe", label: "Maybe", value: d.reorder.maybe, tone: "text-warning" },
-                  { key: "sample", label: "Asked for a sample", value: d.reorder.sample, tone: "text-accent" },
-                ]}
-              />
-              <p className="flex items-center gap-1.5 px-4 pb-4 text-[11.5px] text-ink-muted sm:px-5">
-                <ArrowRightIcon className="size-3.5" />
-                A post-delivery call reaches a customer at their warmest all
-                quarter.
-              </p>
-            </>
-          ) : (
-            <Awaiting need="Needs calls where the coordinator asked what they need next. This is the line that pays for the call." />
           )}
         </Panel>
       </div>
