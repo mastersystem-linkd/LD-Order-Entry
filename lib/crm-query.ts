@@ -675,7 +675,10 @@ const CUSTOMER_PAGE_SIZE = 25;
 export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
   const q = (p.get("q") ?? "").trim().toLowerCase();
   const sort = (p.get("sort") ?? "value") as CustomerSort;
-  const rated = p.get("rated"); // "low" | "high" | null
+  const rated = p.get("rated"); // "low" | "high" | "any" | null
+  // Both drive the KPI tiles, which filter the list to what they count.
+  const linked = p.get("linked"); // "yes" | "no" | null
+  const signal = p.get("signal"); // "at_risk" | null
   const page = Math.max(1, Number(p.get("page") ?? 1) || 1);
   // Optional order-date window. When set, a customer with no order inside it
   // drops out of the list entirely rather than appearing with zeroes — the
@@ -834,6 +837,10 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
   // rather than being silently treated as 0.
   if (rated === "low") out = out.filter((r) => r.avgRating !== null && r.avgRating <= 3);
   if (rated === "high") out = out.filter((r) => r.avgRating !== null && r.avgRating >= 4);
+  if (rated === "any") out = out.filter((r) => r.avgRating !== null);
+  if (linked === "yes") out = out.filter((r) => r.crrCustomerId !== null);
+  if (linked === "no") out = out.filter((r) => r.crrCustomerId === null);
+  if (signal === "at_risk") out = out.filter((r) => customerSignal(r) === "at_risk");
 
   const cmp: Record<CustomerSort, (a: CustomerRow, b: CustomerRow) => number> = {
     value: (a, b) => Number(b.value12m) - Number(a.value12m),

@@ -148,6 +148,38 @@ async function main() {
     newest.rows[0]?.key !== oldest.rows[0]?.key,
   ]);
 
+  // --- the filters the KPI tiles apply ------------------------------------
+  // Each tile narrows the list to exactly what it counts. If a tile said 84
+  // and clicking it showed a different number, the tile would be a lie.
+  const linkedOnly = await loadCustomers(new URLSearchParams("linked=yes"));
+  checks.push([
+    "linked=yes returns exactly the CRR-matched customers",
+    linkedOnly.total === first.kpis.linked &&
+      linkedOnly.rows.every((r) => r.crrCustomerId !== null),
+  ]);
+  const unlinkedOnly = await loadCustomers(new URLSearchParams("linked=no"));
+  checks.push([
+    "linked=no returns exactly the unmatched ones",
+    unlinkedOnly.total === first.kpis.unlinked &&
+      unlinkedOnly.rows.every((r) => r.crrCustomerId === null),
+  ]);
+  const ratedAny = await loadCustomers(new URLSearchParams("rated=any"));
+  checks.push([
+    "rated=any matches the Rated tile",
+    ratedAny.total === first.kpis.rated &&
+      ratedAny.rows.every((r) => r.avgRating !== null),
+  ]);
+  const atRisk = await loadCustomers(new URLSearchParams("signal=at_risk"));
+  checks.push([
+    "signal=at_risk matches the At risk tile",
+    atRisk.total === first.kpis.atRisk &&
+      atRisk.rows.every((r) => customerSignal(r) === "at_risk"),
+  ]);
+  checks.push([
+    "the tiles partition the list — linked + unlinked = all",
+    linkedOnly.total + unlinkedOnly.total === first.total,
+  ]);
+
   console.log();
   let bad = 0;
   for (const [name, ok] of checks) {

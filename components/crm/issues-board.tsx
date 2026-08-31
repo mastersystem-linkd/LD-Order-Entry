@@ -140,6 +140,27 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
   const data = q.data;
   const rows = data?.rows ?? [];
   const k = data?.kpis;
+
+  // Each tile narrows the board to what it counts, and clicking the active one
+  // puts it back — a KPI you can act on beats one you can only read. The
+  // status chips above stay in sync because they read the same state.
+  const openish = status === "OPEN_ANY" && !severity;
+  const showOpen = () => {
+    setStatus("OPEN_ANY");
+    setSeverity("");
+  };
+  const showHighSeverity = () => {
+    if (severity === "HIGH") {
+      setSeverity("");
+      return;
+    }
+    setStatus("OPEN_ANY");
+    setSeverity("HIGH");
+  };
+  const showResolved = () => {
+    setSeverity("");
+    setStatus(status === "RESOLVED" ? "OPEN_ANY" : "RESOLVED");
+  };
   const groups = groupBy === "dept" ? (data?.byDept ?? []) : (data?.byCategory ?? []);
 
   return (
@@ -258,7 +279,10 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           icon={<TriangleAlertIcon />}
           label="Open issues"
           value={k?.open ?? 0}
+          sub={openish ? "showing open" : "show open only"}
           tone="red"
+          active={openish}
+          onClick={showOpen}
         />
         <StatCard
           className="py-2.5 sm:py-3"
@@ -266,7 +290,9 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           label="Value at risk"
           value={k ? `₹${formatNumber(k.valueAtRisk)}` : "—"}
           tone="amber"
-          sub="counted once per order"
+          sub={openish ? "counted once per order" : "show the open ones"}
+          active={openish}
+          onClick={showOpen}
         />
         <StatCard
           className="py-2.5 sm:py-3"
@@ -274,7 +300,15 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           label="Median resolution"
           value={k?.medianResolutionDays != null ? `${k.medianResolutionDays} d` : "—"}
           tone="slate"
-          sub={k?.medianResolutionDays == null ? "nothing resolved yet" : undefined}
+          sub={
+            status === "RESOLVED"
+              ? "showing resolved"
+              : k?.medianResolutionDays == null
+                ? "nothing resolved yet"
+                : "see the resolved ones"
+          }
+          active={status === "RESOLVED"}
+          onClick={showResolved}
         />
         <StatCard
           className="py-2.5 sm:py-3"
@@ -282,6 +316,9 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           label="High severity"
           value={k?.highSeverity ?? 0}
           tone="red"
+          sub={severity === "HIGH" ? "showing high only" : "show high only"}
+          active={severity === "HIGH"}
+          onClick={showHighSeverity}
         />
       </div>
 

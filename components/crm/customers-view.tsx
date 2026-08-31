@@ -108,6 +108,8 @@ export function CustomersView() {
   const [rawSearch, setRawSearch] = React.useState("");
   const [sort, setSort] = React.useState<CustomerSort>("value");
   const [rated, setRated] = React.useState("");
+  const [linked, setLinked] = React.useState("");
+  const [signal, setSignal] = React.useState("");
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
   const [page, setPage] = React.useState(1);
@@ -118,6 +120,8 @@ export function CustomersView() {
   params.set("page", String(page));
   params.set("sort", sort);
   if (rated) params.set("rated", rated);
+  if (linked) params.set("linked", linked);
+  if (signal) params.set("signal", signal);
   if (from) params.set("from", from);
   if (to) params.set("to", to);
   if (search) params.set("q", search);
@@ -131,11 +135,29 @@ export function CustomersView() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [sort, rated, from, to, search]);
+  }, [sort, rated, linked, signal, from, to, search]);
 
   const data = q.data;
   const rows = data?.rows ?? [];
   const k = data?.kpis;
+
+  // Each tile narrows the list to what it counts, and clicking the active one
+  // clears it — so a tile is never a trap you cannot get out of.
+  const showAll = () => {
+    setRated("");
+    setLinked("");
+    setSignal("");
+  };
+  const only = (
+    set: (v: string) => void,
+    value: string,
+    current: string,
+  ) => () => {
+    const wasActive = current === value;
+    showAll();
+    if (!wasActive) set(value);
+  };
+  const noFilter = !rated && !linked && !signal;
 
   return (
     <div className="flex flex-col gap-3">
@@ -144,28 +166,42 @@ export function CustomersView() {
           icon={<UsersIcon />}
           label="Customers"
           value={k ? formatCount(k.customers) : "—"}
-          sub="with at least one live order"
+          sub={noFilter ? "with at least one live order" : "show all"}
+          active={noFilter}
+          onClick={showAll}
         />
         <StatCard
           icon={<LinkIcon />}
           label="Matched to CRR"
           value={k ? `${k.linked} / ${k.customers}` : "—"}
-          sub={k ? `${k.unlinked} still grouped by name` : undefined}
+          sub={
+            linked === "yes"
+              ? "showing matched only"
+              : k
+                ? `${k.unlinked} still grouped by name`
+                : undefined
+          }
           tone="slate"
+          active={linked === "yes"}
+          onClick={only(setLinked, "yes", linked)}
         />
         <StatCard
           icon={<StarIcon />}
           label="Rated"
           value={k ? formatCount(k.rated) : "—"}
-          sub="customers with a completed call"
+          sub={rated === "any" ? "showing rated only" : "customers with a completed call"}
           tone="amber"
+          active={rated === "any"}
+          onClick={only(setRated, "any", rated)}
         />
         <StatCard
           icon={<TriangleAlertIcon />}
           label="At risk"
           value={k ? formatCount(k.atRisk) : "—"}
-          sub="low rating or an open complaint"
+          sub={signal ? "showing at risk only" : "low rating or an open complaint"}
           tone="red"
+          active={signal === "at_risk"}
+          onClick={only(setSignal, "at_risk", signal)}
         />
       </div>
 
@@ -196,6 +232,7 @@ export function CustomersView() {
           onChange={(e) => setRated(e.target.value)}
         >
           <option value="">All ratings</option>
+          <option value="any">Rated (any score)</option>
           <option value="low">Rated 3 or below</option>
           <option value="high">Rated 4–5</option>
         </select>

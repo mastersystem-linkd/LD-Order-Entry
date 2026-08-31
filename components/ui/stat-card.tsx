@@ -24,6 +24,8 @@ export function StatCard({
   tone = "indigo",
   trend,
   className,
+  onClick,
+  active,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -32,13 +34,40 @@ export function StatCard({
   tone?: Tone;
   trend?: { dir: "up" | "down"; text: string };
   className?: string;
+  /**
+   * Makes the tile a filter, the way the Orders KPIs already work: clicking it
+   * narrows the list below to what it counts. A figure you can act on beats a
+   * figure you can only read.
+   */
+  onClick?: () => void;
+  /** Whether the filter this tile applies is the one currently in force. */
+  active?: boolean;
 }) {
   const t = TONE[tone];
   return (
     <Card
       data-size="sm"
+      // A real button when it filters, so it is keyboard-reachable and
+      // announces its pressed state — not a div with a click handler.
+      {...(onClick
+        ? {
+            role: "button" as const,
+            tabIndex: 0,
+            "aria-pressed": !!active,
+            onClick,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            },
+          }
+        : {})}
       className={cn(
         "relative overflow-hidden py-3 transition-shadow duration-200 hover:shadow-lg sm:py-4",
+        onClick &&
+          "cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]",
+        active && "border-accent ring-2 ring-accent/25",
         className,
       )}
     >
