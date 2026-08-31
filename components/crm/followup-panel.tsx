@@ -432,11 +432,11 @@ export function FollowupPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subsKey]);
 
+  // Every stage starts CLOSED. Auto-opening the first unfinished one dropped
+  // the coordinator inside a form before she had seen what the call involved —
+  // the point of stages is the overview, and she should choose where to start.
+  // Clicking an open stage closes it again.
   const [stage, setStage] = React.useState<number | null>(null);
-  React.useEffect(() => {
-    if (!d || stage !== null) return;
-    setStage(d.attempts.length === 0 ? 1 : d.followup.ratingOverall === null ? 4 : null);
-  }, [d, stage]);
 
   const [channel, setChannel] = React.useState<AttemptChannel>("call");
   const [outcome, setOutcome] = React.useState<AttemptOutcome>("connected");
@@ -503,6 +503,7 @@ export function FollowupPanel({
       }),
     onSuccess: () => {
       toast.success("Attempt logged");
+      setStage(null);
       q.refetch();
       onSaved();
     },
