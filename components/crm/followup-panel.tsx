@@ -438,6 +438,13 @@ export function FollowupPanel({
   // Clicking an open stage closes it again.
   const [stage, setStage] = React.useState<number | null>(null);
 
+  const activeCriteria = (d?.criteria ?? []).filter((c) => c.isActive);
+  const scoredActive = activeCriteria.filter(
+    (c) => draft?.ratings[c.key] != null,
+  ).length;
+  const ratingsDone =
+    activeCriteria.length > 0 && scoredActive === activeCriteria.length;
+
   const [channel, setChannel] = React.useState<AttemptChannel>("call");
   const [outcome, setOutcome] = React.useState<AttemptOutcome>("connected");
   const [attendedBy, setAttendedBy] = React.useState("");
@@ -976,7 +983,7 @@ export function FollowupPanel({
           <Stage
             n={2}
             title="Issues or complaints"
-            done={draft.customerSaysOnTime !== null}
+            done={draft.customerSaysOnTime !== null || d.issues.length > 0}
             open={stage === 2}
             disabled={isUnreachable}
             onToggle={() => setStage(stage === 2 ? null : 2)}
@@ -1085,14 +1092,16 @@ export function FollowupPanel({
           <Stage
             n={4}
             title="Ratings"
-            done={draft.overall !== null}
+            done={ratingsDone}
             open={stage === 4}
             disabled={isUnreachable}
             onToggle={() => setStage(stage === 4 ? null : 4)}
             summary={
-              draft.overall === null
-                ? `Not rated — ${d.criteria.length} criteria`
-                : `${exact !== null ? exact.toFixed(1) : draft.overall} out of 5 · ${Object.keys(draft.ratings).length} of ${d.criteria.length} scored`
+              scoredActive === 0
+                ? `Not rated — ${activeCriteria.length} criteria`
+                : ratingsDone
+                  ? `${exact !== null ? exact.toFixed(1) : draft.overall} out of 5 · all ${activeCriteria.length} scored`
+                  : `Part rated — ${scoredActive} of ${activeCriteria.length} scored`
             }
           >
             <p className="mb-2 text-[12px] text-ink-soft">
@@ -1205,7 +1214,7 @@ export function FollowupPanel({
             n={5}
             last
             title="New requirement"
-            done={draft.reorder !== "none"}
+            done={draft.reorder !== "none" || d.followup.status === "COMPLETED"}
             open={stage === 5}
             disabled={isUnreachable}
             onToggle={() => setStage(stage === 5 ? null : 5)}
