@@ -260,7 +260,7 @@ export function CustomersView() {
             max={to || undefined}
             onChange={(e) => setFrom(e.target.value)}
           />
-          <span className="text-[11px] text-ink-soft">to</span>
+          <span className="text-[12px] font-medium text-ink-soft">to</span>
           <input
             type="date"
             aria-label="Orders to"
@@ -276,7 +276,7 @@ export function CustomersView() {
                 setFrom("");
                 setTo("");
               }}
-              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-soft hover:bg-inset hover:text-ink"
+              className="cursor-pointer rounded-field px-1.5 py-1 text-[12px] font-medium text-ink-soft hover:bg-inset hover:text-ink"
             >
               Clear
             </button>
@@ -290,12 +290,12 @@ export function CustomersView() {
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-4 py-2.5 sm:px-5">
           <CardTitle className="text-[15px]">Customer history</CardTitle>
           {data ? (
-            <span className="num rounded-pill bg-inset px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+            <span className="num rounded-pill bg-inset px-2 py-0.5 text-[12px] font-semibold text-ink-soft">
               {data.total}
             </span>
           ) : null}
           <span
-            className="text-[11px] text-ink-soft"
+            className="text-[12px] text-ink-soft"
             title="A view over orders, follow-ups and complaints — never a second customer master. Party names are shown exactly as typed."
           >
             read-only · grouped by CRR customer
@@ -337,7 +337,7 @@ export function CustomersView() {
                     <tr key={r.key} className="group">
                       <Td>
                         <div className="font-semibold">{r.name}</div>
-                        <div className="text-[11.5px] text-ink-soft">
+                        <div className="text-[12px] text-ink-soft">
                           {r.crrCustomerId !== null ? (
                             <>
                               CRR {r.crrCustomerId}
@@ -368,16 +368,16 @@ export function CustomersView() {
                         ) : (
                           <span className="inline-flex items-center gap-1.5">
                             <Stars value={Math.round(r.avgRating)} />
-                            <span className="num text-[12px] font-semibold">
+                            <span className="num text-[12.5px] font-semibold">
                               {r.avgRating.toFixed(1)}
                             </span>
-                            <span className="text-[11px] text-ink-soft">
+                            <span className="text-[12px] font-medium text-ink-soft">
                               ({r.ratedCount})
                             </span>
                           </span>
                         )}
                       </Td>
-                      <Td className="text-[12px]">
+                      <Td className="text-[12.5px]">
                         <Trend v={r.ratingTrend} />
                       </Td>
                       <Td className="num text-right">
@@ -389,14 +389,14 @@ export function CustomersView() {
                           <span className="text-ink-soft">—</span>
                         )}
                       </Td>
-                      <Td className="num text-[12px] text-ink-soft">
+                      <Td className="num text-[12.5px] text-ink-soft">
                         {r.lastContacted ? (
                           formatDate(r.lastContacted)
                         ) : (
                           <span className="text-ink-soft">never</span>
                         )}
                       </Td>
-                      <Td className="num text-[12px] text-ink-soft">
+                      <Td className="num text-[12.5px] text-ink-soft">
                         {r.lastOrderDate ? formatDate(r.lastOrderDate) : "—"}
                       </Td>
                       <Td>

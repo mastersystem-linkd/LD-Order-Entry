@@ -192,7 +192,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
         <div className="flex flex-wrap items-end gap-3 px-4 pt-4 pb-3 sm:px-5">
           <div className="min-w-0 flex-1">
             <CardTitle className="text-[17px]">Priority queue</CardTitle>
-            <CardDescription className="text-[11.5px]">
+            <CardDescription className="text-[12px]">
               Ranked by order value, our own delay and prior complaints — not by
               date.{" "}
               {data ? (
@@ -338,7 +338,7 @@ function QueueRow({
       </Td>
       <Td className="max-w-[260px]">
         <div className="truncate font-semibold text-ink">{row.partyName}</div>
-        <div className="truncate text-[11.5px] text-ink-soft">
+        <div className="truncate text-[12px] text-ink-soft">
           {row.qualities} quality{row.qualities === 1 ? "" : "s"} · {row.designs}{" "}
           design{row.designs === 1 ? "" : "s"}
           {row.transport ? ` · ${row.transport}` : ""}

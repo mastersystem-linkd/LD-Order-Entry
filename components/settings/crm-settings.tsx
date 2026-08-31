@@ -187,7 +187,7 @@ function RatingCriteria() {
                   ) : null}
                 </div>
                 {!c.is_active ? (
-                  <span className="rounded-pill bg-inset px-2 py-0.5 text-[10.5px] font-semibold text-ink-soft">
+                  <span className="rounded-pill bg-inset px-2 py-0.5 text-[11.5px] font-semibold text-ink-soft">
                     retired
                   </span>
                 ) : null}
@@ -301,7 +301,7 @@ function IssueCategories() {
                 <span
                   key={r.id}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-pill border border-line bg-surface-2 py-1 pr-1 pl-2.5 text-[12px]",
+                    "inline-flex items-center gap-1.5 rounded-pill border border-line bg-surface-2 py-1 pr-1 pl-2.5 text-[12.5px]",
                     !r.is_active && "opacity-50",
                   )}
                 >

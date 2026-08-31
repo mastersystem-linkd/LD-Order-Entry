@@ -149,13 +149,13 @@ function Section({
         muted && "pointer-events-none opacity-45 select-none",
       )}
     >
-      <h3 className="mb-3 flex items-center gap-2.5 text-[10.5px] font-semibold tracking-[0.1em] text-ink uppercase">
-        <span className="grid size-[18px] shrink-0 place-items-center rounded-md bg-accent/10 text-[10px] font-bold tracking-normal text-accent">
+      <h3 className="mb-3 flex items-center gap-2.5 text-[11.5px] font-semibold tracking-[0.1em] text-ink uppercase">
+        <span className="grid size-[18px] shrink-0 place-items-center rounded-md bg-accent/10 text-[11px] font-bold tracking-normal text-accent">
           {n}
         </span>
         <span className="text-ink">{title}</span>
         {aside ? (
-          <span className="ml-auto text-[10.5px] font-medium tracking-normal text-ink-soft normal-case">
+          <span className="ml-auto text-[11.5px] font-medium tracking-normal text-ink-soft normal-case">
             {aside}
           </span>
         ) : null}
@@ -168,7 +168,7 @@ function Section({
 function Fact({ k, v, wide }: { k: string; v: React.ReactNode; wide?: boolean }) {
   return (
     <div className={cn(wide && "col-span-2")}>
-      <div className="text-[10px] font-semibold tracking-[0.07em] text-ink-soft uppercase">
+      <div className="text-[11px] font-semibold tracking-[0.07em] text-ink-soft uppercase">
         {k}
       </div>
       {/* Deliberately plain ink: these are context, and colouring them would
@@ -216,10 +216,10 @@ function Field({
   return (
     <div className={cn("min-w-0", wide && "sm:col-span-2")}>
       <div className="mb-1 flex items-baseline gap-1.5">
-        <span className="text-[10.5px] font-semibold tracking-[0.05em] text-ink uppercase">
+        <span className="text-[11.5px] font-semibold tracking-[0.05em] text-ink uppercase">
           {label}
         </span>
-        {hint ? <span className="text-[10px] text-ink-soft">{hint}</span> : null}
+        {hint ? <span className="text-[11px] text-ink-soft">{hint}</span> : null}
       </div>
       {children}
     </div>
@@ -227,7 +227,7 @@ function Field({
 }
 
 const selectCls =
-  "h-8 rounded-field border border-line bg-surface px-2 text-[12px] text-ink outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
+  "h-8 rounded-field border border-line bg-surface px-2 text-[12.5px] text-ink outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
 
 export function FollowupPanel({
   followupId,
@@ -479,7 +479,7 @@ export function FollowupPanel({
       onClose={onClose}
       footer={
         <>
-          <span className="text-[11.5px] text-ink-soft">
+          <span className="text-[12px] text-ink-soft">
             {d?.followup.isEscalated ? (
               <span className="inline-flex items-center gap-1.5 font-semibold text-danger">
                 <AlertTriangleIcon className="size-3.5" />
@@ -547,7 +547,7 @@ export function FollowupPanel({
                 v={
                   <span className="num">
                     {formatDate(d.followup.deliveredAt)}
-                    <span className="ml-1 text-[11px] font-normal text-ink-soft">
+                    <span className="ml-1 text-[12px] font-normal text-ink-soft">
                       {d.followup.deliveryBasis === "received_lr"
                         ? "· LR received"
                         : "· dispatch + transit"}
@@ -664,7 +664,7 @@ export function FollowupPanel({
                         </span>
                       </li>
                     </ul>
-                    <p className="mt-2.5 border-t border-danger/20 pt-2 text-[11.5px] leading-relaxed text-ink-soft">
+                    <p className="mt-2.5 border-t border-danger/20 pt-2 text-[12px] leading-relaxed text-ink-soft">
                       This is against <b>our own plan</b>. The customer may still
                       feel it arrived on time — ask them, do not assume.
                     </p>
@@ -729,7 +729,7 @@ export function FollowupPanel({
                 usually not the person who went. */}
             {channel === "visit" && outcome !== "not_available" ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <label className="text-[11.5px] text-ink-soft">Visited by</label>
+                <label className="text-[12px] text-ink-soft">Visited by</label>
                 <Autocomplete
                   value={attendedBy}
                   onValueChange={setAttendedBy}
@@ -742,7 +742,7 @@ export function FollowupPanel({
             {d.attempts.length > 0 ? (
               <ul className="mt-2.5 flex flex-col gap-1">
                 {d.attempts.slice(0, 3).map((a, i) => (
-                  <li key={a.id} className="text-[11.5px] text-ink-soft">
+                  <li key={a.id} className="text-[12px] text-ink-soft">
                     Attempt {d.attempts.length - i} ·{" "}
                     <span className="num">{formatDateTime(a.attemptedAt)}</span> —{" "}
                     {OUTCOME_LABEL[a.outcome as AttemptOutcome] ?? a.outcome}
@@ -752,7 +752,7 @@ export function FollowupPanel({
                 ))}
               </ul>
             ) : (
-              <p className="mt-2.5 text-[11.5px] text-ink-soft">
+              <p className="mt-2.5 text-[12px] text-ink-soft">
                 No attempt logged yet. Log the unanswered ones too — coverage is
                 unmeasurable without them.
               </p>
@@ -764,7 +764,7 @@ export function FollowupPanel({
                 CONCLUSION drawn from the log, so it sits below it. */}
             {!isUnreachable ? (
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-2.5">
-                <span className="text-[11px] text-ink-soft">
+                <span className="text-[12px] text-ink-soft">
                   {unreachableReason ??
                     (attempted
                       ? "Tried enough times?"
@@ -799,7 +799,7 @@ export function FollowupPanel({
                   <div className="text-[13px] font-semibold text-ink">
                     Marked unreachable
                   </div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-ink-soft">
                     No conversation happened, so there is nothing to answer,
                     rate or promise — the steps below are closed. Anything
                     already recorded is kept. Reopen if they call back.
@@ -899,14 +899,14 @@ export function FollowupPanel({
                       {c.label}
                     </span>
                     {c.hint ? (
-                      <span className="ml-1.5 text-[10px] text-ink-soft">
+                      <span className="ml-1.5 text-[11px] text-ink-soft">
                         {c.hint}
                       </span>
                     ) : null}
                     {/* A retired criterion only appears when this call already
                         scored it, so the old score stays readable. */}
                     {!c.isActive ? (
-                      <span className="ml-1.5 text-[10px] text-ink-soft italic">
+                      <span className="ml-1.5 text-[11px] text-ink-soft italic">
                         retired
                       </span>
                     ) : null}
@@ -914,7 +914,7 @@ export function FollowupPanel({
                   <div className="flex shrink-0 items-center gap-2">
                     <span
                       className={cn(
-                        "num w-3 text-right text-[12px] font-semibold tabular-nums",
+                        "num w-3 text-right text-[12.5px] font-semibold tabular-nums",
                         draft.ratings[c.key] ? "text-ink" : "text-transparent",
                       )}
                     >
@@ -947,7 +947,7 @@ export function FollowupPanel({
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-card border border-line bg-inset px-3.5 py-3">
               <div>
-                <div className="text-[10px] font-medium tracking-[0.07em] text-ink-soft uppercase">
+                <div className="text-[11px] font-medium tracking-[0.07em] text-ink-soft uppercase">
                   Overall &middot; suggested, editable
                 </div>
                 <div className="mt-1 flex items-center gap-3">
@@ -990,7 +990,7 @@ export function FollowupPanel({
             {/* The commercial half of the call. A post-delivery conversation
                 reaches a customer at their warmest all quarter, so this is not
                 an afterthought — it is the line that pays for the call. */}
-            <p className="mb-2 text-[12px] text-ink-soft">
+            <p className="mb-2 text-[12.5px] text-ink-soft">
               Are they buying again?
             </p>
             <Segmented
@@ -1013,7 +1013,7 @@ export function FollowupPanel({
                   onChange={(e) => set("reorderNote", e.target.value)}
                   placeholder="What did they ask for?"
                 />
-                <p className="mt-1.5 text-[11.5px] text-ink-soft">
+                <p className="mt-1.5 text-[12px] text-ink-soft">
                   Goes to the sales reorder list
                   {d.order.salesPerson ? `, tagged to ${d.order.salesPerson}` : ""}.
                 </p>
@@ -1117,9 +1117,9 @@ function IssueList({
             <strong className="text-[12.5px] text-ink">
               {categoryLabel(i.category)}
             </strong>
-            <span className="ml-auto text-[11px] text-ink-soft">Issue #{n + 1}</span>
+            <span className="ml-auto text-[12px] text-ink-soft">Issue #{n + 1}</span>
           </div>
-          <div className="text-[11.5px] text-ink-soft">
+          <div className="text-[12px] text-ink-soft">
             {i.quality ? (
               <>
                 {i.quality} · <span className="num">{i.designNo}</span>
@@ -1136,14 +1136,14 @@ function IssueList({
             {i.ownerDept ? ` · ${i.ownerDept}` : ""}
           </div>
           {i.description ? (
-            <p className="mt-1 text-[12px] text-ink">{i.description}</p>
+            <p className="mt-1 text-[12.5px] text-ink">{i.description}</p>
           ) : null}
         </div>
       ))}
 
       {adding ? (
         <div className="rounded-card border border-line bg-surface-2 p-3">
-          <div className="mb-2.5 text-[11px] font-semibold tracking-[0.06em] text-ink-soft uppercase">
+          <div className="mb-2.5 text-[12px] font-semibold tracking-[0.06em] text-ink-soft uppercase">
             New issue
           </div>
 
@@ -1192,7 +1192,7 @@ function IssueList({
               >
                 <Input
                   autoFocus
-                  className="h-8 w-full text-[12px]"
+                  className="h-8 w-full text-[12.5px]"
                   value={otherCategory}
                   onChange={(e) => setOtherCategory(e.target.value)}
                   placeholder="e.g. Roll length short"
@@ -1230,7 +1230,7 @@ function IssueList({
 
             <Field label="Meters affected" hint="optional">
               <Input
-                className="h-8 w-full text-[12px]"
+                className="h-8 w-full text-[12.5px]"
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
                 placeholder="e.g. 120"
@@ -1240,7 +1240,7 @@ function IssueList({
 
             <Field label="What exactly happened" hint="optional" wide>
               <Input
-                className="h-8 w-full text-[12px]"
+                className="h-8 w-full text-[12.5px]"
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
                 placeholder="Two thans water-stained at the edges…"

@@ -229,7 +229,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
             max={to || undefined}
             onChange={(e) => setFrom(e.target.value)}
           />
-          <span className="text-[11px] text-ink-soft">to</span>
+          <span className="text-[12px] text-ink-soft">to</span>
           <input
             type="date"
             aria-label="Raised to"
@@ -245,7 +245,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                 setFrom("");
                 setTo("");
               }}
-              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-soft hover:bg-inset hover:text-ink"
+              className="cursor-pointer rounded-field px-1.5 py-1 text-[12px] font-medium text-ink-soft hover:bg-inset hover:text-ink"
             >
               Clear
             </button>
@@ -384,11 +384,11 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-4 py-2.5 sm:px-5">
             <CardTitle className="text-[15px]">Complaints</CardTitle>
             {data ? (
-              <span className="num rounded-pill bg-inset px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+              <span className="num rounded-pill bg-inset px-2 py-0.5 text-[12px] font-semibold text-ink-soft">
                 {data.total}
               </span>
             ) : null}
-            <span className="text-[11px] text-ink-soft">
+            <span className="text-[12px] text-ink-soft">
               worst first · click a row to resolve
             </span>
           </div>
@@ -533,7 +533,7 @@ function IssueRowView({
             spent half the width on repeating the same identity. */}
         <Td>
           <div className="num text-[13px] font-semibold text-ink">{row.orderNo}</div>
-          <div className="max-w-[190px] truncate text-[11.5px] text-ink-soft">
+          <div className="max-w-[190px] truncate text-[12px] text-ink-soft">
             {row.partyName}
           </div>
         </Td>
@@ -547,13 +547,13 @@ function IssueRowView({
           </div>
           {row.description ? (
             <div
-              className="truncate text-[11.5px] text-ink-soft"
+              className="truncate text-[12.5px] font-medium text-ink-soft"
               title={row.description}
             >
               {row.description}
             </div>
           ) : (
-            <div className="text-[11.5px] text-ink-soft italic">
+            <div className="text-[12px] text-ink-soft italic">
               no detail recorded
             </div>
           )}
@@ -565,10 +565,10 @@ function IssueRowView({
               <div className="max-w-[150px] truncate text-[12.5px] font-medium text-ink">
                 {row.quality}
               </div>
-              <div className="num text-[11.5px] text-ink-soft">{row.designNo}</div>
+              <div className="num text-[12px] text-ink-soft">{row.designNo}</div>
             </>
           ) : (
-            <span className="text-[12px] text-ink-soft">Whole order</span>
+            <span className="text-[12.5px] text-ink-soft">Whole order</span>
           )}
         </Td>
 
@@ -598,7 +598,7 @@ function IssueRowView({
             department that has to FIX it, so the column says so. */}
         <Td>
           {row.ownerDept ? (
-            <span className="inline-flex items-center rounded-md bg-inset px-2 py-[3px] text-[10.5px] font-semibold tracking-wide text-ink-soft">
+            <span className="inline-flex items-center rounded-md bg-inset px-2 py-[3px] text-[11.5px] font-semibold tracking-wide text-ink-soft">
               {DEPT_LABEL[row.ownerDept] ?? row.ownerDept}
             </span>
           ) : (
@@ -626,7 +626,7 @@ function IssueRowView({
             {STATUS_TEXT[row.status]}
           </Pill>
           {row.resolution ? (
-            <div className="mt-0.5 text-[10.5px] text-ink-soft">
+            <div className="mt-0.5 text-[11.5px] text-ink-soft">
               {RESOLUTION_LABEL[row.resolution]}
             </div>
           ) : null}
@@ -638,13 +638,13 @@ function IssueRowView({
           <Td colSpan={9} className="px-4 py-3.5 whitespace-normal">
             <div className="flex flex-col gap-3">
               <div>
-                <div className="text-[10.5px] tracking-[0.05em] text-ink-soft uppercase">
+                <div className="text-[11.5px] tracking-[0.05em] text-ink-soft uppercase">
                   What happened
                 </div>
                 <p className="mt-0.5 text-[13px] text-ink">
                   {row.description || "No description was recorded."}
                 </p>
-                <p className="mt-1 text-[11.5px] text-ink-soft">
+                <p className="mt-1 text-[12px] text-ink-soft">
                   Raised {formatDate(row.createdAt)}
                   {row.resolvedAt
                     ? ` · closed ${formatDate(row.resolvedAt)}${row.resolvedBy ? ` by ${row.resolvedBy}` : ""}`

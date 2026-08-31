@@ -30,7 +30,7 @@ export function NotBuiltYet({
           {blocked}
         </p>
       ) : null}
-      <p className="mt-5 inline-flex items-center gap-2 rounded-pill bg-inset px-3 py-1 text-[11px] font-semibold tracking-[0.06em] text-ink-soft uppercase">
+      <p className="mt-5 inline-flex items-center gap-2 rounded-pill bg-inset px-3 py-1 text-[12px] font-semibold tracking-[0.06em] text-ink-soft uppercase">
         {phase} · not built
       </p>
     </Card>

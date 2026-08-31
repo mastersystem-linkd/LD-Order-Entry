@@ -52,7 +52,7 @@ export function CoverageMeter({
         <span className={cn("num font-display text-[40px] leading-none font-semibold", toneText)}>
           {pct}%
         </span>
-        <span className="text-[12px] text-ink-soft">of delivered orders called</span>
+        <span className="text-[12.5px] font-medium text-ink-soft">of delivered orders called</span>
       </div>
 
       <div className="relative mt-4 h-3 w-full rounded-pill bg-inset">
@@ -68,7 +68,7 @@ export function CoverageMeter({
         />
       </div>
 
-      <div className="mt-2 flex items-baseline justify-between text-[11.5px]">
+      <div className="mt-2 flex items-baseline justify-between text-[12px]">
         <span className="text-ink-soft">
           <span className="num font-semibold text-ink">{formatCount(contacted)}</span> of{" "}
           <span className="num">{formatCount(followups)}</span> called
@@ -102,9 +102,9 @@ export function QueueBar({
       </div>
       <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
         {parts.map((p) => (
-          <span key={p.key} className="inline-flex items-center gap-1.5 text-[12px]">
+          <span key={p.key} className="inline-flex items-center gap-1.5 text-[12.5px]">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
-            <span className="truncate text-ink-soft">{p.label}</span>
+            <span className="truncate font-medium text-ink-soft">{p.label}</span>
             <span className="num ml-auto font-semibold text-ink">{formatCount(p.count)}</span>
           </span>
         ))}
@@ -138,18 +138,18 @@ export function OnTimeQuadrant({
   const max = Math.max(...cells.map((c) => c.v), 1);
   return (
     <div className={cn("px-4 pb-5 sm:px-5", CHART_BODY)}>
-      <div className="mb-2 grid grid-cols-[76px_1fr_1fr] gap-2 text-[10.5px] font-medium text-ink-soft">
+      <div className="mb-2 grid grid-cols-[76px_1fr_1fr] gap-2 text-[11.5px] font-medium text-ink-soft">
         <span />
         <span className="text-center">Customer happy</span>
         <span className="text-center">Customer not</span>
       </div>
       <div className="grid grid-cols-[76px_1fr_1fr] gap-2">
-        <span className="flex items-center justify-end text-right text-[10.5px] font-medium text-ink-soft">
+        <span className="flex items-center justify-end text-right text-[11.5px] font-medium text-ink-soft">
           We hit our deadline
         </span>
         <QuadCell c={cells[0]} max={max} />
         <QuadCell c={cells[1]} max={max} />
-        <span className="flex items-center justify-end text-right text-[10.5px] font-medium text-ink-soft">
+        <span className="flex items-center justify-end text-right text-[11.5px] font-medium text-ink-soft">
           We missed it
         </span>
         <QuadCell c={cells[2]} max={max} />
@@ -179,7 +179,7 @@ function QuadCell({
       style={{ background: `color-mix(in oklab, ${colour} ${strength * 100}%, var(--surface))` }}
     >
       <div className="num text-[22px] leading-none font-semibold text-ink">{c.v}</div>
-      <div className="mt-1.5 text-[10px] leading-tight text-ink-soft">{c.note}</div>
+      <div className="mt-1.5 text-[11px] leading-tight text-ink-soft">{c.note}</div>
     </div>
   );
 }
@@ -214,7 +214,7 @@ export function CountBars({
       {rows.map((r) => (
         <div key={r.key} className="flex items-center gap-3">
           <span
-            className="w-[116px] shrink-0 truncate text-[12px] text-ink-soft"
+            className="w-[116px] shrink-0 truncate text-[12.5px] font-medium text-ink-soft"
             title={r.label}
           >
             {r.label}

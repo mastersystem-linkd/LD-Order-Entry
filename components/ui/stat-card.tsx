@@ -88,12 +88,12 @@ export function StatCard({
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12px] font-medium text-ink-soft">{label}</div>
+          <div className="truncate text-[12.5px] font-semibold text-ink-soft">{label}</div>
           <div className="num font-display text-[19px] font-semibold leading-tight tracking-[-0.02em] break-words text-ink sm:text-[22px]">
             {value}
           </div>
           {sub ? (
-            <div className="hidden text-[11px] text-ink-muted sm:block">{sub}</div>
+            <div className="hidden text-[11.5px] font-medium text-ink-soft sm:block">{sub}</div>
           ) : null}
         </div>
         {trend ? (
