@@ -119,7 +119,13 @@ async function main() {
         .where(eq(lookupValues.id, u.id));
     }
     for (let i = 0; i < inserts.length; i += 500) {
-      await tx.insert(lookupValues).values(inserts.slice(i, i + 500));
+      await tx
+        .insert(lookupValues)
+        .values(inserts.slice(i, i + 500))
+        // uq_lookup_values_category_value (migration 0004). The pre-filter
+        // above should make this unreachable; if it ever isn't, skipping a
+        // duplicate beats aborting the whole sync.
+        .onConflictDoNothing();
     }
   });
 

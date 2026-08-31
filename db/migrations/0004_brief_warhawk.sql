@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_lookup_values_category_value" ON "ld_order_entry"."lookup_values" USING btree ("category","value");

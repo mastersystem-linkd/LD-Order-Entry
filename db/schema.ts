@@ -16,6 +16,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -296,6 +297,13 @@ export const lookupValues = app.table(
   (t) => [
     index("idx_lookup_values_category").on(t.category),
     index("idx_lookup_values_crr_customer").on(t.crrCustomerId),
+    // A dropdown must not offer the same text twice. Without this the table
+    // silently accumulated duplicates: db/clone-to-dev.ts advertises "ON
+    // CONFLICT DO NOTHING" but had no conflict target to hit, and
+    // db/sync-crr-dropdowns.ts added two CRR customers that shared a display
+    // name. A duplicated value also broke the Autocomplete list, which keyed
+    // its options by the value itself. *(migration 0004)*
+    uniqueIndex("uq_lookup_values_category_value").on(t.category, t.value),
   ],
 );
 

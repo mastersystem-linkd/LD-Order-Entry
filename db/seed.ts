@@ -73,7 +73,7 @@ async function seedLookups() {
     }
   }
   if (toInsert.length > 0) {
-    await db.insert(lookupValues).values(toInsert);
+    await db.insert(lookupValues).values(toInsert).onConflictDoNothing();
   }
   const [{ value }] = await db.select({ value: count() }).from(lookupValues);
   console.log(`  lookup_values:   ${value} rows (+${toInsert.length} new)`);

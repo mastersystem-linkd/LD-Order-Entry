@@ -95,10 +95,20 @@ async function main() {
     if (ids.length < 2) continue;
     for (const id of ids.slice(1)) {
       const tagged = byCustomer.get(id)!.find((r) => r.alias);
-      if (tagged) {
-        display.set(id, tidyDisplayName(tagged.fullRawName));
-        disambiguated++;
-      }
+      // Prefer CRR's own branch tag. Where the colliding customer has no
+      // tagged spelling at all, fall back to its CRR id — an EARLIER version
+      // only handled the tagged case and silently left both customers sharing
+      // one name, which put two identical entries in the PARTY and HASTE
+      // dropdowns pointing at different customers (CRR 62 and 94, both
+      // "GARODIA SYNTEX PVT LTD"). A name nobody can tell apart is worse than
+      // an ugly one.
+      display.set(
+        id,
+        tagged
+          ? tidyDisplayName(tagged.fullRawName)
+          : `${display.get(id)} [CRR ${id}]`,
+      );
+      disambiguated++;
     }
   }
   if (disambiguated) {

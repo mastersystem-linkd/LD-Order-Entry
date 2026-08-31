@@ -141,8 +141,11 @@ export function Autocomplete({
               }}
               className="z-50 max-h-72 max-w-[calc(100vw-1rem)] overflow-auto rounded-[10px] border border-line bg-surface py-1 text-sm shadow-lg"
             >
+              {/* Keyed by position, not by value: these are free-text lookups
+                  with no uniqueness constraint behind them, and a duplicated
+                  value must never be able to break the list. */}
               {matches.map((s, i) => (
-                <li key={s}>
+                <li key={`${i}-${s}`}>
                   <button
                     type="button"
                     role="option"
