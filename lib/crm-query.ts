@@ -479,6 +479,11 @@ export async function loadIssues(p: URLSearchParams): Promise<IssueList> {
   const severity = p.get("severity")?.trim() ?? "";
   const dept = p.get("dept")?.trim() ?? "";
   const q = p.get("q")?.trim() ?? "";
+  // Window on when the complaint was RAISED, not on the order date: this board
+  // answers "what came in this month", and an old order can produce a new
+  // complaint.
+  const from = (p.get("from") ?? "").trim() || null;
+  const to = (p.get("to") ?? "").trim() || null;
 
   // Order value, so "value at risk" means something. Active lines only.
   const orderValue = db.$with("order_value").as(
@@ -499,6 +504,10 @@ export async function loadIssues(p: URLSearchParams): Promise<IssueList> {
   } else if (status && status !== "ALL") {
     where.push(eq(crmIssues.status, status));
   }
+  if (from) where.push(sql`${crmIssues.createdAt} >= ${from}::date`);
+  // Inclusive of the end day: a "to" of the 31st must include the 31st, not
+  // stop at midnight on its first second.
+  if (to) where.push(sql`${crmIssues.createdAt} < (${to}::date + interval '1 day')`);
   if (category) where.push(eq(crmIssues.category, category));
   if (severity) where.push(eq(crmIssues.severity, severity));
   if (dept) where.push(eq(crmIssues.ownerDept, dept));
@@ -664,6 +673,12 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
   const sort = (p.get("sort") ?? "value") as CustomerSort;
   const rated = p.get("rated"); // "low" | "high" | null
   const page = Math.max(1, Number(p.get("page") ?? 1) || 1);
+  // Optional order-date window. When set, a customer with no order inside it
+  // drops out of the list entirely rather than appearing with zeroes — the
+  // question being asked is "who bought in this period", and a row of dashes
+  // is not an answer to it.
+  const from = (p.get("from") ?? "").trim() || null;
+  const to = (p.get("to") ?? "").trim() || null;
 
   const rows = await db.execute<{
     key: string;
@@ -681,6 +696,7 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
     total_issues: number;
     last_contacted: string | null;
     last_order_date: string | null;
+    first_order_date: string | null;
     reorder_intent: string | null;
     followups_due: number;
   }>(sql`
@@ -696,7 +712,14 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
       join ${orderLineItems} li on li.order_id = o.id
       group by o.id, o.crr_customer_id, o.party_name, o.order_date
     ),
-    live as (select * from order_value where live_lines > 0),
+    -- An order whose every line is deleted is itself deleted, and a window
+    -- (when given) decides which orders count at all.
+    live as (
+      select * from order_value
+      where live_lines > 0
+        and (${from}::date is null or order_date >= ${from}::date)
+        and (${to}::date is null or order_date <= ${to}::date)
+    ),
     grouped as (
       select coalesce('crr:' || crr_customer_id::text, 'raw:' || upper(party_name)) as key,
              min(crr_customer_id) as crr_customer_id,
@@ -705,7 +728,8 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
              count(*) filter (where order_date >= current_date - 365) as orders_12m,
              coalesce(sum(value) filter (where order_date >= current_date - 365), 0) as value_12m,
              count(*) as orders_all,
-             max(order_date) as last_order_date
+             max(order_date) as last_order_date,
+             min(order_date) as first_order_date
       from live group by 1
     ),
     ranked_fu as (
@@ -740,6 +764,7 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
     )
     select g.key, g.name, g.crr_customer_id, g.aliases,
            g.orders_12m, g.value_12m, g.orders_all, g.last_order_date,
+           g.first_order_date,
            fu.avg_rating, coalesce(fu.rated_count, 0) as rated_count,
            fu.rating_recent, fu.rating_older,
            fu.last_contacted, fu.reorder_intent,
@@ -778,6 +803,7 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
       totalIssues: Number(r.total_issues),
       lastContacted: r.last_contacted,
       lastOrderDate: r.last_order_date,
+      firstOrderDate: r.first_order_date,
       reorderIntent: (r.reorder_intent as CustomerRow["reorderIntent"]) ?? null,
       followupsDue: Number(r.followups_due),
     };
@@ -814,6 +840,10 @@ export async function loadCustomers(p: URLSearchParams): Promise<CustomerList> {
       (a.avgRating ?? Infinity) - (b.avgRating ?? Infinity) ||
       Number(b.value12m) - Number(a.value12m),
     name: (a, b) => a.name.localeCompare(b.name),
+    // By ORDER DATE, not by when the row was created — "newest customer" means
+    // whoever ordered most recently.
+    newest: (a, b) => (b.lastOrderDate ?? "").localeCompare(a.lastOrderDate ?? ""),
+    oldest: (a, b) => (a.firstOrderDate ?? "").localeCompare(b.firstOrderDate ?? ""),
   };
   out = [...out].sort(cmp[sort] ?? cmp.value);
 

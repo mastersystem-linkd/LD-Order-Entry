@@ -23,7 +23,7 @@ import {
   type IssueResolution,
   type IssueRow,
 } from "@/lib/crm";
-import { formatDate, formatNumber } from "@/lib/orders";
+import { formatCount, formatDate, formatNumber } from "@/lib/orders";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -108,6 +108,8 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
   const [severity, setSeverity] = React.useState("");
   const [dept, setDept] = React.useState("");
   const [groupBy, setGroupBy] = React.useState<"dept" | "category">("dept");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
   const [rawSearch, setRawSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -120,6 +122,8 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
   if (category) params.set("category", category);
   if (severity) params.set("severity", severity);
   if (dept) params.set("dept", dept);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
   if (search) params.set("q", search);
   const qs = params.toString();
 
@@ -131,7 +135,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
 
   React.useEffect(() => {
     setPage(1);
-  }, [status, category, severity, dept, search]);
+  }, [status, category, severity, dept, from, to, search]);
 
   const data = q.data;
   const rows = data?.rows ?? [];
@@ -193,7 +197,41 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           ))}
         </select>
 
-        <div className="relative min-w-[200px] flex-1">
+        {/* Window on when the complaint was RAISED — an old order can produce
+            a new complaint, so filtering on order date would hide it. */}
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            aria-label="Raised from"
+            className={selectCls}
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+          <span className="text-[11px] text-ink-muted">to</span>
+          <input
+            type="date"
+            aria-label="Raised to"
+            className={selectCls}
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+          />
+          {from || to ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFrom("");
+                setTo("");
+              }}
+              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-muted hover:bg-inset hover:text-ink"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+
+        <div className="relative min-w-[180px] flex-1">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
           <Input
             value={rawSearch}

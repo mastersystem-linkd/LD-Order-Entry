@@ -22,7 +22,7 @@ import {
   type CustomerRow,
   type CustomerSort,
 } from "@/lib/crm";
-import { formatDate, formatNumber } from "@/lib/orders";
+import { formatCount, formatDate, formatNumber } from "@/lib/orders";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
@@ -49,8 +49,10 @@ const selectCls =
   "h-9 rounded-field border border-line bg-surface px-2.5 text-[12.5px] text-ink outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
 
 const SORTS: { value: CustomerSort; label: string }[] = [
-  { value: "value", label: "Sorted by value" },
+  { value: "value", label: "Highest value" },
   { value: "orders", label: "Most orders" },
+  { value: "newest", label: "Newest order first" },
+  { value: "oldest", label: "Oldest order first" },
   { value: "rating", label: "Lowest rated first" },
   { value: "issues", label: "Most complaints" },
   { value: "name", label: "Name (A–Z)" },
@@ -106,6 +108,8 @@ export function CustomersView() {
   const [rawSearch, setRawSearch] = React.useState("");
   const [sort, setSort] = React.useState<CustomerSort>("value");
   const [rated, setRated] = React.useState("");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
   const [page, setPage] = React.useState(1);
 
   const search = useDebouncedValue(rawSearch, 250);
@@ -114,6 +118,8 @@ export function CustomersView() {
   params.set("page", String(page));
   params.set("sort", sort);
   if (rated) params.set("rated", rated);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
   if (search) params.set("q", search);
   const qs = params.toString();
 
@@ -125,7 +131,7 @@ export function CustomersView() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [sort, rated, search]);
+  }, [sort, rated, from, to, search]);
 
   const data = q.data;
   const rows = data?.rows ?? [];
@@ -137,7 +143,7 @@ export function CustomersView() {
         <StatCard
           icon={<UsersIcon />}
           label="Customers"
-          value={k ? formatNumber(k.customers) : "—"}
+          value={k ? formatCount(k.customers) : "—"}
           sub="with at least one live order"
         />
         <StatCard
@@ -150,14 +156,14 @@ export function CustomersView() {
         <StatCard
           icon={<StarIcon />}
           label="Rated"
-          value={k ? formatNumber(k.rated) : "—"}
+          value={k ? formatCount(k.rated) : "—"}
           sub="customers with a completed call"
           tone="amber"
         />
         <StatCard
           icon={<TriangleAlertIcon />}
           label="At risk"
-          value={k ? formatNumber(k.atRisk) : "—"}
+          value={k ? formatCount(k.atRisk) : "—"}
           sub="low rating or an open complaint"
           tone="red"
         />
@@ -204,6 +210,41 @@ export function CustomersView() {
             </option>
           ))}
         </select>
+
+        {/* Order-date window. A customer with no order inside it drops out
+            rather than showing a row of dashes — "who bought in August" is not
+            answered by listing everyone with blanks. */}
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            aria-label="Orders from"
+            className={selectCls}
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+          <span className="text-[11px] text-ink-muted">to</span>
+          <input
+            type="date"
+            aria-label="Orders to"
+            className={selectCls}
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+          />
+          {from || to ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFrom("");
+                setTo("");
+              }}
+              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-muted hover:bg-inset hover:text-ink"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <Card className="overflow-hidden p-0">

@@ -617,11 +617,20 @@ export type CustomerRow = {
   totalIssues: number;
   lastContacted: string | null;
   lastOrderDate: string | null;
+  /** Earliest order in the window — what "oldest first" actually sorts on. */
+  firstOrderDate: string | null;
   reorderIntent: ReorderIntent | null;
   followupsDue: number;
 };
 
-export type CustomerSort = "value" | "rating" | "issues" | "orders" | "name";
+export type CustomerSort =
+  | "value"
+  | "rating"
+  | "issues"
+  | "orders"
+  | "name"
+  | "newest"
+  | "oldest";
 
 export type CustomerList = {
   rows: CustomerRow[];

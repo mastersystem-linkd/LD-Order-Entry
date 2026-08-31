@@ -166,6 +166,15 @@ export type TrashList = {
 };
 
 // Indian-style number formatting for money/qty display.
+/**
+ * Whole things — customers, orders, complaints. formatNumber() is for
+ * QUANTITIES and always shows two decimals, which is right for 2,500.00 m and
+ * absurd for "172.00 customers".
+ */
+export function formatCount(value: number): string {
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value);
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 2,

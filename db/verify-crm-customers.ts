@@ -95,6 +95,59 @@ async function main() {
   const linked = first.kpis.linked + first.kpis.unlinked === first.kpis.customers;
   checks.push(["linked + unlinked = total customers", linked]);
 
+  // --- the order-date window (OE-P18) -------------------------------------
+  // Every row must have bought at least once, and inside the window when one
+  // is given — a customer with no order in the period is not an answer to
+  // "who bought in this period", it is noise with dashes in it.
+  const aug = await loadCustomers(new URLSearchParams("from=2026-08-01&to=2026-08-31"));
+  checks.push([
+    "a date window narrows the list",
+    aug.total > 0 && aug.total <= first.total,
+  ]);
+  checks.push([
+    "every customer in the window ordered inside it",
+    aug.rows.every(
+      (r) =>
+        r.lastOrderDate !== null &&
+        r.lastOrderDate >= "2026-08-01" &&
+        r.lastOrderDate <= "2026-08-31" &&
+        r.ordersAll > 0,
+    ),
+  ]);
+  const july = await loadCustomers(new URLSearchParams("from=2026-07-01&to=2026-07-31"));
+  checks.push([
+    "a different window gives a different set",
+    july.total !== aug.total || july.rows[0]?.key !== aug.rows[0]?.key,
+  ]);
+  const impossible = await loadCustomers(
+    new URLSearchParams("from=2099-01-01&to=2099-12-31"),
+  );
+  checks.push(["a window with no orders returns nobody", impossible.total === 0]);
+
+  // --- sorting by order date ----------------------------------------------
+  const newest = await loadCustomers(new URLSearchParams("sort=newest"));
+  checks.push([
+    "sort=newest is descending by last order",
+    newest.rows.every(
+      (r, i) =>
+        i === 0 ||
+        (newest.rows[i - 1].lastOrderDate ?? "") >= (r.lastOrderDate ?? ""),
+    ),
+  ]);
+  const oldest = await loadCustomers(new URLSearchParams("sort=oldest"));
+  checks.push([
+    "sort=oldest is ascending by first order",
+    oldest.rows.every(
+      (r, i) =>
+        i === 0 ||
+        (oldest.rows[i - 1].firstOrderDate ?? "") <= (r.firstOrderDate ?? ""),
+    ),
+  ]);
+  checks.push([
+    "newest and oldest are not the same list",
+    newest.rows[0]?.key !== oldest.rows[0]?.key,
+  ]);
+
   console.log();
   let bad = 0;
   for (const [name, ok] of checks) {
