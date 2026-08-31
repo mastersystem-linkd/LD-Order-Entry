@@ -197,7 +197,7 @@ function Know({
       )}
     >
       <span className="mt-[1px] shrink-0 [&_svg]:size-3.5">{icon}</span>
-      <span className="min-w-0">{children}</span>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -542,7 +542,7 @@ export function FollowupPanel({
                 k="Qualities · designs"
                 v={
                   <span>
-                    {row.qualities} quality{row.qualities === 1 ? "" : "s"} ·{" "}
+                    {row.qualities} {row.qualities === 1 ? "quality" : "qualities"} ·{" "}
                     {row.designs} design{row.designs === 1 ? "" : "s"} —{" "}
                     <span className="num">{formatNumber(row.qtyMtr)} m</span>
                   </span>
@@ -554,70 +554,113 @@ export function FollowupPanel({
           <Section n={2} title="What we already know">
             <div className="flex flex-col gap-1.5">
               {(() => {
-                // "Our SLA" is the Time-tracking config in Settings: each stage
-                // has a target measured in days from the ORDER DATE. Saying
-                // only "late" or "on time" told the coordinator nothing they
-                // could repeat to a customer, so the stages that actually
-                // missed are named with their numbers.
-                const late = (d.sla ?? [])
+                // Written for a coordinator on a phone call, not for a
+                // developer. The previous version read "Order Entry ran 60.3
+                // days late against a 8-day target (7 stages missed: Order
+                // Entry +60.3d…)" — every fact in it was true and none of it
+                // was usable. What a caller needs is: what we promised, what
+                // happened, how far apart they are, and whether to trust it.
+                const rows = d.sla ?? [];
+                const late = rows
                   .filter((r) => r.lateMinutes > 0)
                   .sort((a, b) => b.lateMinutes - a.lateMinutes);
-                const days = (m: number) => Math.round((m / 1440) * 10) / 10;
-                if (late.length === 0) {
-                  const worked = (d.sla ?? []).filter((r) => r.done > 0);
+                const days = (m: number) => Math.max(1, Math.round(m / 1440));
+                const started = rows.filter((r) => r.done > 0);
+                const dispatch = rows.find((r) => r.stageKey === "dispatch");
+
+                if (started.length === 0) {
                   return (
-                    <Know tone="ok" icon={<CheckIcon />}>
-                      {worked.length === 0 ? (
-                        <>
-                          No stage has been ticked yet, so there is{" "}
-                          <strong>nothing to judge</strong> against our
-                          deadlines.
-                        </>
-                      ) : (
-                        <>
-                          Every stage so far met its deadline — the target is{" "}
-                          <strong>
-                            {(d.sla ?? []).find((r) => r.stageKey === "dispatch")
-                              ?.targetDays ?? "—"}{" "}
-                            days
-                          </strong>{" "}
-                          from the order date to dispatch.
-                        </>
-                      )}
+                    <Know tone="plain" icon={<PackageIcon />}>
+                      <b className="text-ink">Nothing has been ticked yet</b> on
+                      this order, so we cannot say whether it was on time.
                     </Know>
                   );
                 }
+
+                if (late.length === 0) {
+                  return (
+                    <Know tone="ok" icon={<CheckIcon />}>
+                      <b>Every step was finished on time.</b>
+                      {dispatch ? (
+                        <>
+                          {" "}
+                          Our plan allows{" "}
+                          <b>{dispatch.targetDays} days</b> from the order date
+                          to dispatch, and we stayed inside it.
+                        </>
+                      ) : null}
+                    </Know>
+                  );
+                }
+
                 const worst = late[0];
+                const lateDays = days(worst.lateMinutes);
+                const took = worst.targetDays + lateDays;
                 return (
                   <Know tone="bad" icon={<AlertTriangleIcon />}>
-                    <strong>{worst.label}</strong> ran{" "}
-                    <strong>{days(worst.lateMinutes)} days late</strong> against
-                    a {worst.targetDays}-day target
-                    {late.length > 1 ? (
-                      <>
-                        {" "}
-                        ({late.length} stages missed:{" "}
-                        {late
-                          .slice(0, 3)
-                          .map((r) => `${r.label} +${days(r.lateMinutes)}d`)
-                          .join(", ")}
-                        {late.length > 3 ? "…" : ""})
-                      </>
-                    ) : null}
-                    . Measured against the deadline configured in Settings, not
-                    transit reality — expect the customer to disagree.
+                    <b className="text-[13px]">This order was late.</b>
+                    <ul className="mt-2 flex flex-col gap-1.5">
+                      <li className="flex gap-2">
+                        <span className="w-[86px] shrink-0 text-ink-muted">
+                          We planned
+                        </span>
+                        <span>
+                          <b>{worst.label}</b> within{" "}
+                          <b className="num">{worst.targetDays} days</b> of the
+                          order date
+                        </span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="w-[86px] shrink-0 text-ink-muted">
+                          It took
+                        </span>
+                        <span>
+                          about <b className="num">{took} days</b>
+                        </span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="w-[86px] shrink-0 text-ink-muted">
+                          So we were
+                        </span>
+                        <span>
+                          <b className="num">{lateDays} days</b> later than
+                          planned
+                        </span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="w-[86px] shrink-0 text-ink-muted">
+                          Steps late
+                        </span>
+                        <span>
+                          <b className="num">{late.length}</b> of{" "}
+                          <b className="num">{rows.length}</b>
+                          {late.length > 1 ? (
+                            <span className="text-ink-muted">
+                              {" "}
+                              — {late.slice(0, 3).map((r) => r.label).join(", ")}
+                              {late.length > 3 ? " and more" : ""}
+                            </span>
+                          ) : null}
+                        </span>
+                      </li>
+                    </ul>
+                    <p className="mt-2.5 border-t border-danger/20 pt-2 text-[11.5px] leading-relaxed text-ink-soft">
+                      This is against <b>our own plan</b>. The customer may still
+                      feel it arrived on time — ask them, do not assume.
+                    </p>
                   </Know>
                 );
               })()}
               {row.hadOutOfStock ? (
                 <Know tone="plain" icon={<PackageIcon />}>
-                  A design was <strong>out of stock</strong> at stock checking.
+                  <b>We ran out of stock</b> on one of the designs, which is
+                  part of why this took longer.
                 </Know>
               ) : null}
               {row.hadCancellation ? (
                 <Know tone="plain" icon={<TruckIcon />}>
-                  This order has <strong>cancelled designs</strong> — expect it to
-                  come up.
+                  <b>Some designs on this order were cancelled.</b> They may
+                  bring it up — have the reason ready.
                 </Know>
               ) : null}
             </div>
