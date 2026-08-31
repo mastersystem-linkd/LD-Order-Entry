@@ -202,6 +202,30 @@ function Know({
   );
 }
 
+function Field({
+  label,
+  hint,
+  wide,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("min-w-0", wide && "sm:col-span-2")}>
+      <div className="mb-1 flex items-baseline gap-1.5">
+        <span className="text-[10.5px] font-medium tracking-[0.05em] text-ink-muted uppercase">
+          {label}
+        </span>
+        {hint ? <span className="text-[10px] text-ink-muted">{hint}</span> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 const selectCls =
   "h-8 rounded-field border border-line bg-surface px-2 text-[12px] text-ink outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]";
 
@@ -884,7 +908,14 @@ function IssueList({
 }) {
   const [adding, setAdding] = React.useState(false);
   const [lineId, setLineId] = React.useState("");
+  // A DROPDOWN, with "Other" as the escape hatch — not a free-text box.
+  // Free text was tried and was wrong: the field looked like a plain input, so
+  // the categories already on file were invisible and every coordinator would
+  // have coined their own wording for the same complaint. Picking is the
+  // common case; typing is the exception, and it must look like one.
+  const OTHER = "__other__";
   const [category, setCategory] = React.useState<IssueCategory>("");
+  const [otherCategory, setOtherCategory] = React.useState("");
 
   // Complaint categories are managed data (Settings → CRM), not a fixed enum:
   // a customer complains about whatever they complain about. The list is
@@ -909,12 +940,16 @@ function IssueList({
   const [qty, setQty] = React.useState("");
   const [desc, setDesc] = React.useState("");
 
+  // "Other" is a UI affordance, never a stored value — what lands in the
+  // database is the words the coordinator actually typed.
+  const chosenCategory = category === OTHER ? otherCategory.trim() : category;
+
   const create = useMutation({
     mutationFn: () =>
       apiSend("/api/crm/issues", "POST", {
         followup_id: followupId,
         order_line_item_id: lineId || null,
-        category,
+        category: chosenCategory,
         severity,
         owner_dept: dept,
         qty_affected: qty ? Number(qty) : null,
@@ -926,6 +961,7 @@ function IssueList({
       setQty("");
       setDesc("");
       setLineId("");
+      setOtherCategory("");
       onChanged();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -970,74 +1006,131 @@ function IssueList({
       ))}
 
       {adding ? (
-        <div className="rounded-field border border-line bg-surface-2 p-2.5">
-          <div className="grid grid-cols-2 gap-1.5">
-            <select
-              className={selectCls}
-              value={lineId}
-              onChange={(e) => setLineId(e.target.value)}
-            >
-              <option value="">Whole order (no design)</option>
-              {lines
-                .filter((l) => !l.isCancelled)
-                .map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.quality} · {l.designNo}
+        <div className="rounded-card border border-line bg-surface-2 p-3">
+          <div className="mb-2.5 text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
+            New issue
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <Field label="What went wrong">
+              <select
+                className={cn(selectCls, "w-full")}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {categoryLabel(c)}
                   </option>
                 ))}
-            </select>
-            {/* Free text with suggestions, not a closed list: if the customer
-                names something nobody anticipated it must still be recordable.
-                The issues API adds a genuinely new value to the master list,
-                so it is offered on the very next call. */}
-            <Autocomplete
-              value={category}
-              onValueChange={setCategory}
-              suggestions={categories}
-              placeholder="What went wrong?"
-              className="h-9"
-            />
-            <select
-              className={selectCls}
-              value={severity}
-              onChange={(e) => setSeverity(e.target.value as IssueSeverity)}
-            >
-              {ISSUE_SEVERITIES.map((s) => (
-                <option key={s} value={s}>
-                  Severity: {s}
-                </option>
-              ))}
-            </select>
-            <select
-              className={selectCls}
-              value={dept}
-              onChange={(e) => setDept(e.target.value as OwnerDept)}
-            >
-              {OWNER_DEPTS.map((o) => (
-                <option key={o} value={o}>
-                  Owner: {o}
-                </option>
-              ))}
-            </select>
-            <Input
-              className="h-8 text-[12px]"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              placeholder="Meters affected"
-              inputMode="decimal"
-            />
-            <Input
-              className="h-8 text-[12px]"
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              placeholder="What exactly happened…"
-            />
+                {/* The escape hatch. Anything typed under it is added to the
+                    master list by the issues API, so the next coordinator picks
+                    it instead of inventing a second wording for the same
+                    complaint. */}
+                <option value={OTHER}>Other — type it in…</option>
+              </select>
+            </Field>
+
+            <Field label="Which design">
+              <select
+                className={cn(selectCls, "w-full")}
+                value={lineId}
+                onChange={(e) => setLineId(e.target.value)}
+              >
+                <option value="">Whole order (no design)</option>
+                {lines
+                  .filter((l) => !l.isCancelled)
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.quality} · {l.designNo}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+
+            {category === OTHER ? (
+              <Field
+                label="Name the problem"
+                hint="Saved to the list for everyone"
+                wide
+              >
+                <Input
+                  autoFocus
+                  className="h-8 w-full text-[12px]"
+                  value={otherCategory}
+                  onChange={(e) => setOtherCategory(e.target.value)}
+                  placeholder="e.g. Roll length short"
+                />
+              </Field>
+            ) : null}
+
+            <Field label="Severity">
+              <select
+                className={cn(selectCls, "w-full")}
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value as IssueSeverity)}
+              >
+                {ISSUE_SEVERITIES.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "HIGH" ? "High" : s === "MEDIUM" ? "Medium" : "Low"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Whose to fix">
+              <select
+                className={cn(selectCls, "w-full")}
+                value={dept}
+                onChange={(e) => setDept(e.target.value as OwnerDept)}
+              >
+                {OWNER_DEPTS.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Meters affected" hint="optional">
+              <Input
+                className="h-8 w-full text-[12px]"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                placeholder="e.g. 120"
+                inputMode="decimal"
+              />
+            </Field>
+
+            <Field label="What exactly happened" hint="optional" wide>
+              <Input
+                className="h-8 w-full text-[12px]"
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                placeholder="Two thans water-stained at the edges…"
+              />
+            </Field>
           </div>
-          <div className="mt-2 flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>
+
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setAdding(false);
+                setOtherCategory("");
+              }}
+            >
               Cancel
             </Button>
-            <Button size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
+            <Button
+              size="sm"
+              disabled={create.isPending || !chosenCategory}
+              title={
+                chosenCategory ? "Raise this issue" : "Name the problem first"
+              }
+              onClick={() => create.mutate()}
+            >
               Add issue
             </Button>
           </div>
