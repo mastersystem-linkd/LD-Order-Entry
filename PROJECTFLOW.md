@@ -1853,6 +1853,106 @@ executing in `iad1` (Washington DC) while the database is in `ap-south-1`
 everything above. Moving the function region to `bom1` is a small config change
 with a potentially large effect — untested, and it is a deployment decision.
 
+## 27. The CRM module (2026-08-30 → 09-01)
+
+The rest of this app tracks an order **until it leaves us**. This module tracks
+what happened **after it reached the customer**: a coordinator works a queue of
+delivered orders, calls the party, records what they actually experienced,
+raises complaints against specific designs, and rates the order.
+
+Four tables, one role, two capabilities, one logic module. No new library, no
+change to the locked stack.
+
+### 27.1 What it is made of
+
+| Piece | Where |
+|---|---|
+| Derivations — delivery test, priority, state machine, ratings, escalation | `lib/crm.ts` |
+| Queries — reconcile, queue, issues, customers, analytics | `lib/crm-query.ts` |
+| API | `app/api/crm/{followups,issues,customers,analytics,settings,rating-criteria}` |
+| Screens | `app/(app)/crm/{,issues,customers,analytics}` |
+| Components | `components/crm/*` |
+| Tables | `crm_followups` · `crm_followup_attempts` · `crm_issues` · `crm_settings` · `crm_rating_criteria` · `crm_followup_ratings` |
+
+`lib/crm.ts` may import `lib/workflow.ts`; `lib/workflow.ts` must never import
+`lib/crm.ts`. CRM reads orders — orders never read CRM.
+
+### 27.2 The queue creates itself
+
+There is no scheduler in this app and none was added. `GET /api/crm/followups`
+**reconciles before it returns**: it finds delivered orders with no follow-up
+and inserts them, idempotently, capped at 500 a pass. An order is delivered
+when every active line has its LR back, *or* was dispatched and the transit
+days have elapsed.
+
+The spec argued for that fallback on the grounds that LRs are rarely ticked.
+On the real book the opposite was true — of the 70 orders that qualified, **69
+came in via `received_lr` and 1 via dispatch + transit**. The fallback is still
+right, it just costs nothing rather than saving the day.
+
+### 27.3 What turned out to be configurable
+
+Three vocabularies shipped hard-coded and each had to become data:
+
+- **Complaint categories** were a nine-value enum. A customer complains about
+  whatever they complain about, so a category is free text drawn from
+  `lookup_values("CRM_ISSUE")`, and one typed mid-call joins the master list.
+- **Rating criteria** were four fixed *columns*. What a business measures
+  changes; *migration 0005* made them rows (`crm_rating_criteria`), with scores
+  in `crm_followup_ratings` keyed by the criterion's key rather than a foreign
+  key — so a score survives its criterion being retired.
+- **Attempt outcomes** were one list for every channel, which offered "Busy"
+  and "Wrong number" for a *visit*. They follow the channel now, and a visit
+  records **where** it happened and **who went** (`attended_by`, *0006*).
+
+The lesson each time: a fixed vocabulary is a guess about someone else's job.
+
+### 27.4 The two figures that are not what they look like
+
+**`system_on_time` is SLA-config-relative, not delivery performance.**
+`delay_minutes` is frozen at tick time against `order_date + planned_offset_days`
+and `/api/stages/recompute` skips done rows, so a wrong offset can never be
+repaired retroactively. On the first 70 follow-ups, **0 were on time and 70
+late** — because five of the seven offsets were still the seed default of 1 day.
+Read it as "did we hit the deadline as configured that day", nothing more.
+
+**Coverage qualifies every other number on the analytics screen.** With 1 call
+made out of 71 delivered orders, a 0% complaint rate means nobody asked. Every
+panel there is built so an unworked queue *looks* unworked: `null` and `0` are
+kept strictly apart, and each panel states what it still needs rather than
+drawing a convincing zero.
+
+### 27.5 The call panel
+
+A **brief** plus five **stages**. Context and *What we already know* stay open —
+that is what the coordinator reads. Log attempt · the call · feedback · ratings
+· next requirement are collapsed stages, one open at a time, each showing what
+it holds when closed, opening on the first unfinished one.
+
+*What we already know* is written for the person dialling, not for a developer.
+It was once "Order Entry ran 60.3 days late against a 8-day target (7 stages
+missed…)"; it is now four labelled lines — what we planned, what it took, how
+far off we were, how many steps missed — and a caveat that says **ask them, do
+not assume**.
+
+### 27.6 Verification
+
+Every CRM surface sits behind an auth guard, so the SQL cannot be exercised
+without a browser. Four scripts do it instead, all refusing to run against
+production:
+
+| Script | Covers |
+|---|---|
+| `db/verify-crm.ts` | derivations, idempotent reconcile, priority order, filters |
+| `db/verify-crm-customers.ts` | the roll-up, date windows, sorts, every KPI filter |
+| `db/verify-crm-config.ts` | configurable criteria and categories, channel/outcome pairing |
+| `db/verify-crm-analytics.ts` | works one follow-up, asserts every figure moves, restores it |
+
+The analytics script only ever probes a follow-up that is DUE, unrated and
+uncontacted. An earlier version took whichever row came back first and
+"restored" it to DUE — which would have silently destroyed the only worked
+follow-up in the schema.
+
 ---
 
 *Written from a full read of the codebase. When behaviour and this document
