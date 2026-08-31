@@ -27,13 +27,20 @@ const STAGES: {
   sortOrder: number;
   plannedOffsetDays: number;
 }[] = [
-  { stageKey: "order_entry", label: "Order Entry", sortOrder: 1, plannedOffsetDays: 1 },
-  { stageKey: "stock_checking", label: "Stock Checking", sortOrder: 2, plannedOffsetDays: 1 },
-  { stageKey: "rolling_checking", label: "Rolling & Checking", sortOrder: 3, plannedOffsetDays: 1 },
-  { stageKey: "challan", label: "Challan", sortOrder: 4, plannedOffsetDays: 1 },
-  { stageKey: "bill", label: "Bill", sortOrder: 5, plannedOffsetDays: 1 },
-  { stageKey: "dispatch", label: "Dispatch", sortOrder: 6, plannedOffsetDays: 3 },
-  { stageKey: "received_lr", label: "Received LR", sortOrder: 7, plannedOffsetDays: 4 },
+  // Offsets are days from order_date, and they are TARGETS. These were all 1
+  // (the column default) until they were measured: with a one-day promise on
+  // five stages, 99.4% of all work read as late and both the dashboard's
+  // on-time gauge and the CRM's system_on_time snapshot carried no signal.
+  // Set from db/analyse-sla.ts at p75 of steady-state performance, so roughly
+  // three stages in four land on time and a late order actually stands out.
+  // Re-run that script and revisit these as the business changes.
+  { stageKey: "order_entry", label: "Order Entry", sortOrder: 1, plannedOffsetDays: 8 },
+  { stageKey: "stock_checking", label: "Stock Checking", sortOrder: 2, plannedOffsetDays: 8 },
+  { stageKey: "rolling_checking", label: "Rolling & Checking", sortOrder: 3, plannedOffsetDays: 8 },
+  { stageKey: "challan", label: "Challan", sortOrder: 4, plannedOffsetDays: 8 },
+  { stageKey: "bill", label: "Bill", sortOrder: 5, plannedOffsetDays: 10 },
+  { stageKey: "dispatch", label: "Dispatch", sortOrder: 6, plannedOffsetDays: 12 },
+  { stageKey: "received_lr", label: "Received LR", sortOrder: 7, plannedOffsetDays: 12 },
 ];
 
 const LOOKUPS: Record<LookupCategory, string[]> = {
