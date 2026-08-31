@@ -120,7 +120,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
   ];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-2.5 shadow-sm">
         {RANGES.map((r) => (
@@ -189,29 +189,32 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
       </div>
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3 px-4 pt-4 pb-3 sm:px-5">
-          <div className="min-w-0 flex-1">
-            <CardTitle className="text-[17px]">Priority queue</CardTitle>
-            <CardDescription className="text-[12px]">
-              Ranked by order value, our own delay and prior complaints — not by
-              date.{" "}
-              {data ? (
-                <span className="num">
-                  {data.total} follow-up{data.total === 1 ? "" : "s"}
-                  {data.created > 0
-                    ? ` · ${data.created} newly delivered`
-                    : ""}
-                </span>
-              ) : null}
-            </CardDescription>
-          </div>
+        {/* One line. A title over a two-line paragraph above a card holding a
+            single row spent a quarter of the screen explaining itself — the
+            same fault the issues board and customers roll-up had. */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-2.5 sm:px-5">
+          <CardTitle className="text-[15px]">Priority queue</CardTitle>
+          {data ? (
+            <span className="num rounded-pill bg-inset px-2 py-0.5 text-[11.5px] font-semibold text-ink-soft">
+              {data.total}
+              {data.created > 0 ? ` · ${data.created} new` : ""}
+            </span>
+          ) : null}
+          <span
+            className="text-[11.5px] text-ink-soft"
+            title="Ranked by order value, our own delay and prior complaints — not by date."
+          >
+            worst first · click a row to work it
+          </span>
           <Segmented
+            size="sm"
+            className="ml-auto"
             ariaLabel="Sort"
             value={sort}
             onChange={(v) => setSort(v)}
             options={[
               { value: "priority", label: "Priority" },
-              { value: "oldest", label: "Oldest first" },
+              { value: "oldest", label: "Oldest" },
               { value: "value", label: "Value" },
             ]}
           />

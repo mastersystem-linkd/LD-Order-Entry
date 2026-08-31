@@ -85,6 +85,14 @@ export const LOOKUP_CATEGORIES = [
   // one mid-call without a deploy. Same rule as fabric and design (§3.4):
   // never block an unknown value.
   "CRM_ISSUE",
+  // Who has to fix a complaint, and why a delivery ran late. Both are lists
+  // of the business's own making — another firm's departments and excuses are
+  // not these. Safe to make data because NOTHING branches on their values,
+  // unlike severity ("HIGH" drives escalation), attempt outcomes
+  // (isReachedOutcome drives the state machine) or reorder intent (analytics
+  // counts specific values), all of which stay fixed for that reason.
+  "CRM_DEPT",
+  "CRM_DELAY_REASON",
 ] as const;
 export type LookupCategory = (typeof LOOKUP_CATEGORIES)[number];
 

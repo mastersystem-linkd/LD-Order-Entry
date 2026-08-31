@@ -235,33 +235,41 @@ function RatingCriteria() {
   );
 }
 
-function IssueCategories() {
+function ManagedList({
+  category,
+  title,
+  blurb,
+  placeholder,
+}: {
+  category: string;
+  title: string;
+  blurb: React.ReactNode;
+  placeholder: string;
+}) {
   const queryClient = useQueryClient();
   const [value, setValue] = React.useState("");
 
   const q = useQuery({
-    queryKey: ["lookups", "CRM_ISSUE", "all"],
+    queryKey: ["lookups", category, "all"],
     queryFn: () =>
       apiGet<{ id: string; value: string; is_active: boolean }[]>(
-        "/api/lookups?category=CRM_ISSUE&all=1",
+        `/api/lookups?category=${category}&all=1`,
       ),
   });
 
   const done = () => {
-    queryClient.invalidateQueries({ queryKey: ["lookups", "CRM_ISSUE"] });
+    queryClient.invalidateQueries({ queryKey: ["lookups", category] });
     queryClient.invalidateQueries({ queryKey: ["crm-issues"] });
+    queryClient.invalidateQueries({ queryKey: ["crm-followup"] });
   };
 
   const add = useMutation({
     mutationFn: () =>
-      apiSend("/api/lookups", "POST", {
-        category: "CRM_ISSUE",
-        value: value.trim(),
-      }),
+      apiSend("/api/lookups", "POST", { category, value: value.trim() }),
     onSuccess: () => {
       setValue("");
       done();
-      toast.success("Category added");
+      toast.success("Added");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -278,17 +286,13 @@ function IssueCategories() {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>Complaint categories</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <span className="text-xs text-ink-soft">
           {rows.filter((r) => r.is_active).length} in use
         </span>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-xs text-ink-soft">
-          What a complaint can be filed under. A coordinator can also just type
-          a new one on the call — it is saved here automatically and offered to
-          everyone from the next call onward.
-        </p>
+        <p className="text-xs text-ink-soft">{blurb}</p>
 
         {q.isLoading ? (
           <div className="flex items-center gap-2 text-sm text-ink-soft">
@@ -330,7 +334,7 @@ function IssueCategories() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && value.trim()) add.mutate();
                 }}
-                placeholder="New category, e.g. Roll length short"
+                placeholder={placeholder}
                 className="h-9 min-w-[220px] flex-1"
               />
               <Button
@@ -507,7 +511,24 @@ export function CrmSettingsPanel() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <RatingCriteria />
-        <IssueCategories />
+        <ManagedList
+          category="CRM_ISSUE"
+          title="Complaint categories"
+          placeholder="e.g. Roll length short"
+          blurb="What a complaint can be filed under. A coordinator can also type a new one mid-call — it is saved here automatically and offered to everyone from the next call onward."
+        />
+        <ManagedList
+          category="CRM_DEPT"
+          title="Departments"
+          placeholder="e.g. Quality control"
+          blurb="Who a complaint is assigned to fix. Shown as “Whose to fix” on the call panel and on the issues board."
+        />
+        <ManagedList
+          category="CRM_DELAY_REASON"
+          title="Delay reasons"
+          placeholder="e.g. Festival holiday"
+          blurb="Offered when a customer says the order did not arrive on time."
+        />
       </div>
     </div>
   );

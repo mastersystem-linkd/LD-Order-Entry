@@ -453,6 +453,16 @@ export function FollowupPanel({
 
   // Suggestions for "visited by": the people already named as sales persons,
   // since that is who actually goes. Free text, so anyone else can be typed.
+  // Both of these are the business's own lists, managed in Settings → CRM.
+  const delayReasonQ = useQuery({
+    queryKey: ["lookups", "CRM_DELAY_REASON"],
+    queryFn: () => apiGet<string[]>("/api/lookups?category=CRM_DELAY_REASON"),
+  });
+  const delayReasons = React.useMemo(
+    () => (delayReasonQ.data ?? []).filter((v): v is string => !!v),
+    [delayReasonQ.data],
+  );
+
   const salesPeopleQ = useQuery({
     queryKey: ["lookups", "SALES_PERSON"],
     queryFn: () => apiGet<string[]>("/api/lookups?category=SALES_PERSON"),
@@ -1019,9 +1029,9 @@ export function FollowupPanel({
                     }
                   >
                     <option value="">Not stated</option>
-                    {DELAY_REASONS.map((r) => (
+                    {delayReasons.map((r) => (
                       <option key={r} value={r}>
-                        {DELAY_REASON_LABEL[r]}
+                        {r}
                       </option>
                     ))}
                   </select>
@@ -1293,7 +1303,21 @@ function IssueList({
     if (!category && categories.length) setCategory(categories[0]);
   }, [categories, category]);
   const [severity, setSeverity] = React.useState<IssueSeverity>("MEDIUM");
-  const [dept, setDept] = React.useState<OwnerDept>("TRANSPORT");
+  const [dept, setDept] = React.useState<string>("");
+
+  // Departments are the business's own list (Settings → CRM), not an enum —
+  // another firm's departments are not these.
+  const deptQ = useQuery({
+    queryKey: ["lookups", "CRM_DEPT"],
+    queryFn: () => apiGet<string[]>("/api/lookups?category=CRM_DEPT"),
+  });
+  const depts = React.useMemo(
+    () => (deptQ.data ?? []).filter((v): v is string => !!v),
+    [deptQ.data],
+  );
+  React.useEffect(() => {
+    if (!dept && depts.length) setDept(depts[0]);
+  }, [depts, dept]);
   const [qty, setQty] = React.useState("");
   const [desc, setDesc] = React.useState("");
 
@@ -1439,9 +1463,9 @@ function IssueList({
               <select
                 className={cn(selectCls, "w-full")}
                 value={dept}
-                onChange={(e) => setDept(e.target.value as OwnerDept)}
+                onChange={(e) => setDept(e.target.value)}
               >
-                {OWNER_DEPTS.map((o) => (
+                {depts.map((o) => (
                   <option key={o} value={o}>
                     {o}
                   </option>

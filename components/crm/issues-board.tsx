@@ -103,6 +103,13 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
   });
   const categories = (categoryList.data ?? []).filter((v): v is string => !!v);
 
+  // The same managed list the call panel writes into (Settings -> CRM).
+  const deptList = useQuery({
+    queryKey: ["lookups", "CRM_DEPT"],
+    queryFn: () => apiGet<string[]>("/api/lookups?category=CRM_DEPT"),
+  });
+  const depts = (deptList.data ?? []).filter((v): v is string => !!v);
+
   const [status, setStatus] = React.useState<string>("OPEN_ANY");
   const [category, setCategory] = React.useState("");
   const [severity, setSeverity] = React.useState("");
@@ -211,7 +218,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
 
         <select className={selectCls} value={dept} onChange={(e) => setDept(e.target.value)}>
           <option value="">Anyone&rsquo;s to fix</option>
-          {OWNER_DEPTS.map((d) => (
+          {depts.map((d) => (
             <option key={d} value={d}>
               {DEPT_LABEL[d] ?? d}
             </option>
