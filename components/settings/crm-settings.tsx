@@ -137,17 +137,17 @@ function RatingCriteria() {
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle>Rating criteria</CardTitle>
-        <span className="text-xs text-ink-muted">{active.length} in use</span>
+        <span className="text-xs text-ink-soft">{active.length} in use</span>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink-soft">
           What every delivered order is scored on, 1–5, on the call panel. The
           overall score is suggested as the mean of these and the coordinator
           may override it.
         </p>
 
         {q.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
+          <div className="flex items-center gap-2 text-sm text-ink-soft">
             <Spinner /> Loading…
           </div>
         ) : (
@@ -166,7 +166,7 @@ function RatingCriteria() {
                     aria-label="Move up"
                     disabled={i === 0 || move.isPending}
                     onClick={() => move.mutate({ c, to: Math.max(0, c.sort_order - 1) })}
-                    className="cursor-pointer text-ink-muted hover:text-ink disabled:opacity-30"
+                    className="cursor-pointer text-ink-soft hover:text-ink disabled:opacity-30"
                   >
                     <ChevronUpIcon className="size-3.5" />
                   </button>
@@ -175,7 +175,7 @@ function RatingCriteria() {
                     aria-label="Move down"
                     disabled={i === rows.length - 1 || move.isPending}
                     onClick={() => move.mutate({ c, to: c.sort_order + 1 })}
-                    className="cursor-pointer text-ink-muted hover:text-ink disabled:opacity-30"
+                    className="cursor-pointer text-ink-soft hover:text-ink disabled:opacity-30"
                   >
                     <ChevronDownIcon className="size-3.5" />
                   </button>
@@ -183,7 +183,7 @@ function RatingCriteria() {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium">{c.label}</div>
                   {c.hint ? (
-                    <div className="text-xs text-ink-muted">{c.hint}</div>
+                    <div className="text-xs text-ink-soft">{c.hint}</div>
                   ) : null}
                 </div>
                 {!c.is_active ? (
@@ -222,7 +222,7 @@ function RatingCriteria() {
                 {add.isPending ? <Spinner className="text-white" /> : null} Add
               </Button>
             </div>
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-ink-soft">
               Retiring keeps every score already given and simply stops offering
               the row on new calls — the same way a deactivated dropdown value
               still reads correctly on the orders that used it. Nothing here is
@@ -279,19 +279,19 @@ function IssueCategories() {
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle>Complaint categories</CardTitle>
-        <span className="text-xs text-ink-muted">
+        <span className="text-xs text-ink-soft">
           {rows.filter((r) => r.is_active).length} in use
         </span>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink-soft">
           What a complaint can be filed under. A coordinator can also just type
           a new one on the call — it is saved here automatically and offered to
           everyone from the next call onward.
         </p>
 
         {q.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
+          <div className="flex items-center gap-2 text-sm text-ink-soft">
             <Spinner /> Loading…
           </div>
         ) : (
@@ -311,7 +311,7 @@ function IssueCategories() {
                     title={r.is_active ? "Retire" : "Restore"}
                     disabled={retire.isPending}
                     onClick={() => retire.mutate(r)}
-                    className="cursor-pointer rounded-full p-0.5 text-ink-muted hover:bg-inset hover:text-ink"
+                    className="cursor-pointer rounded-full p-0.5 text-ink-soft hover:bg-inset hover:text-ink"
                   >
                     {r.is_active ? (
                       <XIcon className="size-3" />
@@ -400,11 +400,11 @@ export function CrmSettingsPanel() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>CRM follow-ups</CardTitle>
-          <span className="text-xs text-ink-muted">days, unless stated</span>
+          <span className="text-xs text-ink-soft">days, unless stated</span>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {settings.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-ink-muted">
+            <div className="flex items-center gap-2 text-sm text-ink-soft">
               <Spinner /> Loading…
             </div>
           ) : (
@@ -416,7 +416,7 @@ export function CrmSettingsPanel() {
                 >
                   <div className="flex-1">
                     <div className="text-sm font-medium">{f.label}</div>
-                    <p className="mt-0.5 text-xs text-ink-muted">{f.hint}</p>
+                    <p className="mt-0.5 text-xs text-ink-soft">{f.hint}</p>
                   </div>
                   <Input
                     type="number"
@@ -435,7 +435,7 @@ export function CrmSettingsPanel() {
               <div className="flex items-start gap-3 rounded-field border border-line bg-surface-2 px-3 py-2.5">
                 <div className="flex-1">
                   <div className="text-sm font-medium">Create follow-ups automatically</div>
-                  <p className="mt-0.5 text-xs text-ink-muted">
+                  <p className="mt-0.5 text-xs text-ink-soft">
                     Off pauses new follow-ups. Nothing already created is
                     deleted, and the queue keeps working.
                   </p>
@@ -496,7 +496,7 @@ export function CrmSettingsPanel() {
             <b className="text-ink num">{edited.escalate_rating_at || "—"}</b> or
             below flags it for review.
           </p>
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-ink-soft">
             Changing transit days re-dates <i>future</i> follow-ups only.
             Anything already in the queue keeps the delivery date it was created
             with, so the coordinator&rsquo;s list does not reshuffle under them.

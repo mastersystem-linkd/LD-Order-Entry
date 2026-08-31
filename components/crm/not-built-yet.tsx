@@ -26,7 +26,7 @@ export function NotBuiltYet({
         {what}
       </p>
       {blocked ? (
-        <p className="mx-auto mt-3 max-w-[42ch] text-[12.5px] leading-[1.6] text-ink-muted">
+        <p className="mx-auto mt-3 max-w-[42ch] text-[12.5px] leading-[1.6] text-ink-soft">
           {blocked}
         </p>
       ) : null}

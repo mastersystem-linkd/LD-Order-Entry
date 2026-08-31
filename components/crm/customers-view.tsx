@@ -77,10 +77,10 @@ function money(v: string): string {
 function Trend({ v }: { v: number | null }) {
   // Null is "not enough rated calls to compare" — deliberately not "steady",
   // which would claim a stability we have no evidence for.
-  if (v === null) return <span className="text-ink-muted">—</span>;
+  if (v === null) return <span className="text-ink-soft">—</span>;
   if (Math.abs(v) < 0.25) {
     return (
-      <span className="inline-flex items-center gap-1 text-ink-muted">
+      <span className="inline-flex items-center gap-1 text-ink-soft">
         <MinusIcon className="size-3.5" /> steady
       </span>
     );
@@ -218,7 +218,7 @@ export function CustomersView() {
 
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-2.5 shadow-sm">
         <div className="relative min-w-[220px] flex-1">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-soft" />
           <Input
             value={rawSearch}
             onChange={(e) => setRawSearch(e.target.value)}
@@ -260,7 +260,7 @@ export function CustomersView() {
             max={to || undefined}
             onChange={(e) => setFrom(e.target.value)}
           />
-          <span className="text-[11px] text-ink-muted">to</span>
+          <span className="text-[11px] text-ink-soft">to</span>
           <input
             type="date"
             aria-label="Orders to"
@@ -276,7 +276,7 @@ export function CustomersView() {
                 setFrom("");
                 setTo("");
               }}
-              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-muted hover:bg-inset hover:text-ink"
+              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-soft hover:bg-inset hover:text-ink"
             >
               Clear
             </button>
@@ -295,7 +295,7 @@ export function CustomersView() {
             </span>
           ) : null}
           <span
-            className="text-[11px] text-ink-muted"
+            className="text-[11px] text-ink-soft"
             title="A view over orders, follow-ups and complaints — never a second customer master. Party names are shown exactly as typed."
           >
             read-only · grouped by CRR customer
@@ -320,13 +320,13 @@ export function CustomersView() {
             <tbody>
               {q.isLoading ? (
                 <tr>
-                  <Td colSpan={9} className="py-10 text-center text-ink-muted">
+                  <Td colSpan={9} className="py-10 text-center text-ink-soft">
                     Loading…
                   </Td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <Td colSpan={9} className="py-10 text-center text-ink-muted">
+                  <Td colSpan={9} className="py-10 text-center text-ink-soft">
                     No customers match.
                   </Td>
                 </tr>
@@ -337,7 +337,7 @@ export function CustomersView() {
                     <tr key={r.key} className="group">
                       <Td>
                         <div className="font-semibold">{r.name}</div>
-                        <div className="text-[11.5px] text-ink-muted">
+                        <div className="text-[11.5px] text-ink-soft">
                           {r.crrCustomerId !== null ? (
                             <>
                               CRR {r.crrCustomerId}
@@ -357,21 +357,21 @@ export function CustomersView() {
                         </div>
                       </Td>
                       <Td className="num text-right">
-                        {r.orders12m || <span className="text-ink-muted">—</span>}
+                        {r.orders12m || <span className="text-ink-soft">—</span>}
                       </Td>
                       <Td className="num text-right font-semibold">
                         {money(r.value12m)}
                       </Td>
                       <Td>
                         {r.avgRating === null ? (
-                          <span className="text-ink-muted">—</span>
+                          <span className="text-ink-soft">—</span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5">
                             <Stars value={Math.round(r.avgRating)} />
                             <span className="num text-[12px] font-semibold">
                               {r.avgRating.toFixed(1)}
                             </span>
-                            <span className="text-[11px] text-ink-muted">
+                            <span className="text-[11px] text-ink-soft">
                               ({r.ratedCount})
                             </span>
                           </span>
@@ -386,14 +386,14 @@ export function CustomersView() {
                             {r.openIssues}
                           </span>
                         ) : (
-                          <span className="text-ink-muted">—</span>
+                          <span className="text-ink-soft">—</span>
                         )}
                       </Td>
                       <Td className="num text-[12px] text-ink-soft">
                         {r.lastContacted ? (
                           formatDate(r.lastContacted)
                         ) : (
-                          <span className="text-ink-muted">never</span>
+                          <span className="text-ink-soft">never</span>
                         )}
                       </Td>
                       <Td className="num text-[12px] text-ink-soft">
@@ -401,7 +401,7 @@ export function CustomersView() {
                       </Td>
                       <Td>
                         {sig === "none" ? (
-                          <span className="text-ink-muted">—</span>
+                          <span className="text-ink-soft">—</span>
                         ) : (
                           <Pill tone={SIGNAL_TONE[sig]}>
                             {CUSTOMER_SIGNAL_LABEL[sig]}

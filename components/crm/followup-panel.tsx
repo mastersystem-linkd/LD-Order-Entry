@@ -149,13 +149,13 @@ function Section({
         muted && "pointer-events-none opacity-45 select-none",
       )}
     >
-      <h3 className="mb-3 flex items-center gap-2.5 text-[10.5px] font-semibold tracking-[0.1em] text-ink-muted uppercase">
+      <h3 className="mb-3 flex items-center gap-2.5 text-[10.5px] font-semibold tracking-[0.1em] text-ink uppercase">
         <span className="grid size-[18px] shrink-0 place-items-center rounded-md bg-accent/10 text-[10px] font-bold tracking-normal text-accent">
           {n}
         </span>
-        <span className="text-ink-soft">{title}</span>
+        <span className="text-ink">{title}</span>
         {aside ? (
-          <span className="ml-auto text-[10.5px] font-medium tracking-normal text-ink-muted normal-case">
+          <span className="ml-auto text-[10.5px] font-medium tracking-normal text-ink-soft normal-case">
             {aside}
           </span>
         ) : null}
@@ -168,7 +168,7 @@ function Section({
 function Fact({ k, v, wide }: { k: string; v: React.ReactNode; wide?: boolean }) {
   return (
     <div className={cn(wide && "col-span-2")}>
-      <div className="text-[10px] font-medium tracking-[0.07em] text-ink-muted uppercase">
+      <div className="text-[10px] font-semibold tracking-[0.07em] text-ink-soft uppercase">
         {k}
       </div>
       {/* Deliberately plain ink: these are context, and colouring them would
@@ -216,10 +216,10 @@ function Field({
   return (
     <div className={cn("min-w-0", wide && "sm:col-span-2")}>
       <div className="mb-1 flex items-baseline gap-1.5">
-        <span className="text-[10.5px] font-medium tracking-[0.05em] text-ink-muted uppercase">
+        <span className="text-[10.5px] font-semibold tracking-[0.05em] text-ink uppercase">
           {label}
         </span>
-        {hint ? <span className="text-[10px] text-ink-muted">{hint}</span> : null}
+        {hint ? <span className="text-[10px] text-ink-soft">{hint}</span> : null}
       </div>
       {children}
     </div>
@@ -341,6 +341,22 @@ export function FollowupPanel({
     [salesPeopleQ.data],
   );
 
+  // Marking unreachable with nothing logged writes the attempt first, so
+  // coverage still counts the try. Without this the silence would be
+  // unmeasurable, which is the whole reason attempts are logged (§12.7).
+  const giveUp = async () => {
+    if (!attempted) {
+      const outcome = channel === "visit" ? "not_available" : "no_answer";
+      await apiSend(`/api/crm/followups/${followupId}/attempts`, "POST", {
+        channel,
+        outcome,
+        attended_by: null,
+        note: "Marked unreachable without a separate attempt being logged",
+      }).catch(() => null);
+    }
+    save.mutate("UNREACHABLE");
+  };
+
   const attemptBlocked =
     channel === "visit" && outcome !== "not_available" && !attendedBy.trim()
       ? "Record who made the visit"
@@ -414,11 +430,15 @@ export function FollowupPanel({
   const isUnreachable = d?.followup.status === "UNREACHABLE";
   const connected = (d?.attempts ?? []).some((a) => isReachedOutcome(a.outcome));
   const attempted = (d?.attempts ?? []).length > 0;
+  // The ONLY state in which giving up is wrong is one where somebody already
+  // answered. Requiring a logged attempt first made the button permanently
+  // disabled on a fresh follow-up — a control that is never available is not a
+  // control, it is a puzzle. If nothing is logged yet, pressing it records the
+  // failed attempt AND gives up, because a coordinator saying "I cannot reach
+  // them" IS telling us they tried.
   const unreachableReason = connected
     ? "Someone answered on this order — it cannot be unreachable."
-    : !attempted
-      ? "Log at least one failed attempt first."
-      : null;
+    : null;
   const highIssue = (d?.issues ?? []).some((i) => i.severity === "HIGH");
 
   return (
@@ -459,7 +479,7 @@ export function FollowupPanel({
       onClose={onClose}
       footer={
         <>
-          <span className="text-[11.5px] text-ink-muted">
+          <span className="text-[11.5px] text-ink-soft">
             {d?.followup.isEscalated ? (
               <span className="inline-flex items-center gap-1.5 font-semibold text-danger">
                 <AlertTriangleIcon className="size-3.5" />
@@ -501,7 +521,7 @@ export function FollowupPanel({
       }
     >
       {!d || !draft ? (
-        <div className="px-4 py-10 text-center text-[13px] text-ink-muted">
+        <div className="px-4 py-10 text-center text-[13px] text-ink-soft">
           Loading…
         </div>
       ) : (
@@ -527,7 +547,7 @@ export function FollowupPanel({
                 v={
                   <span className="num">
                     {formatDate(d.followup.deliveredAt)}
-                    <span className="ml-1 text-[11px] font-normal text-ink-muted">
+                    <span className="ml-1 text-[11px] font-normal text-ink-soft">
                       {d.followup.deliveryBasis === "received_lr"
                         ? "· LR received"
                         : "· dispatch + transit"}
@@ -601,7 +621,7 @@ export function FollowupPanel({
                     <b className="text-[13px]">This order was late.</b>
                     <ul className="mt-2 flex flex-col gap-1.5">
                       <li className="flex gap-2">
-                        <span className="w-[86px] shrink-0 text-ink-muted">
+                        <span className="w-[86px] shrink-0 text-ink-soft">
                           We planned
                         </span>
                         <span>
@@ -611,7 +631,7 @@ export function FollowupPanel({
                         </span>
                       </li>
                       <li className="flex gap-2">
-                        <span className="w-[86px] shrink-0 text-ink-muted">
+                        <span className="w-[86px] shrink-0 text-ink-soft">
                           It took
                         </span>
                         <span>
@@ -619,7 +639,7 @@ export function FollowupPanel({
                         </span>
                       </li>
                       <li className="flex gap-2">
-                        <span className="w-[86px] shrink-0 text-ink-muted">
+                        <span className="w-[86px] shrink-0 text-ink-soft">
                           So we were
                         </span>
                         <span>
@@ -628,14 +648,14 @@ export function FollowupPanel({
                         </span>
                       </li>
                       <li className="flex gap-2">
-                        <span className="w-[86px] shrink-0 text-ink-muted">
+                        <span className="w-[86px] shrink-0 text-ink-soft">
                           Steps late
                         </span>
                         <span>
                           <b className="num">{late.length}</b> of{" "}
                           <b className="num">{rows.length}</b>
                           {late.length > 1 ? (
-                            <span className="text-ink-muted">
+                            <span className="text-ink-soft">
                               {" "}
                               — {late.slice(0, 3).map((r) => r.label).join(", ")}
                               {late.length > 3 ? " and more" : ""}
@@ -722,7 +742,7 @@ export function FollowupPanel({
             {d.attempts.length > 0 ? (
               <ul className="mt-2.5 flex flex-col gap-1">
                 {d.attempts.slice(0, 3).map((a, i) => (
-                  <li key={a.id} className="text-[11.5px] text-ink-muted">
+                  <li key={a.id} className="text-[11.5px] text-ink-soft">
                     Attempt {d.attempts.length - i} ·{" "}
                     <span className="num">{formatDateTime(a.attemptedAt)}</span> —{" "}
                     {OUTCOME_LABEL[a.outcome as AttemptOutcome] ?? a.outcome}
@@ -732,7 +752,7 @@ export function FollowupPanel({
                 ))}
               </ul>
             ) : (
-              <p className="mt-2.5 text-[11.5px] text-ink-muted">
+              <p className="mt-2.5 text-[11.5px] text-ink-soft">
                 No attempt logged yet. Log the unanswered ones too — coverage is
                 unmeasurable without them.
               </p>
@@ -744,16 +764,24 @@ export function FollowupPanel({
                 CONCLUSION drawn from the log, so it sits below it. */}
             {!isUnreachable ? (
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-2.5">
-                <span className="text-[11px] text-ink-muted">
-                  {unreachableReason ?? "Tried enough times?"}
+                <span className="text-[11px] text-ink-soft">
+                  {unreachableReason ??
+                    (attempted
+                      ? "Tried enough times?"
+                      : "Tried and got nowhere? This logs the attempt too.")}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="shrink-0 text-warning hover:bg-warning/10"
                   disabled={!canEdit || busy || unreachableReason !== null}
-                  title={unreachableReason ?? "No answer after repeated attempts"}
-                  onClick={() => save.mutate("UNREACHABLE")}
+                  title={
+                    unreachableReason ??
+                    (attempted
+                      ? "Give up on this one — no answer after repeated attempts"
+                      : "Records a failed attempt and gives up on this one")
+                  }
+                  onClick={giveUp}
                 >
                   <PhoneOffIcon /> Can&rsquo;t reach
                 </Button>
@@ -856,7 +884,7 @@ export function FollowupPanel({
             muted={isUnreachable}
           >
             {d.criteria.length === 0 ? (
-              <p className="py-2 text-[12.5px] text-ink-muted">
+              <p className="py-2 text-[12.5px] text-ink-soft">
                 No rating criteria are configured. An admin can add them in
                 Settings → CRM.
               </p>
@@ -871,14 +899,14 @@ export function FollowupPanel({
                       {c.label}
                     </span>
                     {c.hint ? (
-                      <span className="ml-1.5 text-[10px] text-ink-muted">
+                      <span className="ml-1.5 text-[10px] text-ink-soft">
                         {c.hint}
                       </span>
                     ) : null}
                     {/* A retired criterion only appears when this call already
                         scored it, so the old score stays readable. */}
                     {!c.isActive ? (
-                      <span className="ml-1.5 text-[10px] text-ink-muted italic">
+                      <span className="ml-1.5 text-[10px] text-ink-soft italic">
                         retired
                       </span>
                     ) : null}
@@ -919,7 +947,7 @@ export function FollowupPanel({
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-card border border-line bg-inset px-3.5 py-3">
               <div>
-                <div className="text-[10px] font-medium tracking-[0.07em] text-ink-muted uppercase">
+                <div className="text-[10px] font-medium tracking-[0.07em] text-ink-soft uppercase">
                   Overall &middot; suggested, editable
                 </div>
                 <div className="mt-1 flex items-center gap-3">
@@ -985,7 +1013,7 @@ export function FollowupPanel({
                   onChange={(e) => set("reorderNote", e.target.value)}
                   placeholder="What did they ask for?"
                 />
-                <p className="mt-1.5 text-[11.5px] text-ink-muted">
+                <p className="mt-1.5 text-[11.5px] text-ink-soft">
                   Goes to the sales reorder list
                   {d.order.salesPerson ? `, tagged to ${d.order.salesPerson}` : ""}.
                 </p>
@@ -1089,7 +1117,7 @@ function IssueList({
             <strong className="text-[12.5px] text-ink">
               {categoryLabel(i.category)}
             </strong>
-            <span className="ml-auto text-[11px] text-ink-muted">Issue #{n + 1}</span>
+            <span className="ml-auto text-[11px] text-ink-soft">Issue #{n + 1}</span>
           </div>
           <div className="text-[11.5px] text-ink-soft">
             {i.quality ? (
@@ -1115,7 +1143,7 @@ function IssueList({
 
       {adding ? (
         <div className="rounded-card border border-line bg-surface-2 p-3">
-          <div className="mb-2.5 text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase">
+          <div className="mb-2.5 text-[11px] font-semibold tracking-[0.06em] text-ink-soft uppercase">
             New issue
           </div>
 

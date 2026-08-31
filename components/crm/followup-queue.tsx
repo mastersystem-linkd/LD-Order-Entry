@@ -140,7 +140,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
         ))}
 
         <div className="relative ml-1 min-w-[240px] flex-1">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-soft" />
           <Input
             value={rawSearch}
             onChange={(e) => setRawSearch(e.target.value)}
@@ -236,7 +236,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
               <tbody>
                 {q.isLoading ? (
                   <tr>
-                    <Td colSpan={9} className="px-4 py-10 text-center text-ink-muted">
+                    <Td colSpan={9} className="px-4 py-10 text-center text-ink-soft">
                       Loading…
                     </Td>
                   </tr>
@@ -262,7 +262,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <Td colSpan={9} className="px-4 py-10 text-center text-ink-muted">
+                    <Td colSpan={9} className="px-4 py-10 text-center text-ink-soft">
                       No follow-ups match these filters.
                     </Td>
                   </tr>
@@ -338,7 +338,7 @@ function QueueRow({
       </Td>
       <Td className="max-w-[260px]">
         <div className="truncate font-semibold text-ink">{row.partyName}</div>
-        <div className="truncate text-[11.5px] text-ink-muted">
+        <div className="truncate text-[11.5px] text-ink-soft">
           {row.qualities} quality{row.qualities === 1 ? "" : "s"} · {row.designs}{" "}
           design{row.designs === 1 ? "" : "s"}
           {row.transport ? ` · ${row.transport}` : ""}
@@ -353,7 +353,7 @@ function QueueRow({
         {/* Two separate truths (§12.3). This column is OUR verdict — the
             customer's answer is captured on the call and can disagree. */}
         {row.systemOnTime === null ? (
-          <span className="text-ink-muted">—</span>
+          <span className="text-ink-soft">—</span>
         ) : row.systemOnTime ? (
           <Pill tone="done">On time</Pill>
         ) : (

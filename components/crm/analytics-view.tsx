@@ -59,7 +59,7 @@ const inputCls =
 function Awaiting({ need }: { need: string }) {
   return (
     <div className={cn("flex items-center justify-center px-5 pb-5 text-center", CHART_BODY)}>
-      <p className="max-w-[300px] text-[12px] leading-relaxed text-balance text-ink-muted">
+      <p className="max-w-[300px] text-[12px] leading-relaxed text-balance text-ink-soft">
         {need}
       </p>
     </div>
@@ -84,7 +84,7 @@ function Panel({
     <Card className={cn("flex h-full flex-col overflow-hidden p-0", className)}>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-2.5 sm:px-5">
         <CardTitle className="text-[15px]">{title}</CardTitle>
-        {note ? <span className="text-[11px] text-ink-muted">{note}</span> : null}
+        {note ? <span className="text-[11.5px] text-ink-soft">{note}</span> : null}
         {aside ? <div className="ml-auto">{aside}</div> : null}
       </div>
       <CardContent className="flex-1 px-0 pt-0 pb-0">{children}</CardContent>
@@ -187,7 +187,7 @@ export function CrmAnalyticsView() {
           max={to || undefined}
           onChange={(e) => setFrom(e.target.value)}
         />
-        <span className="text-[11px] text-ink-muted">to</span>
+        <span className="text-[11px] text-ink-soft">to</span>
         <input
           type="date"
           aria-label="To"
@@ -203,12 +203,12 @@ export function CrmAnalyticsView() {
               setFrom("");
               setTo("");
             }}
-            className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-muted hover:bg-inset hover:text-ink"
+            className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-soft hover:bg-inset hover:text-ink"
           >
             Clear
           </button>
         ) : null}
-        <span className="ml-auto text-[11px] text-ink-muted">
+        <span className="ml-auto text-[11px] text-ink-soft">
           {d ? `${formatCount(d.coverage.followups)} follow-ups in range` : ""}
         </span>
       </div>

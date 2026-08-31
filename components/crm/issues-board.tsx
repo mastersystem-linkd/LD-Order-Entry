@@ -229,7 +229,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
             max={to || undefined}
             onChange={(e) => setFrom(e.target.value)}
           />
-          <span className="text-[11px] text-ink-muted">to</span>
+          <span className="text-[11px] text-ink-soft">to</span>
           <input
             type="date"
             aria-label="Raised to"
@@ -245,7 +245,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                 setFrom("");
                 setTo("");
               }}
-              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-muted hover:bg-inset hover:text-ink"
+              className="cursor-pointer rounded-field px-1.5 py-1 text-[11px] font-medium text-ink-soft hover:bg-inset hover:text-ink"
             >
               Clear
             </button>
@@ -253,7 +253,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
         </div>
 
         <div className="relative min-w-[180px] flex-1">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted" />
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-soft" />
           <Input
             value={rawSearch}
             onChange={(e) => setRawSearch(e.target.value)}
@@ -340,7 +340,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
           </div>
           <CardContent className="px-2 pb-3">
             {groups.length === 0 ? (
-              <p className="px-2 py-3 text-[12.5px] text-ink-muted">
+              <p className="px-2 py-3 text-[12.5px] text-ink-soft">
                 Nothing to break down yet.
               </p>
             ) : (
@@ -388,7 +388,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                 {data.total}
               </span>
             ) : null}
-            <span className="text-[11px] text-ink-muted">
+            <span className="text-[11px] text-ink-soft">
               worst first · click a row to resolve
             </span>
           </div>
@@ -414,7 +414,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                 <tbody>
                   {q.isLoading ? (
                     <tr>
-                      <Td colSpan={9} className="px-4 py-10 text-center text-ink-muted">
+                      <Td colSpan={9} className="px-4 py-10 text-center text-ink-soft">
                         Loading…
                       </Td>
                     </tr>
@@ -437,7 +437,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                         </div>
                         {/* An empty board here is a real state, not a bug — say
                             which, or it reads as broken. */}
-                        <div className="mx-auto mt-1.5 max-w-[52ch] text-[12.5px] leading-[1.6] text-ink-muted">
+                        <div className="mx-auto mt-1.5 max-w-[52ch] text-[12.5px] leading-[1.6] text-ink-soft">
                           Issues are raised during a call, from the follow-up panel
                           on CRM → Follow-ups. Open a follow-up, work through “The
                           call”, and press <strong>+ Add issue</strong>.
@@ -533,7 +533,7 @@ function IssueRowView({
             spent half the width on repeating the same identity. */}
         <Td>
           <div className="num text-[13px] font-semibold text-ink">{row.orderNo}</div>
-          <div className="max-w-[190px] truncate text-[11.5px] text-ink-muted">
+          <div className="max-w-[190px] truncate text-[11.5px] text-ink-soft">
             {row.partyName}
           </div>
         </Td>
@@ -553,7 +553,7 @@ function IssueRowView({
               {row.description}
             </div>
           ) : (
-            <div className="text-[11.5px] text-ink-muted italic">
+            <div className="text-[11.5px] text-ink-soft italic">
               no detail recorded
             </div>
           )}
@@ -565,10 +565,10 @@ function IssueRowView({
               <div className="max-w-[150px] truncate text-[12.5px] font-medium text-ink">
                 {row.quality}
               </div>
-              <div className="num text-[11.5px] text-ink-muted">{row.designNo}</div>
+              <div className="num text-[11.5px] text-ink-soft">{row.designNo}</div>
             </>
           ) : (
-            <span className="text-[12px] text-ink-muted">Whole order</span>
+            <span className="text-[12px] text-ink-soft">Whole order</span>
           )}
         </Td>
 
@@ -576,7 +576,7 @@ function IssueRowView({
           {row.qtyAffected != null ? (
             <span className="font-medium">{formatNumber(row.qtyAffected)} m</span>
           ) : (
-            <span className="text-ink-muted">—</span>
+            <span className="text-ink-soft">—</span>
           )}
         </Td>
 
@@ -586,7 +586,7 @@ function IssueRowView({
           {row.orderValue > 0 ? (
             <span className="font-semibold">{money(row.orderValue)}</span>
           ) : (
-            <span className="text-ink-muted">—</span>
+            <span className="text-ink-soft">—</span>
           )}
         </Td>
 
@@ -602,7 +602,7 @@ function IssueRowView({
               {DEPT_LABEL[row.ownerDept] ?? row.ownerDept}
             </span>
           ) : (
-            <span className="text-ink-muted">unassigned</span>
+            <span className="text-ink-soft">unassigned</span>
           )}
         </Td>
 
@@ -626,7 +626,7 @@ function IssueRowView({
             {STATUS_TEXT[row.status]}
           </Pill>
           {row.resolution ? (
-            <div className="mt-0.5 text-[10.5px] text-ink-muted">
+            <div className="mt-0.5 text-[10.5px] text-ink-soft">
               {RESOLUTION_LABEL[row.resolution]}
             </div>
           ) : null}
@@ -638,13 +638,13 @@ function IssueRowView({
           <Td colSpan={9} className="px-4 py-3.5 whitespace-normal">
             <div className="flex flex-col gap-3">
               <div>
-                <div className="text-[10.5px] tracking-[0.05em] text-ink-muted uppercase">
+                <div className="text-[10.5px] tracking-[0.05em] text-ink-soft uppercase">
                   What happened
                 </div>
                 <p className="mt-0.5 text-[13px] text-ink">
                   {row.description || "No description was recorded."}
                 </p>
-                <p className="mt-1 text-[11.5px] text-ink-muted">
+                <p className="mt-1 text-[11.5px] text-ink-soft">
                   Raised {formatDate(row.createdAt)}
                   {row.resolvedAt
                     ? ` · closed ${formatDate(row.resolvedAt)}${row.resolvedBy ? ` by ${row.resolvedBy}` : ""}`
