@@ -106,6 +106,79 @@ async function main() {
     .where(and(eq(crmFollowupRatings.criterionKey, "__verify_tmp")));
   checks.push(["no scores leaked from this run", orphan.length === 0]);
 
+  // --- attempt outcomes must fit their channel (§12.7) --------------------
+  const { CHANNEL_OUTCOMES, isReachedOutcome, statusAfterAttempt } =
+    await import("../lib/crm");
+  const { followupAttemptSchema } = await import("../lib/validation");
+
+  checks.push([
+    "a visit is never offered 'busy' or 'wrong number'",
+    !CHANNEL_OUTCOMES.visit.includes("busy") &&
+      !CHANNEL_OUTCOMES.visit.includes("wrong_number"),
+  ]);
+  checks.push([
+    "a visit records WHERE it happened",
+    CHANNEL_OUTCOMES.visit.includes("met_at_our_office") &&
+      CHANNEL_OUTCOMES.visit.includes("met_at_customer_place"),
+  ]);
+  checks.push([
+    "a call is never offered a visit outcome",
+    !CHANNEL_OUTCOMES.call.includes("met_at_our_office"),
+  ]);
+  checks.push([
+    "every channel offers at least one outcome",
+    Object.values(CHANNEL_OUTCOMES).every((o) => o.length > 0),
+  ]);
+
+  // Meeting someone in person is contact — the strongest there is. If this
+  // ever regressed to "connected" only, a visit would count toward marking the
+  // customer UNREACHABLE.
+  checks.push([
+    "meeting in person counts as reaching the customer",
+    isReachedOutcome("met_at_our_office") &&
+      isReachedOutcome("met_at_customer_place"),
+  ]);
+  checks.push([
+    "a missed visit does NOT count as reaching them",
+    !isReachedOutcome("not_available") && !isReachedOutcome("no_answer"),
+  ]);
+  checks.push([
+    "a successful visit keeps the follow-up live, never UNREACHABLE",
+    statusAfterAttempt("DUE", 9, "met_at_customer_place", 3) === "IN_PROGRESS",
+  ]);
+
+  // --- the API refuses the combinations the UI never offers ---------------
+  checks.push([
+    "API rejects a 'busy' visit",
+    !followupAttemptSchema.safeParse({
+      channel: "visit",
+      outcome: "busy",
+      attended_by: "Amit",
+    }).success,
+  ]);
+  checks.push([
+    "API rejects a visit with nobody named",
+    !followupAttemptSchema.safeParse({ channel: "visit", outcome: "met_at_our_office" })
+      .success,
+  ]);
+  checks.push([
+    "API accepts a visit that names who went",
+    followupAttemptSchema.safeParse({
+      channel: "visit",
+      outcome: "met_at_customer_place",
+      attended_by: "Amit Shah",
+    }).success,
+  ]);
+  checks.push([
+    "a NOT-AVAILABLE visit needs no name — nobody was met",
+    followupAttemptSchema.safeParse({ channel: "visit", outcome: "not_available" })
+      .success,
+  ]);
+  checks.push([
+    "a normal call still validates",
+    followupAttemptSchema.safeParse({ channel: "call", outcome: "no_answer" }).success,
+  ]);
+
   console.log();
   let bad = 0;
   for (const [name, ok] of checks) {

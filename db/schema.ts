@@ -417,8 +417,17 @@ export const crmFollowupAttempts = app.table(
       .defaultNow(),
     // 'call' | 'whatsapp' | 'visit' | 'email'
     channel: varchar("channel", { length: 20 }).notNull(),
-    // 'connected' | 'no_answer' | 'busy' | 'wrong_number' | 'call_back_later'
+    // Channel-dependent — see CHANNEL_OUTCOMES in lib/crm.ts. Calls end
+    // 'connected' | 'no_answer' | 'busy' | 'wrong_number' | 'call_back_later';
+    // visits end 'met_at_our_office' | 'met_at_customer_place' | 'not_available'.
     outcome: varchar("outcome", { length: 30 }).notNull(),
+    /**
+     * Who actually made the contact — typed, not the signed-in user. A visit
+     * is usually made by a salesperson or the principal while the coordinator
+     * records it afterwards, so this and `created_by` (who keyed it in) are
+     * routinely different people and both matter. *(migration 0006)*
+     */
+    attendedBy: varchar("attended_by", { length: 120 }),
     note: text("note"),
     createdBy: varchar("created_by", { length: 120 }),
     createdAt: timestamp("created_at", { withTimezone: true })

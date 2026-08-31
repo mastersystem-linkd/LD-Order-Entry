@@ -61,8 +61,39 @@ export const ATTEMPT_OUTCOMES = [
   "busy",
   "wrong_number",
   "call_back_later",
+  // Visits. A visit cannot be "busy" or a "wrong number", and WHERE it
+  // happened is the useful fact: a customer who came to us is a different
+  // signal from one we had to travel to.
+  "met_at_our_office",
+  "met_at_customer_place",
+  "not_available",
 ] as const;
 export type AttemptOutcome = (typeof ATTEMPT_OUTCOMES)[number];
+
+/**
+ * Which outcomes make sense for each channel. Offering "Busy" for a visit or
+ * "Met at our office" for a WhatsApp is how a dropdown teaches people that the
+ * form was not built for their job.
+ */
+export const CHANNEL_OUTCOMES: Record<AttemptChannel, AttemptOutcome[]> = {
+  call: ["connected", "no_answer", "busy", "wrong_number", "call_back_later"],
+  whatsapp: ["connected", "no_answer", "wrong_number", "call_back_later"],
+  visit: ["met_at_our_office", "met_at_customer_place", "not_available"],
+  email: ["connected", "no_answer", "call_back_later"],
+};
+
+/**
+ * Did we actually reach the customer? Coverage and the UNREACHABLE rule both
+ * depend on this, and neither may assume "reached" means the single value
+ * "connected" — meeting someone in person is the strongest contact there is.
+ */
+export function isReachedOutcome(outcome: string): boolean {
+  return (
+    outcome === "connected" ||
+    outcome === "met_at_our_office" ||
+    outcome === "met_at_customer_place"
+  );
+}
 
 /**
  * Complaint categories are DATA, not a union. A fixed list could not survive
@@ -162,6 +193,9 @@ export const OUTCOME_LABEL: Record<AttemptOutcome, string> = {
   busy: "Busy",
   wrong_number: "Wrong number",
   call_back_later: "Call back later",
+  met_at_our_office: "Met — at our office",
+  met_at_customer_place: "Met — at their place",
+  not_available: "Not available",
 };
 
 export const CHANNEL_LABEL: Record<AttemptChannel, string> = {
@@ -380,7 +414,11 @@ export function statusAfterAttempt(
   maxAttempts: number = CRM_DEFAULTS.maxAttempts,
 ): FollowupStatus {
   if (current === "COMPLETED" || current === "NOT_REQUIRED") return current;
-  if (outcome === "connected") return "IN_PROGRESS";
+  // Any outcome that REACHED the customer keeps this live — meeting them at
+  // our counter is contact, and counting it toward "unreachable" would be
+  // absurd. Checked through isReachedOutcome so the visit outcomes are
+  // included, not just the single value "connected".
+  if (isReachedOutcome(outcome)) return "IN_PROGRESS";
   if (attemptCount >= maxAttempts) return "UNREACHABLE";
   return "IN_PROGRESS";
 }

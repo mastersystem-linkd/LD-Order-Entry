@@ -1,0 +1,1 @@
+ALTER TABLE "ld_order_entry"."crm_followup_attempts" ADD COLUMN "attended_by" varchar(120);

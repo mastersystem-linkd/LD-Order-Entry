@@ -4,6 +4,7 @@ import { STAGE_KEYS } from "@/lib/workflow";
 import {
   ATTEMPT_CHANNELS,
   ATTEMPT_OUTCOMES,
+  CHANNEL_OUTCOMES,
   DELAY_REASONS,
   FOLLOWUP_STATUSES,
   ISSUE_RESOLUTIONS,
@@ -211,11 +212,39 @@ export const followupUpdateSchema = z
 export type FollowupUpdateInput = z.infer<typeof followupUpdateSchema>;
 
 // POST /api/crm/followups/:id/attempts — one logged call, answered or not.
-export const followupAttemptSchema = z.object({
-  channel: z.enum(ATTEMPT_CHANNELS),
-  outcome: z.enum(ATTEMPT_OUTCOMES),
-  note: crmNote,
-});
+export const followupAttemptSchema = z
+  .object({
+    channel: z.enum(ATTEMPT_CHANNELS),
+    outcome: z.enum(ATTEMPT_OUTCOMES),
+    /** Who made the contact — see the column comment; not the signed-in user. */
+    attended_by: z
+      .string()
+      .trim()
+      .max(120)
+      .optional()
+      .nullable()
+      .transform((v) => (v ? v : null)),
+    note: crmNote,
+  })
+  // An outcome must belong to its channel: a visit is never "busy", and a
+  // WhatsApp is never "met at our office". Without this the UI is the only
+  // thing keeping the vocabulary honest, and the API would accept nonsense.
+  .refine((d) => CHANNEL_OUTCOMES[d.channel].includes(d.outcome), {
+    message: "That outcome does not apply to this channel",
+    path: ["outcome"],
+  })
+  // A visit that happened was made by somebody, and "who came?" is the first
+  // question anyone asks about it later.
+  .refine(
+    (d) =>
+      d.channel !== "visit" ||
+      d.outcome === "not_available" ||
+      !!d.attended_by,
+    {
+      message: "Record who made the visit",
+      path: ["attended_by"],
+    },
+  );
 export type FollowupAttemptInput = z.infer<typeof followupAttemptSchema>;
 
 // POST /api/crm/issues — a complaint. order_line_item_id is nullable because a

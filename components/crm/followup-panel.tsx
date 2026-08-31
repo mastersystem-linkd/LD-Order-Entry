@@ -15,6 +15,7 @@ import { apiGet, apiSend } from "@/lib/api-client";
 import {
   categoryLabel,
   CHANNEL_LABEL,
+  CHANNEL_OUTCOMES,
   DELAY_REASON_LABEL,
   DELAY_REASONS,
   ISSUE_SEVERITIES,
@@ -103,6 +104,8 @@ type Detail = {
     outcome: string;
     note: string | null;
     attemptedAt: string;
+    /** Who made the contact — differs from createdBy, who merely keyed it in. */
+    attendedBy: string | null;
     createdBy: string | null;
   }[];
   issues: {
@@ -257,12 +260,39 @@ export function FollowupPanel({
 
   const [channel, setChannel] = React.useState<AttemptChannel>("call");
   const [outcome, setOutcome] = React.useState<AttemptOutcome>("connected");
+  const [attendedBy, setAttendedBy] = React.useState("");
+
+  // Switching channel must not leave an outcome that channel cannot have —
+  // "Busy" surviving a switch to Visit would be submitted and rejected by the
+  // API, which is a worse way to learn the rule than never seeing it.
+  React.useEffect(() => {
+    if (!CHANNEL_OUTCOMES[channel].includes(outcome)) {
+      setOutcome(CHANNEL_OUTCOMES[channel][0]);
+    }
+  }, [channel, outcome]);
+
+  // Suggestions for "visited by": the people already named as sales persons,
+  // since that is who actually goes. Free text, so anyone else can be typed.
+  const salesPeopleQ = useQuery({
+    queryKey: ["lookups", "SALES_PERSON"],
+    queryFn: () => apiGet<string[]>("/api/lookups?category=SALES_PERSON"),
+  });
+  const salesPeople = React.useMemo(
+    () => (salesPeopleQ.data ?? []).filter((v): v is string => !!v),
+    [salesPeopleQ.data],
+  );
+
+  const attemptBlocked =
+    channel === "visit" && outcome !== "not_available" && !attendedBy.trim()
+      ? "Record who made the visit"
+      : null;
 
   const logAttempt = useMutation({
     mutationFn: () =>
       apiSend(`/api/crm/followups/${followupId}/attempts`, "POST", {
         channel,
         outcome,
+        attended_by: attendedBy.trim() || null,
         note: null,
       }),
     onSuccess: () => {
@@ -500,26 +530,47 @@ export function FollowupPanel({
                   (c) => ({ value: c, label: CHANNEL_LABEL[c] }),
                 )}
               />
+              {/* Outcomes follow the channel: a visit is never "busy" and a
+                  WhatsApp is never "met at our office". Offering all of them
+                  everywhere is how a form tells people it was not built for
+                  their job. The API enforces the same pairing. */}
               <select
                 className={selectCls}
                 value={outcome}
                 onChange={(e) => setOutcome(e.target.value as AttemptOutcome)}
               >
-                {Object.entries(OUTCOME_LABEL).map(([v, l]) => (
+                {CHANNEL_OUTCOMES[channel].map((v) => (
                   <option key={v} value={v}>
-                    {l}
+                    {OUTCOME_LABEL[v]}
                   </option>
                 ))}
               </select>
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!canEdit || busy}
+                disabled={!canEdit || busy || attemptBlocked !== null}
+                title={attemptBlocked ?? "Log this attempt"}
                 onClick={() => logAttempt.mutate()}
               >
                 <PlusIcon /> Log
               </Button>
             </div>
+
+            {/* A visit was made by somebody, and "who went?" is the first
+                question asked about it later. The coordinator recording it is
+                usually not the person who went. */}
+            {channel === "visit" && outcome !== "not_available" ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <label className="text-[11.5px] text-ink-soft">Visited by</label>
+                <Autocomplete
+                  value={attendedBy}
+                  onValueChange={setAttendedBy}
+                  suggestions={salesPeople}
+                  placeholder="Who made the visit?"
+                  className="h-9 min-w-[200px] flex-1"
+                />
+              </div>
+            ) : null}
             {d.attempts.length > 0 ? (
               <ul className="mt-2.5 flex flex-col gap-1">
                 {d.attempts.slice(0, 3).map((a, i) => (
@@ -527,7 +578,8 @@ export function FollowupPanel({
                     Attempt {d.attempts.length - i} ·{" "}
                     <span className="num">{formatDateTime(a.attemptedAt)}</span> —{" "}
                     {OUTCOME_LABEL[a.outcome as AttemptOutcome] ?? a.outcome}
-                    {a.createdBy ? ` · ${a.createdBy}` : ""}
+                    {a.attendedBy ? ` · by ${a.attendedBy}` : ""}
+                    {a.createdBy ? ` · logged by ${a.createdBy}` : ""}
                   </li>
                 ))}
               </ul>
@@ -754,10 +806,13 @@ function IssueList({
   // master by the issues API, so it is offered on the very next call.
   const categoryList = useQuery({
     queryKey: ["lookups", "CRM_ISSUE"],
-    queryFn: () => apiGet<{ value: string }[]>("/api/lookups?category=CRM_ISSUE"),
+    // NOTE: without ?all=1 this endpoint returns a plain string[], not row
+    // objects. Typing it as {value}[] produced an array of undefined and took
+    // the whole panel down on mount.
+    queryFn: () => apiGet<string[]>("/api/lookups?category=CRM_ISSUE"),
   });
   const categories = React.useMemo(
-    () => (categoryList.data ?? []).map((r) => r.value),
+    () => (categoryList.data ?? []).filter((v): v is string => !!v),
     [categoryList.data],
   );
   React.useEffect(() => {

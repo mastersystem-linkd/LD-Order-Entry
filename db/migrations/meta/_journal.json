@@ -43,6 +43,13 @@
       "when": 1788154855146,
       "tag": "0005_previous_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788155901365,
+      "tag": "0006_aberrant_deadpool",
+      "breakpoints": true
     }
   ]
 }

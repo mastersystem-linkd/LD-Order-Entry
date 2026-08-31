@@ -3,7 +3,12 @@ import { eq } from "drizzle-orm";
 
 import { jsonData, jsonError, requireCapability } from "@/lib/api";
 import { db, dbx } from "@/lib/db";
-import { statusAfterAttempt, type AttemptOutcome, type FollowupStatus } from "@/lib/crm";
+import {
+  isReachedOutcome,
+  statusAfterAttempt,
+  type AttemptOutcome,
+  type FollowupStatus,
+} from "@/lib/crm";
 import { loadCrmConfig } from "@/lib/crm-query";
 import { followupAttemptSchema, firstZodError } from "@/lib/validation";
 import { crmFollowupAttempts, crmFollowups } from "@/db/schema";
@@ -23,7 +28,7 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const parsed = followupAttemptSchema.safeParse(body);
   if (!parsed.success) return jsonError(firstZodError(parsed.error), 422);
-  const { channel, outcome, note } = parsed.data;
+  const { channel, outcome, note, attended_by } = parsed.data;
 
   try {
     const cfg = await loadCrmConfig();
@@ -54,6 +59,7 @@ export async function POST(
           followupId: id,
           channel,
           outcome,
+          attendedBy: attended_by,
           note,
           attemptedAt: now,
           createdBy: guard.user.email ?? guard.user.name ?? null,
@@ -68,7 +74,7 @@ export async function POST(
           // First contact is what "contacted" means for the coverage metric —
           // not the completion of the call.
           contactedAt:
-            outcome === "connected" && !cur.contactedAt ? now : cur.contactedAt,
+            isReachedOutcome(outcome) && !cur.contactedAt ? now : cur.contactedAt,
           updatedAt: now,
         })
         .where(eq(crmFollowups.id, id))

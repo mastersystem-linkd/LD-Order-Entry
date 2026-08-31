@@ -16,9 +16,12 @@ const MAX_SUGGESTIONS = 50;
 // clipped by an ancestor's `overflow-hidden`/`overflow-x-auto` (e.g. the fabric
 // block card or the line-item horizontal-scroll container).
 export function Autocomplete({
-  value,
+  // Defaulted: a caller passing undefined for a moment must degrade to an
+  // empty field, not take the page down with it. The same defensiveness as
+  // keying the list by position rather than by value.
+  value = "",
   onValueChange,
-  suggestions,
+  suggestions = [],
   className,
   onBlur,
   ...inputProps
@@ -37,7 +40,7 @@ export function Autocomplete({
   } | null>(null);
 
   const { matches, more } = React.useMemo(() => {
-    const v = value.trim().toLowerCase();
+    const v = (value ?? "").trim().toLowerCase();
     if (!v) {
       // Nothing typed → browse the whole list (scrollable), first page of it.
       return {

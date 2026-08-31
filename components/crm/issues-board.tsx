@@ -78,9 +78,12 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
   // is populated from the same list the call panel writes into.
   const categoryList = useQuery({
     queryKey: ["lookups", "CRM_ISSUE"],
-    queryFn: () => apiGet<{ value: string }[]>("/api/lookups?category=CRM_ISSUE"),
+    // NOTE: without ?all=1 this endpoint returns a plain string[], not row
+    // objects. Typing it as {value}[] produced an array of undefined and took
+    // the whole panel down on mount.
+    queryFn: () => apiGet<string[]>("/api/lookups?category=CRM_ISSUE"),
   });
-  const categories = (categoryList.data ?? []).map((r) => r.value);
+  const categories = (categoryList.data ?? []).filter((v): v is string => !!v);
 
   const [status, setStatus] = React.useState<string>("OPEN_ANY");
   const [category, setCategory] = React.useState("");
