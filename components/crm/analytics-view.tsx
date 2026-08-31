@@ -136,7 +136,7 @@ export function CrmAnalyticsView() {
       {/* Coverage first, and coverage loudest. Every other number on this page
           is a statement about the calls that were made; this is the one that
           says how many that was. */}
-      <div className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1 [&>*]:w-[46vw] [&>*]:shrink-0 [&>*]:snap-start sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:[&>*]:w-auto xl:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           className="py-2.5 sm:py-3"
           icon={<PhoneCallIcon />}

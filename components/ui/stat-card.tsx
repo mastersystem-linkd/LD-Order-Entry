@@ -64,7 +64,7 @@ export function StatCard({
           }
         : {})}
       className={cn(
-        "relative overflow-hidden py-3 transition-shadow duration-200 hover:shadow-lg sm:py-4",
+        "relative overflow-hidden py-2 transition-shadow duration-200 hover:shadow-lg sm:py-4",
         onClick &&
           "cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]",
         active && "border-accent ring-2 ring-accent/25",
@@ -78,18 +78,20 @@ export function StatCard({
           background: `radial-gradient(circle, ${t.glow}, transparent 70%)`,
         }}
       />
-      <CardContent className="relative flex items-center gap-2.5 sm:gap-3">
+      <CardContent className="relative flex items-center gap-2.5 px-2.5 sm:gap-3 sm:px-4">
         <span
           className={cn(
-            "grid size-9 shrink-0 place-items-center rounded-[11px] [&_svg]:size-4 sm:size-10 sm:[&_svg]:size-[18px]",
+            "hidden shrink-0 place-items-center rounded-[11px] sm:grid sm:size-10 sm:[&_svg]:size-[18px]",
             t.tile,
           )}
         >
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] font-semibold text-ink-soft">{label}</div>
-          <div className="num font-display text-[19px] font-semibold leading-tight tracking-[-0.02em] break-words text-ink sm:text-[22px]">
+          <div className="truncate text-[11px] leading-tight font-semibold text-ink-soft sm:text-[12.5px]">
+            {label}
+          </div>
+          <div className="num font-display text-[17px] font-semibold leading-tight tracking-[-0.02em] break-words text-ink sm:text-[22px]">
             {value}
           </div>
           {sub ? (

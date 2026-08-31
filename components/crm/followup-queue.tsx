@@ -161,7 +161,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {/* KPI row — each card filters the list in place */}
-      <div className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1 [&>*]:w-[46vw] [&>*]:shrink-0 [&>*]:snap-start sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-0 sm:[&>*]:w-auto xl:grid-cols-5">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5">
         {cards.map((c) => (
           <button
             key={c.key}
@@ -200,8 +200,10 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
               {data.created > 0 ? ` · ${data.created} new` : ""}
             </span>
           ) : null}
+          {/* The explanation is worth one line on a desktop and worth nothing
+              on a phone, where it pushed the sort control onto its own row. */}
           <span
-            className="text-[11.5px] text-ink-soft"
+            className="hidden text-[11.5px] text-ink-soft sm:inline"
             title="Ranked by order value, our own delay and prior complaints — not by date."
           >
             worst first · click a row to work it
