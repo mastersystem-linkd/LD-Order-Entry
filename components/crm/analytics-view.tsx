@@ -10,12 +10,42 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 
+import dynamic from "next/dynamic";
+
 import { apiGet } from "@/lib/api-client";
 import { categoryLabel, type CrmAnalytics } from "@/lib/crm";
 import { formatCount } from "@/lib/orders";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
+import {
+  CHART_COLOURS,
+  CoverageGauge,
+  OnTimeQuadrant,
+  QueueBar,
+} from "@/components/crm/crm-charts-lite";
+
+const chartFallback = <div className="min-h-[188px]" />;
+const RatingRadar = dynamic(
+  () => import("@/components/crm/crm-charts").then((m) => m.RatingRadar),
+  { ssr: false, loading: () => chartFallback },
+);
+const RatingTrend = dynamic(
+  () => import("@/components/crm/crm-charts").then((m) => m.RatingTrend),
+  { ssr: false, loading: () => chartFallback },
+);
+const ComplaintPareto = dynamic(
+  () => import("@/components/crm/crm-charts").then((m) => m.ComplaintPareto),
+  { ssr: false, loading: () => chartFallback },
+);
+const ShareDonut = dynamic(
+  () => import("@/components/crm/crm-charts").then((m) => m.ShareDonut),
+  { ssr: false, loading: () => chartFallback },
+);
+const RankedBars = dynamic(
+  () => import("@/components/crm/crm-charts").then((m) => m.RankedBars),
+  { ssr: false, loading: () => chartFallback },
+);
 
 // CRM analytics (CLAUDE.md §12.5.5, OE-P18) — what the follow-up work adds up
 // to.
@@ -72,49 +102,6 @@ function Panel({
   );
 }
 
-/** Horizontal bars — a Pareto reads better than a pie and needs no library. */
-function Bars({
-  rows,
-  tone = "accent",
-  unit,
-}: {
-  rows: { key: string; count: number; label?: string }[];
-  tone?: "accent" | "danger" | "warning";
-  unit?: string;
-}) {
-  const max = Math.max(...rows.map((r) => r.count), 1);
-  const bar =
-    tone === "danger"
-      ? "bg-danger"
-      : tone === "warning"
-        ? "bg-warning"
-        : "bg-accent";
-  return (
-    <div className="flex flex-col gap-1.5 px-4 pb-4 sm:px-5">
-      {rows.map((r) => (
-        <div key={r.key} className="flex items-center gap-3">
-          <span
-            className="w-[132px] shrink-0 truncate text-[12px] text-ink-soft"
-            title={r.label ?? r.key}
-          >
-            {r.label ?? r.key}
-          </span>
-          <span className="h-2 flex-1 overflow-hidden rounded-pill bg-inset">
-            <span
-              className={cn("block h-full rounded-pill transition-all", bar)}
-              style={{ width: `${Math.max(3, (r.count / max) * 100)}%` }}
-            />
-          </span>
-          <span className="num w-12 shrink-0 text-right text-[12px] font-semibold">
-            {formatCount(r.count)}
-            {unit ?? ""}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function CrmAnalyticsView() {
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
@@ -142,21 +129,11 @@ export function CrmAnalyticsView() {
         <StatCard
           className="py-2.5 sm:py-3"
           icon={<PhoneCallIcon />}
-          label="Coverage"
-          value={d?.coverage.pct != null ? `${d.coverage.pct}%` : "—"}
-          sub={
-            d
-              ? `${formatCount(d.coverage.contacted)} of ${formatCount(d.coverage.followups)} delivered orders called`
-              : undefined
-          }
+          label="Waiting to be called"
+          value={d ? formatCount(d.funnel.due + d.funnel.inProgress) : "—"}
+          sub={d ? `${formatCount(d.coverage.followups)} delivered in range` : undefined}
           tone={
-            d?.coverage.pct == null
-              ? "slate"
-              : d.coverage.pct >= 85
-                ? "green"
-                : d.coverage.pct >= 50
-                  ? "amber"
-                  : "red"
+            d && d.funnel.due + d.funnel.inProgress > 0 ? "amber" : "slate"
           }
         />
         <StatCard
@@ -233,15 +210,27 @@ export function CrmAnalyticsView() {
       ) : null}
 
       <div className="grid gap-3 lg:grid-cols-2">
+        <Panel title="Coverage" note="the honesty metric — how many were actually called">
+          {d && d.coverage.pct !== null ? (
+            <CoverageGauge
+              pct={d.coverage.pct}
+              contacted={d.coverage.contacted}
+              followups={d.coverage.followups}
+            />
+          ) : (
+            <Awaiting need="No delivered orders in this range, so there is nothing to have called." />
+          )}
+        </Panel>
+
         <Panel title="Where the queue stands" note="every follow-up in range">
           {d && d.coverage.followups > 0 ? (
-            <Bars
-              rows={[
-                { key: "due", label: "Waiting to be called", count: d.funnel.due },
-                { key: "prog", label: "In progress", count: d.funnel.inProgress },
-                { key: "done", label: "Completed", count: d.funnel.completed },
-                { key: "unre", label: "Unreachable", count: d.funnel.unreachable },
-                { key: "nreq", label: "Not required", count: d.funnel.notRequired },
+            <QueueBar
+              parts={[
+                { key: "due", label: "Waiting", count: d.funnel.due, color: CHART_COLOURS.due },
+                { key: "prog", label: "In progress", count: d.funnel.inProgress, color: CHART_COLOURS.progress },
+                { key: "done", label: "Completed", count: d.funnel.completed, color: CHART_COLOURS.done },
+                { key: "unre", label: "Unreachable", count: d.funnel.unreachable, color: CHART_COLOURS.unreachable },
+                { key: "nreq", label: "Not required", count: d.funnel.notRequired, color: CHART_COLOURS.notRequired },
               ]}
             />
           ) : (
@@ -260,15 +249,7 @@ export function CrmAnalyticsView() {
             d.onTime.weOnTimeTheyNot >
             0 ? (
             <>
-              <Bars
-                tone="warning"
-                rows={[
-                  { key: "a", label: "On time · they agree", count: d.onTime.bothOnTime },
-                  { key: "b", label: "Late · they agree", count: d.onTime.bothLate },
-                  { key: "c", label: "Late · they were fine", count: d.onTime.weLateTheyFine },
-                  { key: "d", label: "On time · they were not", count: d.onTime.weOnTimeTheyNot },
-                ]}
-              />
+              <OnTimeQuadrant data={d.onTime} />
               <p className="px-4 pb-4 text-[11.5px] leading-relaxed text-ink-muted sm:px-5">
                 A large “late · they were fine” bar means the deadlines in
                 Settings → Time tracking are tighter than the promise you
@@ -283,14 +264,7 @@ export function CrmAnalyticsView() {
 
         <Panel title="Where the score is lost" note="by criterion, worst first">
           {d && d.ratings.subs.length > 0 ? (
-            <Bars
-              tone="warning"
-              rows={d.ratings.subs.map((s) => ({
-                key: s.key,
-                label: s.label,
-                count: s.avg,
-              }))}
-            />
+            <RatingRadar subs={d.ratings.subs} />
           ) : (
             <Awaiting need="Needs rated calls. Criteria are configured in Settings → CRM, so this chart follows whatever you decided to measure." />
           )}
@@ -298,13 +272,7 @@ export function CrmAnalyticsView() {
 
         <Panel title="Rating trend" note="monthly average of the overall score">
           {d && d.ratings.trend.length > 1 ? (
-            <Bars
-              rows={d.ratings.trend.map((t) => ({
-                key: t.month,
-                label: t.month,
-                count: t.avg,
-              }))}
-            />
+            <RatingTrend data={d.ratings.trend} />
           ) : (
             <Awaiting
               need={
@@ -318,9 +286,8 @@ export function CrmAnalyticsView() {
 
         <Panel title="What keeps happening" note="complaints by category">
           {d && d.complaints.byCategory.length > 0 ? (
-            <Bars
-              tone="danger"
-              rows={d.complaints.byCategory.map((c) => ({
+            <ComplaintPareto
+              data={d.complaints.byCategory.map((c) => ({
                 key: c.key,
                 label: categoryLabel(c.key),
                 count: c.count,
@@ -333,9 +300,9 @@ export function CrmAnalyticsView() {
 
         <Panel title="Who has to act" note="complaints by department">
           {d && d.complaints.byDept.length > 0 ? (
-            <Bars
-              tone="danger"
-              rows={d.complaints.byDept.map((c) => ({
+            <ShareDonut
+              centreLabel="complaints"
+              data={d.complaints.byDept.map((c) => ({
                 key: c.key,
                 label: DEPT_LABEL[c.key] ?? c.key,
                 count: c.count,
@@ -348,9 +315,8 @@ export function CrmAnalyticsView() {
 
         <Panel title="Complaints by transport" note="who is damaging the goods">
           {d && d.complaints.byTransport.length > 0 ? (
-            <Bars
-              tone="danger"
-              rows={d.complaints.byTransport.map((c) => ({
+            <RankedBars
+              data={d.complaints.byTransport.map((c) => ({
                 key: c.key,
                 label: c.key,
                 count: c.count,
@@ -364,12 +330,13 @@ export function CrmAnalyticsView() {
         <Panel title="Reorder signals" note="the commercial case for calling">
           {d && d.reorder.yes + d.reorder.maybe + d.reorder.sample > 0 ? (
             <>
-              <Bars
-                rows={[
+              <ShareDonut
+                centreLabel="signals"
+                data={[
                   { key: "yes", label: "Buying again", count: d.reorder.yes },
                   { key: "maybe", label: "Maybe", count: d.reorder.maybe },
-                  { key: "sample", label: "Asked for a sample", count: d.reorder.sample },
-                ]}
+                  { key: "sample", label: "Sample asked", count: d.reorder.sample },
+                ].filter((r) => r.count > 0)}
               />
               <p className="flex items-center gap-1.5 px-4 pb-4 text-[11.5px] text-ink-muted sm:px-5">
                 <ArrowRightIcon className="size-3.5" />
