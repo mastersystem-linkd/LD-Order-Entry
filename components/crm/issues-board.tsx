@@ -139,7 +139,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
   const groups = groupBy === "dept" ? (data?.byDept ?? []) : (data?.byCategory ?? []);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-2.5 shadow-sm">
         {STATUS_TABS.map((t) => (
@@ -214,28 +214,32 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
         <StatCard
+          className="py-2.5 sm:py-3"
           icon={<TriangleAlertIcon />}
           label="Open issues"
           value={k?.open ?? 0}
           tone="red"
         />
         <StatCard
+          className="py-2.5 sm:py-3"
           icon={<IndianRupeeIcon />}
           label="Value at risk"
           value={k ? `₹${formatNumber(k.valueAtRisk)}` : "—"}
           tone="amber"
-          sub="Orders with an open complaint, counted once each"
+          sub="counted once per order"
         />
         <StatCard
+          className="py-2.5 sm:py-3"
           icon={<ClockIcon />}
           label="Median resolution"
           value={k?.medianResolutionDays != null ? `${k.medianResolutionDays} d` : "—"}
           tone="slate"
-          sub={k?.medianResolutionDays == null ? "Nothing resolved yet" : undefined}
+          sub={k?.medianResolutionDays == null ? "nothing resolved yet" : undefined}
         />
         <StatCard
+          className="py-2.5 sm:py-3"
           icon={<AlertTriangleIcon />}
           label="High severity"
           value={k?.highSeverity ?? 0}
@@ -243,13 +247,10 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+      <div className="grid gap-3 lg:grid-cols-[196px_1fr]">
         {/* Group-by rail — who has to act, or what keeps happening */}
         <Card className="h-fit">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <CardTitle className="text-[15px]">Breakdown</CardTitle>
-          </div>
-          <div className="px-4 pb-2">
+          <div className="px-3 pt-3 pb-2">
             <Segmented
               size="sm"
               className="w-full"
@@ -303,13 +304,18 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
         </Card>
 
         <Card>
-          <div className="px-4 pt-4 pb-3 sm:px-5">
-            <CardTitle className="text-[17px]">Complaints</CardTitle>
-            <CardDescription className="text-[11.5px]">
-              Worst first — severity, then how long it has been open. Click a
-              row to resolve it.
-              {data ? <span className="num"> {data.total} shown.</span> : null}
-            </CardDescription>
+          {/* One line, not a title over a paragraph. The rule the list obeys
+              is worth stating once; it is not worth 60px of every screen. */}
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-4 py-2.5 sm:px-5">
+            <CardTitle className="text-[15px]">Complaints</CardTitle>
+            {data ? (
+              <span className="num rounded-pill bg-inset px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+                {data.total}
+              </span>
+            ) : null}
+            <span className="text-[11px] text-ink-muted">
+              worst first · click a row to resolve
+            </span>
           </div>
 
           <CardContent className="px-0">

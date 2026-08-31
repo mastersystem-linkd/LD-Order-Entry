@@ -132,7 +132,7 @@ export function CustomersView() {
   const k = data?.kpis;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={<UsersIcon />}
@@ -204,20 +204,24 @@ export function CustomersView() {
             </option>
           ))}
         </select>
-        <span className="ml-auto text-[11.5px] text-ink-muted">
-          Read-only · grouped by CRR customer
-        </span>
       </div>
 
       <Card className="overflow-hidden p-0">
-        <div className="flex flex-wrap items-end gap-3 px-4 pt-4 pb-3">
-          <div>
-            <CardTitle>Customer history</CardTitle>
-            <CardDescription>
-              A view over orders, follow-ups and complaints — never a second
-              customer master, and party names are shown exactly as typed.
-            </CardDescription>
-          </div>
+        {/* One line. The caveat matters but does not deserve a paragraph on
+            every load — it lives in the tooltip and in the header note above. */}
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-4 py-2.5 sm:px-5">
+          <CardTitle className="text-[15px]">Customer history</CardTitle>
+          {data ? (
+            <span className="num rounded-pill bg-inset px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+              {data.total}
+            </span>
+          ) : null}
+          <span
+            className="text-[11px] text-ink-muted"
+            title="A view over orders, follow-ups and complaints — never a second customer master. Party names are shown exactly as typed."
+          >
+            read-only · grouped by CRR customer
+          </span>
         </div>
 
         <HScroll>
