@@ -724,3 +724,59 @@ export type CrmAnalytics = {
   reorder: { yes: number; maybe: number; sample: number };
   sampleSize: number;
 };
+
+// ---------------------------------------------------------------------------
+// The call log (§12.5.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * One worked call, as a record rather than as a task.
+ *
+ * This exists because three fields were WRITE-ONLY. `notes` (the feedback a
+ * customer actually gave), `reorder_note` (what they said they need next) and
+ * the per-criterion scores were all written by the call panel and readable
+ * nowhere else — a coordinator could record "they want 2,000 m satin crepe in
+ * September" and nobody, sales included, could find it again without opening
+ * that one order. Complaints had a board; the rest of the call had nothing.
+ */
+export type CallRecord = {
+  followupId: string;
+  orderId: string;
+  orderNo: string;
+  partyName: string;
+  crrCustomerId: number | null;
+  salesPerson: string | null;
+  status: FollowupStatus;
+  deliveredAt: string | null;
+  contactedAt: string | null;
+  completedBy: string | null;
+  attempts: number;
+  channels: string[];
+  customerSaysOnTime: boolean | null;
+  delayReason: string | null;
+  ratingOverall: number | null;
+  ratingSource: string | null;
+  /** Per criterion, in the order the criteria are configured. */
+  subRatings: { key: string; label: string; value: number }[];
+  /** The free-text feedback — the whole reason this screen exists. */
+  feedback: string | null;
+  reorderIntent: ReorderIntent;
+  reorderNote: string | null;
+  issues: number;
+  openIssues: number;
+  orderValue: number;
+  isEscalated: boolean;
+};
+
+export type CallList = {
+  rows: CallRecord[];
+  total: number;
+  page: number;
+  totalPages: number;
+  kpis: {
+    calls: number;
+    withFeedback: number;
+    reorderSignals: number;
+    escalated: number;
+  };
+};

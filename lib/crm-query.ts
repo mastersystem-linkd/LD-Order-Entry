@@ -10,6 +10,8 @@ import {
   count,
   eq,
   gte,
+  desc,
+  inArray,
   isNotNull,
   isNull,
   lte,
@@ -25,6 +27,8 @@ import {
   followupDueAt,
   followupPriority,
   priorityBand,
+  type CallList,
+  type CallRecord,
   type CrmAnalytics,
   type CrmConfig,
   type CustomerList,
@@ -41,10 +45,13 @@ import {
   type IssueSeverity,
   type IssueStatus,
   type OwnerDept,
+  type ReorderIntent,
 } from "@/lib/crm";
 
 // Re-exported for server callers that already import this module.
 export type {
+  CallList,
+  CallRecord,
   CustomerList,
   CustomerRow,
   CustomerSort,
@@ -55,6 +62,7 @@ export type {
   IssueRow,
 };
 import {
+  crmFollowupAttempts,
   crmFollowupRatings,
   crmFollowups,
   crmIssues,
@@ -1054,5 +1062,214 @@ export async function loadCrmAnalytics(
     },
     /** How much work these numbers rest on — 0 means nobody has called yet. */
     sampleSize: Number(head?.completed ?? 0),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The call log (§12.5.6)
+// ---------------------------------------------------------------------------
+
+const CALL_PAGE_SIZE = 20;
+
+/**
+ * Every call that was actually WORKED, newest first — the record of what
+ * customers said, as opposed to the queue of who still needs calling.
+ *
+ * Four sequential statements, per the max:5 pool rule. It deliberately does
+ * NOT include untouched DUE rows: a follow-up nobody has opened is not a call
+ * and would bury the ones that are.
+ */
+export async function loadCalls(p: URLSearchParams): Promise<CallList> {
+  const q = (p.get("q") ?? "").trim().toLowerCase();
+  const from = (p.get("from") ?? "").trim() || null;
+  const to = (p.get("to") ?? "").trim() || null;
+  const has = p.get("has"); // "feedback" | "reorder" | "rating" | null
+  const page = Math.max(1, Number(p.get("page") ?? 1) || 1);
+
+  const where: SQL[] = [
+    // Worked means: contacted, rated, given feedback, or closed one way or
+    // another. An untouched DUE row is not a call.
+    sql`(${crmFollowups.contactedAt} is not null
+      or ${crmFollowups.ratingOverall} is not null
+      or ${crmFollowups.notes} is not null
+      or ${crmFollowups.status} in ('COMPLETED','UNREACHABLE','NOT_REQUIRED'))`,
+  ];
+  if (from) where.push(sql`coalesce(${crmFollowups.contactedAt}, ${crmFollowups.deliveredAt}) >= ${from}::date`);
+  if (to)
+    where.push(
+      sql`coalesce(${crmFollowups.contactedAt}, ${crmFollowups.deliveredAt}) < (${to}::date + interval '1 day')`,
+    );
+
+  const rows = await db
+    .select({
+      followupId: crmFollowups.id,
+      orderId: crmFollowups.orderId,
+      orderNo: crmFollowups.orderNo,
+      partyName: customerOrders.partyName,
+      crrCustomerId: customerOrders.crrCustomerId,
+      salesPerson: customerOrders.salesPerson,
+      status: crmFollowups.status,
+      deliveredAt: crmFollowups.deliveredAt,
+      contactedAt: crmFollowups.contactedAt,
+      completedBy: crmFollowups.completedBy,
+      attempts: crmFollowups.attemptCount,
+      customerSaysOnTime: crmFollowups.customerSaysOnTime,
+      delayReason: crmFollowups.delayReason,
+      ratingOverall: crmFollowups.ratingOverall,
+      ratingSource: crmFollowups.ratingSource,
+      feedback: crmFollowups.notes,
+      reorderIntent: crmFollowups.reorderIntent,
+      reorderNote: crmFollowups.reorderNote,
+      isEscalated: crmFollowups.isEscalated,
+    })
+    .from(crmFollowups)
+    .innerJoin(customerOrders, eq(customerOrders.id, crmFollowups.orderId))
+    .where(and(...where))
+    .orderBy(desc(crmFollowups.contactedAt), desc(crmFollowups.deliveredAt))
+    .limit(MAX_ROWS);
+
+  const ids = rows.map((r) => r.followupId);
+
+  // Scores, labelled. Read through crm_rating_criteria so a criterion that has
+  // since been renamed still reads correctly against an old call.
+  const scores = ids.length
+    ? await db
+        .select({
+          followupId: crmFollowupRatings.followupId,
+          key: crmFollowupRatings.criterionKey,
+          value: crmFollowupRatings.value,
+          label: crmRatingCriteria.label,
+          sortOrder: crmRatingCriteria.sortOrder,
+        })
+        .from(crmFollowupRatings)
+        .leftJoin(
+          crmRatingCriteria,
+          eq(crmRatingCriteria.key, crmFollowupRatings.criterionKey),
+        )
+        .where(inArray(crmFollowupRatings.followupId, ids))
+    : [];
+
+  const issues = ids.length
+    ? await db
+        .select({
+          followupId: crmIssues.followupId,
+          status: crmIssues.status,
+        })
+        .from(crmIssues)
+        .where(inArray(crmIssues.followupId, ids))
+    : [];
+
+  const values = ids.length
+    ? await db
+        .select({
+          orderId: orderLineItems.orderId,
+          value: sql<string>`coalesce(sum(${orderLineItems.lineTotal}) filter (
+            where not ${orderLineItems.isCancelled} and not ${orderLineItems.isDeleted}), 0)`,
+        })
+        .from(orderLineItems)
+        .where(inArray(orderLineItems.orderId, rows.map((r) => r.orderId)))
+        .groupBy(orderLineItems.orderId)
+    : [];
+
+  const attemptRows = ids.length
+    ? await db
+        .select({
+          followupId: crmFollowupAttempts.followupId,
+          channel: crmFollowupAttempts.channel,
+        })
+        .from(crmFollowupAttempts)
+        .where(inArray(crmFollowupAttempts.followupId, ids))
+    : [];
+
+  const scoreBy = new Map<string, { key: string; label: string; value: number; sortOrder: number }[]>();
+  for (const s of scores) {
+    const arr = scoreBy.get(s.followupId) ?? [];
+    arr.push({
+      key: s.key,
+      label: s.label ?? s.key,
+      value: s.value,
+      sortOrder: s.sortOrder ?? 999,
+    });
+    scoreBy.set(s.followupId, arr);
+  }
+  const issueBy = new Map<string, { total: number; open: number }>();
+  for (const i of issues) {
+    const cur = issueBy.get(i.followupId) ?? { total: 0, open: 0 };
+    cur.total += 1;
+    if (i.status === "OPEN" || i.status === "IN_PROGRESS") cur.open += 1;
+    issueBy.set(i.followupId, cur);
+  }
+  const valueBy = new Map(values.map((v) => [v.orderId, Number(v.value)]));
+  const channelBy = new Map<string, Set<string>>();
+  for (const a of attemptRows) {
+    const set = channelBy.get(a.followupId) ?? new Set<string>();
+    set.add(a.channel);
+    channelBy.set(a.followupId, set);
+  }
+
+  const all: CallRecord[] = rows.map((r) => {
+    const iss = issueBy.get(r.followupId) ?? { total: 0, open: 0 };
+    return {
+      followupId: r.followupId,
+      orderId: r.orderId,
+      orderNo: r.orderNo,
+      partyName: r.partyName,
+      crrCustomerId: r.crrCustomerId,
+      salesPerson: r.salesPerson,
+      status: r.status as FollowupStatus,
+      deliveredAt: r.deliveredAt ? new Date(r.deliveredAt).toISOString() : null,
+      contactedAt: r.contactedAt ? new Date(r.contactedAt).toISOString() : null,
+      completedBy: r.completedBy,
+      attempts: r.attempts,
+      channels: [...(channelBy.get(r.followupId) ?? [])],
+      customerSaysOnTime: r.customerSaysOnTime,
+      delayReason: r.delayReason,
+      ratingOverall: r.ratingOverall,
+      ratingSource: r.ratingSource,
+      subRatings: (scoreBy.get(r.followupId) ?? [])
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map(({ key, label, value }) => ({ key, label, value })),
+      feedback: r.feedback,
+      reorderIntent: (r.reorderIntent as ReorderIntent) ?? "none",
+      reorderNote: r.reorderNote,
+      issues: iss.total,
+      openIssues: iss.open,
+      orderValue: valueBy.get(r.orderId) ?? 0,
+      isEscalated: r.isEscalated,
+    };
+  });
+
+  const kpis = {
+    calls: all.length,
+    withFeedback: all.filter((r) => !!r.feedback?.trim()).length,
+    reorderSignals: all.filter((r) => r.reorderIntent !== "none").length,
+    escalated: all.filter((r) => r.isEscalated).length,
+  };
+
+  let out = all;
+  if (has === "feedback") out = out.filter((r) => !!r.feedback?.trim());
+  if (has === "reorder") out = out.filter((r) => r.reorderIntent !== "none");
+  if (has === "rating") out = out.filter((r) => r.ratingOverall !== null);
+  if (q) {
+    out = out.filter(
+      (r) =>
+        r.orderNo.toLowerCase().includes(q) ||
+        r.partyName.toLowerCase().includes(q) ||
+        (r.feedback ?? "").toLowerCase().includes(q) ||
+        (r.reorderNote ?? "").toLowerCase().includes(q),
+    );
+  }
+
+  const total = out.length;
+  const totalPages = Math.max(1, Math.ceil(total / CALL_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * CALL_PAGE_SIZE;
+
+  return {
+    rows: out.slice(start, start + CALL_PAGE_SIZE),
+    total,
+    page: safePage,
+    totalPages,
+    kpis,
   };
 }

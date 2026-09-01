@@ -42,7 +42,7 @@ order-entry-system/
     api/                route handlers (JSON). orders/ · orders/[id]/{cancel,delete,tracking,lines/[lineId]} ·
                         order-status/ · tracking/stage · trash · dashboard · reports/monthly ·
                         crm/followups · crm/followups/[id] · crm/followups/[id]/attempts ·
-                        crm/issues · crm/issues/[id] · crm/settings · crm/customers ·
+                        crm/issues · crm/issues/[id] · crm/settings · crm/customers · crm/calls ·
                         export/orders · lookups · designs · design-database · stages · users ·
                         access · health · auth/[...nextauth]
   components/           app-shell/ · orders/ · order-status/ · tracking/ · dashboard/ · trash/ · settings/ · ui/
@@ -249,6 +249,8 @@ The rest of this app tracks an order **until it leaves us**. This module tracks 
 **4b. Feedback is free text, and optional.** The fixed questions cannot anticipate what a customer actually says, and without somewhere to put the rest it goes unrecorded. It writes `crm_followups.notes` — a column the schema and the API always had and which no screen had ever offered a field for. Optional by design: it must never stand between a coordinator and finishing the call.
 
 **4c. Which CRM dropdowns are DATA, and which cannot be.** Complaint categories, **departments** (`CRM_DEPT`) and **delay reasons** (`CRM_DELAY_REASON`) live in `lookup_values` and are managed in Settings → CRM — they are lists of the business's own making, and another firm's departments are not these. Rating criteria live in `crm_rating_criteria`. **Severity, attempt outcomes and reorder intent stay fixed on purpose**: `HIGH` drives escalation in three places, `isReachedOutcome()` drives the follow-up state machine and the `contacted_at` stamp, and the analytics count specific reorder values. Making those configurable would let a rename silently switch off escalation. If one of them must change, change the code that depends on it in the same commit.
+
+**4d. The call log exists because three fields were WRITE-ONLY.** `notes` (the customer's own words), `reorder_note` (what they need next) and the per-criterion scores were written by the call panel and readable **nowhere else** — a coordinator could record *"they want 2,000 m satin crepe in September"* and nobody, sales included, could find it again without opening that one order. Complaints had a board; the rest of the call had nothing. `/crm/calls` is that record: newest first, read-only, search reaching **inside the feedback text**, and it never lists a follow-up nobody has touched. Anything the panel can record must be readable somewhere — check that before adding a field.
 
 **5. Complaints are rows, not prose.** An issue carries a category, a **line** (quality + design), affected meters, a severity and an owning department. **The category is free text**, suggested from `lookup_values("CRM_ISSUE")` and managed in Settings → CRM: a customer complains about whatever they complain about, and a fixed enum could not survive contact with real calls. A category typed on a call is added to the master list by the issues API, so the next coordinator is offered it rather than coining a second spelling — the same way the party and fabric lists learn from what people type (§3.4). Rows written before *migration 0005* carry the old `SCREAMING_SNAKE` keys and are humanised on read by `categoryLabel()`, never rewritten.
 

@@ -127,6 +127,9 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Follow-ups", href: "/crm", cap: "crm.view" },
       { label: "Issues", href: "/crm/issues", cap: "crm.view" },
+      // The record of what customers SAID — feedback, scores and reorder
+      // requests were written by the call panel and readable nowhere else.
+      { label: "Call log", href: "/crm/calls", cap: "crm.view" },
       { label: "Customers", href: "/crm/customers", cap: "crm.view" },
       { label: "CRM analytics", href: "/crm/analytics", cap: "crm.view" },
     ],
