@@ -194,7 +194,7 @@ export function CallsLog() {
               {data.total}
             </span>
           ) : null}
-          <span className="hidden text-[11.5px] text-ink-soft sm:inline">
+          <span className="hidden text-[12px] text-ink-soft sm:inline">
             newest first · click a row for the whole call
           </span>
         </div>
@@ -277,16 +277,16 @@ function CallRow({
       >
         <Td>
           <div className="num text-[13px] font-semibold text-ink">{row.orderNo}</div>
-          <div className="max-w-[190px] truncate text-[11.5px] text-ink-soft">
+          <div className="max-w-[190px] truncate text-[12px] font-medium text-ink-soft">
             {row.partyName}
           </div>
         </Td>
-        <Td className="num text-[12px] text-ink-soft">
+        <Td className="num text-[12.5px] text-ink">
           {row.contactedAt ? (
             <>
               <div>{formatDateTime(row.contactedAt)}</div>
               {row.completedBy ? (
-                <div className="max-w-[150px] truncate text-[11px]">
+                <div className="max-w-[150px] truncate text-[11.5px] text-ink-soft">
                   {row.completedBy}
                 </div>
               ) : null}
@@ -311,13 +311,13 @@ function CallRow({
         <Td className="max-w-[280px]">
           {row.feedback?.trim() ? (
             <span
-              className="line-clamp-2 text-[12px] leading-snug text-ink"
+              className="line-clamp-2 text-[12.5px] leading-snug font-medium text-ink"
               title={row.feedback}
             >
               {row.feedback}
             </span>
           ) : (
-            <span className="text-[12px] text-ink-soft italic">nothing recorded</span>
+            <span className="text-[12.5px] text-ink-soft italic">nothing recorded</span>
           )}
         </Td>
         <Td className="max-w-[190px]">
@@ -330,7 +330,7 @@ function CallRow({
               </Pill>
               {row.reorderNote ? (
                 <div
-                  className="mt-0.5 truncate text-[11.5px] text-ink-soft"
+                  className="mt-0.5 truncate text-[12px] text-ink"
                   title={row.reorderNote}
                 >
                   {row.reorderNote}
@@ -384,7 +384,7 @@ function CallRow({
                         key={s.key}
                         className="flex items-center justify-between gap-3 text-[12.5px]"
                       >
-                        <span className="text-ink-soft">{s.label}</span>
+                        <span className="font-medium text-ink">{s.label}</span>
                         <span className="inline-flex items-center gap-1.5">
                           <Stars value={s.value} size={12} />
                           <span className="num font-semibold">{s.value}</span>
@@ -394,7 +394,7 @@ function CallRow({
                   </ul>
                 )}
                 {row.ratingSource ? (
-                  <p className="mt-2 text-[11.5px] text-ink-soft">
+                  <p className="mt-2 text-[12px] text-ink-soft">
                     {row.ratingSource === "customer"
                       ? "The customer stated these."
                       : "The coordinator judged these."}
@@ -405,7 +405,7 @@ function CallRow({
               <div className="md:col-span-2">
                 <Label>In their own words</Label>
                 {row.feedback?.trim() ? (
-                  <p className="rounded-field border-l-[3px] border-l-accent bg-surface px-3 py-2.5 text-[12.5px] leading-relaxed text-ink">
+                  <p className="rounded-field border-l-[3px] border-l-accent bg-surface px-3 py-3 text-[13px] leading-relaxed text-ink">
                     {row.feedback}
                   </p>
                 ) : (
@@ -417,7 +417,7 @@ function CallRow({
                 {row.reorderNote ? (
                   <>
                     <Label className="mt-4">What they need next</Label>
-                    <p className="rounded-field border-l-[3px] border-l-success bg-surface px-3 py-2.5 text-[12.5px] leading-relaxed text-ink">
+                    <p className="rounded-field border-l-[3px] border-l-success bg-surface px-3 py-3 text-[13px] leading-relaxed text-ink">
                       {row.reorderNote}
                     </p>
                   </>
@@ -425,7 +425,7 @@ function CallRow({
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-[11.5px] text-ink-soft">
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-[12.5px] text-ink-soft">
               <span>
                 Order value{" "}
                 <b className="num text-ink">{money(row.orderValue)}</b>
@@ -469,7 +469,7 @@ function Label({
   return (
     <div
       className={cn(
-        "mb-1.5 text-[10.5px] font-semibold tracking-[0.07em] text-ink-soft uppercase",
+        "mb-1.5 text-[11px] font-semibold tracking-[0.07em] text-ink uppercase",
         className,
       )}
     >
