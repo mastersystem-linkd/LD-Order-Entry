@@ -414,29 +414,31 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
               <Table>
                 <THead className="bg-inset">
                   <tr>
-                    <Th>Order &middot; party</Th>
+                    <Th>Order no</Th>
+                    <Th>Party name</Th>
                     <Th>Complaint</Th>
-                    <Th>Fabric &middot; design</Th>
-                    <Th className="text-right">Affected</Th>
-                    <Th className="text-right">Order value</Th>
-                    <Th>Severity</Th>
-                    {/* Not "Owner" — that read as the transport company
-                        rather than the department that has to fix it. */}
-                    <Th>Whose to fix</Th>
-                    <Th className="text-right">Open</Th>
+                    <Th>Fabric</Th>
+                    <Th>Design no</Th>
+                    <Th className="text-right">Meters affected</Th>
+                    <Th className="text-right">Order amount</Th>
+                    <Th>How serious</Th>
+                    {/* Not "Owner", and not "Whose to fix" either — the values
+                        are department names, so the header should just say so. */}
+                    <Th>Department</Th>
+                    <Th className="text-right">Days open</Th>
                     <Th>Status</Th>
                   </tr>
                 </THead>
                 <tbody>
                   {q.isLoading ? (
                     <tr>
-                      <Td colSpan={9} className="px-4 py-10 text-center text-ink-soft">
+                      <Td colSpan={11} className="px-4 py-10 text-center text-ink-soft">
                         Loading…
                       </Td>
                     </tr>
                   ) : q.isError ? (
                     <tr>
-                      <Td colSpan={9} className="px-4 py-10 text-center">
+                      <Td colSpan={11} className="px-4 py-10 text-center">
                         <div className="font-semibold text-danger">
                           Could not load issues
                         </div>
@@ -447,7 +449,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                     </tr>
                   ) : rows.length === 0 ? (
                     <tr>
-                      <Td colSpan={9} className="px-4 py-12 text-center">
+                      <Td colSpan={11} className="px-4 py-12 text-center">
                         <div className="text-[13.5px] font-medium text-ink">
                           No complaints recorded.
                         </div>
@@ -590,7 +592,7 @@ function IssueRowView({
 
         <Td className="num text-right whitespace-nowrap">
           {row.qtyAffected != null ? (
-            <span className="font-medium">{formatNumber(row.qtyAffected)} m</span>
+            <span className="font-medium">{formatNumber(row.qtyAffected)}</span>
           ) : (
             <span className="text-ink-soft">—</span>
           )}
@@ -651,7 +653,7 @@ function IssueRowView({
 
       {open ? (
         <tr className="border-b border-line bg-surface-2">
-          <Td colSpan={9} className="px-4 py-3.5 whitespace-normal">
+          <Td colSpan={11} className="px-4 py-3.5 whitespace-normal">
             <div className="flex flex-col gap-3">
               <div>
                 <div className="text-[11.5px] tracking-[0.05em] text-ink-soft uppercase">
