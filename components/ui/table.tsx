@@ -8,6 +8,12 @@ import { cn } from "@/lib/utils";
 //
 // House header style (matches the Operations table): uppercase, 13px, bold,
 // tracking-[0.04em], text-ink, never wraps.
+//
+// Cells carry a vertical rule between COLUMNS, not just rows. On a wide table
+// — the issues board is eleven columns — a value and its header can sit an
+// inch apart with nothing tying them together, and the eye slides into the
+// next column. The rule is the faintest line in the palette: enough to guide,
+// not enough to read as a grid.
 
 export function Table({
   className,
@@ -15,7 +21,10 @@ export function Table({
 }: React.TableHTMLAttributes<HTMLTableElement>) {
   return (
     <table
-      className={cn("w-full text-left text-sm text-ink", className)}
+      className={cn(
+        "w-full border-collapse text-left text-sm text-ink",
+        className,
+      )}
       {...props}
     />
   );
@@ -39,7 +48,7 @@ export function Th({
   return (
     <th
       className={cn(
-        "px-3 py-2 text-left align-middle text-[13px] font-bold uppercase tracking-[0.04em] whitespace-nowrap text-ink",
+        "border-r border-line/70 px-3 py-2 text-left align-middle text-[13px] font-bold tracking-[0.04em] whitespace-nowrap text-ink uppercase last:border-r-0",
         className,
       )}
       {...props}
@@ -55,7 +64,10 @@ export function Td({
 }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
     <td
-      className={cn("px-3 py-2 align-middle whitespace-nowrap", className)}
+      className={cn(
+        "border-r border-line/70 px-3 py-2 align-middle whitespace-nowrap last:border-r-0",
+        className,
+      )}
       {...props}
     />
   );

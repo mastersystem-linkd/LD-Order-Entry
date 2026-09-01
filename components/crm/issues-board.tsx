@@ -547,13 +547,9 @@ function IssueRowView({
           open ? "bg-accent-soft" : "hover:bg-surface-2",
         )}
       >
-        {/* Order and party are ONE fact — which order, for whom. Two columns
-            spent half the width on repeating the same identity. */}
-        <Td>
-          <div className="num text-[13px] font-semibold text-ink">{row.orderNo}</div>
-          <div className="max-w-[190px] truncate text-[12px] text-ink-soft">
-            {row.partyName}
-          </div>
+        <Td className="num text-[13px] font-semibold text-ink">{row.orderNo}</Td>
+        <Td className="max-w-[200px] truncate text-[12.5px] font-medium text-ink">
+          {row.partyName}
         </Td>
 
         {/* The complaint itself. The board previously showed the category and
@@ -577,17 +573,13 @@ function IssueRowView({
           )}
         </Td>
 
-        <Td>
-          {row.quality ? (
-            <>
-              <div className="max-w-[150px] truncate text-[12.5px] font-medium text-ink">
-                {row.quality}
-              </div>
-              <div className="num text-[12px] text-ink-soft">{row.designNo}</div>
-            </>
-          ) : (
-            <span className="text-[12.5px] text-ink-soft">Whole order</span>
+        <Td className="max-w-[160px] truncate text-[12.5px] font-medium text-ink">
+          {row.quality ?? (
+            <span className="font-normal text-ink-soft">Whole order</span>
           )}
+        </Td>
+        <Td className="num text-[12.5px] text-ink">
+          {row.designNo ?? <span className="text-ink-soft">—</span>}
         </Td>
 
         <Td className="num text-right whitespace-nowrap">
