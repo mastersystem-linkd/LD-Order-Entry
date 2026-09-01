@@ -239,7 +239,7 @@ export function FollowupQueue({ canEdit }: { canEdit: boolean }) {
                 <tr>
                   <Th className="w-[14px] px-2" />
                   <Th>Order no</Th>
-                  <Th>Party</Th>
+                  <Th className="w-full">Party</Th>
                   <Th>Delivered</Th>
                   <Th className="text-right">Waiting</Th>
                   <Th className="text-right">Order value</Th>

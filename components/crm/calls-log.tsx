@@ -208,7 +208,7 @@ export function CallsLog() {
                 <Th>Party name</Th>
                 <Th>Calling date</Th>
                 <Th>Rating</Th>
-                <Th>Feedback</Th>
+                <Th className="w-full">Feedback</Th>
                 <Th>Any new requirement</Th>
                 <Th className="text-right">Issues</Th>
                 <Th>Outcome</Th>
@@ -308,7 +308,7 @@ function CallRow({
           )}
         </Td>
         {/* The column this screen was built for. */}
-        <Td className="max-w-[280px]">
+        <Td className="max-w-0">
           {row.feedback?.trim() ? (
             <span
               className="line-clamp-2 text-[12.5px] leading-snug font-medium text-ink"

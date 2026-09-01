@@ -305,7 +305,7 @@ export function CustomersView() {
           <Table>
             <THead>
               <tr>
-                <Th>Customer</Th>
+                <Th className="w-full">Customer</Th>
                 <Th className="text-right">Orders 12m</Th>
                 <Th className="text-right">Value 12m</Th>
                 <Th>Avg rating</Th>

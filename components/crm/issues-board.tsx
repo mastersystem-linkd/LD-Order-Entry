@@ -416,7 +416,7 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
                   <tr>
                     <Th>Order no</Th>
                     <Th>Party name</Th>
-                    <Th>Complaint</Th>
+                    <Th className="w-full">Complaint</Th>
                     <Th>Fabric</Th>
                     <Th>Design no</Th>
                     <Th className="text-right">Meters affected</Th>
@@ -555,7 +555,7 @@ function IssueRowView({
         {/* The complaint itself. The board previously showed the category and
             hid the description entirely — so a list of complaints never said
             what anyone actually complained about. */}
-        <Td className="max-w-[300px]">
+        <Td className="max-w-0">
           <div className="truncate text-[13px] font-medium text-ink">
             {categoryLabel(row.category)}
           </div>

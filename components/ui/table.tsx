@@ -65,7 +65,7 @@ export function Td({
   return (
     <td
       className={cn(
-        "border-r border-line/70 px-3 py-2 align-middle whitespace-nowrap last:border-r-0",
+        "border-r border-line/45 px-3 py-2.5 align-middle whitespace-nowrap last:border-r-0",
         className,
       )}
       {...props}
