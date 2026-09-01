@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   MessageSquareTextIcon,
@@ -203,11 +204,12 @@ export function CallsLog() {
           <Table>
             <THead>
               <tr>
-                <Th>Order · party</Th>
-                <Th>Called</Th>
+                <Th>Order no</Th>
+                <Th>Party name</Th>
+                <Th>Calling date</Th>
                 <Th>Rating</Th>
-                <Th>What they said</Th>
-                <Th>Wants next</Th>
+                <Th>Feedback</Th>
+                <Th>Any new requirement</Th>
                 <Th className="text-right">Issues</Th>
                 <Th>Outcome</Th>
               </tr>
@@ -215,13 +217,13 @@ export function CallsLog() {
             <tbody>
               {q.isLoading ? (
                 <tr>
-                  <Td colSpan={7} className="py-10 text-center text-ink-soft">
+                  <Td colSpan={8} className="py-10 text-center text-ink-soft">
                     Loading…
                   </Td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <Td colSpan={7} className="py-10 text-center text-ink-soft">
+                  <Td colSpan={8} className="py-10 text-center text-ink-soft">
                     No calls recorded yet. This fills as the follow-up queue is
                     worked.
                   </Td>
@@ -275,11 +277,9 @@ function CallRow({
           open ? "bg-accent-soft" : "hover:bg-surface-2",
         )}
       >
-        <Td>
-          <div className="num text-[13px] font-semibold text-ink">{row.orderNo}</div>
-          <div className="max-w-[190px] truncate text-[12px] font-medium text-ink-soft">
-            {row.partyName}
-          </div>
+        <Td className="num text-[13px] font-semibold text-ink">{row.orderNo}</Td>
+        <Td className="max-w-[200px] truncate text-[12.5px] font-medium text-ink">
+          {row.partyName}
         </Td>
         <Td className="num text-[12.5px] text-ink">
           {row.contactedAt ? (
@@ -339,11 +339,24 @@ function CallRow({
             </>
           )}
         </Td>
+        {/* A count you cannot open is a dead end. It deep-links to the issues
+            board searched for this order — status=ALL because a resolved
+            complaint still has to be reachable from the call that raised it. */}
         <Td className="num text-right">
           {row.issues ? (
-            <span className={cn("font-semibold", row.openIssues ? "text-danger" : "text-ink")}>
+            <Link
+              href={`/crm/issues?q=${encodeURIComponent(row.orderNo)}&status=ALL`}
+              onClick={(e) => e.stopPropagation()}
+              title={`Open ${row.issues === 1 ? "this complaint" : "these complaints"} on the issues board`}
+              className={cn(
+                "inline-flex min-w-6 items-center justify-center rounded-pill px-2 py-0.5 font-semibold underline-offset-2 hover:underline",
+                row.openIssues
+                  ? "bg-danger/10 text-danger"
+                  : "bg-inset text-ink",
+              )}
+            >
               {row.issues}
-            </span>
+            </Link>
           ) : (
             <span className="text-ink-soft">—</span>
           )}
@@ -371,7 +384,7 @@ function CallRow({
 
       {open ? (
         <tr className="border-b border-line bg-surface-2">
-          <Td colSpan={7} className="px-5 py-4 whitespace-normal">
+          <Td colSpan={8} className="px-5 py-4 whitespace-normal">
             <div className="grid gap-5 md:grid-cols-3">
               <div>
                 <Label>Scores</Label>

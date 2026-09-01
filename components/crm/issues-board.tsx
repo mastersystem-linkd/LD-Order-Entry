@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
@@ -91,6 +92,15 @@ const RESOLUTION_LABEL: Record<IssueResolution, string> = {
 };
 
 export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
+  // Deep links land here from the call log, where an issue COUNT is a link:
+  // "1" on a call should open that call's complaint, not a board you then
+  // have to search yourself. Read once, as the initial state — after that the
+  // controls own it, so changing a filter does not fight the URL.
+  const sp = useSearchParams();
+  const initialQ = sp.get("q") ?? "";
+  const initialStatus = sp.get("status") ?? "OPEN_ANY";
+  const initialDept = sp.get("dept") ?? "";
+  const initialSeverity = sp.get("severity") ?? "";
   // Complaint categories are managed data now (Settings → CRM), so the filter
   // is populated from the same list the call panel writes into.
   const categoryList = useQuery({
@@ -109,14 +119,14 @@ export function IssuesBoard({ canEdit }: { canEdit: boolean }) {
   });
   const depts = (deptList.data ?? []).filter((v): v is string => !!v);
 
-  const [status, setStatus] = React.useState<string>("OPEN_ANY");
+  const [status, setStatus] = React.useState<string>(initialStatus);
   const [category, setCategory] = React.useState("");
-  const [severity, setSeverity] = React.useState("");
-  const [dept, setDept] = React.useState("");
+  const [severity, setSeverity] = React.useState(initialSeverity);
+  const [dept, setDept] = React.useState(initialDept);
   const [groupBy, setGroupBy] = React.useState<"dept" | "category">("dept");
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
-  const [rawSearch, setRawSearch] = React.useState("");
+  const [rawSearch, setRawSearch] = React.useState(initialQ);
   const [page, setPage] = React.useState(1);
   const [openId, setOpenId] = React.useState<string | null>(null);
 
