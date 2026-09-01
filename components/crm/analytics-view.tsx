@@ -92,7 +92,7 @@ function Panel({
   return (
     <Card
       className={cn(
-        "flex flex-col overflow-hidden p-0 transition-shadow duration-200 hover:shadow-md",
+        "flex h-full flex-col overflow-hidden p-0 transition-shadow duration-200 hover:shadow-md",
         className,
       )}
     >
@@ -106,7 +106,9 @@ function Panel({
         {note ? <span className="text-[12px] font-medium text-ink-soft">{note}</span> : null}
         {aside ? <div className="ml-auto">{aside}</div> : null}
       </div>
-      <CardContent className="flex-1 px-0 pt-0 pb-0">{children}</CardContent>
+      <CardContent className="flex flex-1 flex-col justify-center px-0 pt-0 pb-0">
+        {children}
+      </CardContent>
     </Card>
   );
 }
@@ -249,7 +251,7 @@ export function CrmAnalyticsView() {
           one panel with a toggle now, the way the issues board already does
           it. Reorder intent lost its panel too: three numbers are a KPI tile,
           not a chart. */}
-      <div className="grid items-start gap-3 lg:grid-cols-2">
+      <div className="grid items-stretch gap-3 lg:grid-cols-2">
         {/* 1 — are we even calling anyone? Qualifies every other panel. */}
         <Panel icon={<PhoneCallIcon />}
           title="Coverage" note="the honesty metric">
