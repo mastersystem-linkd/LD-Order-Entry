@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDownRightIcon,
   ArrowUpRightIcon,
-  IndianRupeeIcon,
   LinkIcon,
   MinusIcon,
   SearchIcon,
@@ -25,7 +24,7 @@ import {
 import { formatCount, formatDate, formatNumber } from "@/lib/orders";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardTitle } from "@/components/ui/card";
 import { HScroll } from "@/components/ui/h-scroll";
 import { Input } from "@/components/ui/input";
 import { Pager } from "@/components/ui/pager";

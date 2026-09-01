@@ -18,16 +18,15 @@ import {
   ISSUE_RESOLUTIONS,
   ISSUE_SEVERITIES,
   ISSUE_STATUSES,
-  OWNER_DEPTS,
   type IssueList,
   type IssueResolution,
   type IssueRow,
 } from "@/lib/crm";
-import { formatCount, formatDate, formatNumber } from "@/lib/orders";
+import { formatDate, formatNumber } from "@/lib/orders";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { HScroll } from "@/components/ui/h-scroll";
 import { Input } from "@/components/ui/input";
 import { Pager } from "@/components/ui/pager";

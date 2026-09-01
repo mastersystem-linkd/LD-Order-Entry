@@ -18,13 +18,6 @@ import { cn } from "@/lib/utils";
 // Where a shape adds nothing over a labelled bar, it is a labelled bar.
 
 /**
- * Shared body height so panels in a row line up. It is a FLOOR, not a fixed
- * height — a panel with one bar in it should not be as tall as a chart, and
- * the grid stretches cards to their row anyway.
- */
-export const CHART_BODY = "min-h-[152px]";
-
-/**
  * Coverage — one number against a target. A big figure and a track, not a
  * dial: at 1.4% a dial shows nothing a reader can interpret, while a track
  * with the target marked shows exactly how far off it is.
@@ -47,34 +40,66 @@ export function CoverageMeter({
     clamped >= target ? "text-success" : clamped >= 50 ? "text-warning" : "text-danger";
 
   return (
-    <div className={cn("flex flex-col justify-center px-4 pb-5 sm:px-5", CHART_BODY)}>
-      <div className="flex items-baseline gap-2">
-        <span className={cn("num font-display text-[40px] leading-none font-semibold", toneText)}>
-          {pct}%
-        </span>
-        <span className="text-[12.5px] font-medium text-ink-soft">of delivered orders called</span>
+    <div className="px-4 pb-5 sm:px-5">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div
+            className={cn(
+              "num font-display text-[46px] leading-[0.95] font-semibold tracking-[-0.03em]",
+              toneText,
+            )}
+          >
+            {pct}%
+          </div>
+          <div className="mt-1 text-[12.5px] font-medium text-ink-soft">
+            of delivered orders called
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="num font-display text-[22px] leading-none font-semibold text-ink">
+            {formatCount(contacted)}
+            <span className="text-[15px] font-medium text-ink-soft">
+              /{formatCount(followups)}
+            </span>
+          </div>
+          <div className="mt-1 text-[11.5px] text-ink-soft">called</div>
+        </div>
       </div>
 
-      <div className="relative mt-4 h-3 w-full rounded-pill bg-inset">
+      <div className="relative mt-5 h-3.5 w-full overflow-hidden rounded-pill bg-inset">
         <span
-          className={cn("block h-full rounded-pill transition-all", tone)}
+          className={cn("block h-full rounded-pill transition-all duration-500", tone)}
           style={{ width: `${Math.max(clamped, 1.5)}%` }}
         />
-        {/* The target, on the track where it can be compared to the fill. */}
+      </div>
+      {/* The target sits on its own line under the track, with the gap named —
+          "how far off are we" is the question, and a bare marker made the
+          reader measure it by eye. */}
+      <div className="relative mt-1.5 h-4">
         <span
-          className="absolute -top-1 h-5 w-[2px] rounded-pill bg-ink-muted"
+          className="absolute -top-[22px] h-5 w-[2px] rounded-pill bg-ink"
           style={{ left: `${target}%` }}
-          title={`Target ${target}%`}
         />
+        <span
+          className="absolute -translate-x-1/2 text-[11px] font-medium text-ink-soft"
+          style={{ left: `${target}%` }}
+        >
+          target {target}%
+        </span>
       </div>
 
-      <div className="mt-2 flex items-baseline justify-between text-[12px]">
-        <span className="text-ink-soft">
-          <span className="num font-semibold text-ink">{formatCount(contacted)}</span> of{" "}
-          <span className="num">{formatCount(followups)}</span> called
-        </span>
-        <span className="text-ink-soft">target {target}%</span>
-      </div>
+      <p className="mt-3 border-t border-line pt-2.5 text-[12px] leading-relaxed text-ink-soft">
+        {clamped >= target ? (
+          <>On target — keep it there.</>
+        ) : (
+          <>
+            <b className="text-ink num">
+              {formatCount(Math.max(0, Math.ceil((target / 100) * followups) - contacted))}
+            </b>{" "}
+            more calls would reach the {target}% target.
+          </>
+        )}
+      </p>
     </div>
   );
 }
@@ -87,8 +112,8 @@ export function QueueBar({
 }) {
   const total = parts.reduce((n, p) => n + p.count, 0) || 1;
   return (
-    <div className={cn("flex flex-col justify-center px-4 pb-5 sm:px-5", CHART_BODY)}>
-      <div className="flex h-5 w-full overflow-hidden rounded-pill bg-inset">
+    <div className={"flex flex-col justify-center px-4 pb-5 sm:px-5"}>
+      <div className="flex h-6 w-full overflow-hidden rounded-pill bg-inset ring-1 ring-line/60 ring-inset">
         {parts.map((p) =>
           p.count > 0 ? (
             <span
@@ -137,7 +162,7 @@ export function OnTimeQuadrant({
   ];
   const max = Math.max(...cells.map((c) => c.v), 1);
   return (
-    <div className={cn("px-4 pb-5 sm:px-5", CHART_BODY)}>
+    <div className={"px-4 pb-5 sm:px-5"}>
       <div className="mb-2 grid grid-cols-[76px_1fr_1fr] gap-2 text-[11.5px] font-medium text-ink-soft">
         <span />
         <span className="text-center">Customer happy</span>
@@ -175,10 +200,20 @@ function QuadCell({
         : "var(--danger)";
   return (
     <div
-      className="rounded-field border border-line px-2 py-3 text-center"
-      style={{ background: `color-mix(in oklab, ${colour} ${strength * 100}%, var(--surface))` }}
+      className={cn(
+        "rounded-card border px-2 py-3.5 text-center transition-all",
+        c.v > 0 && c.v === max ? "border-transparent shadow-sm" : "border-line",
+      )}
+      style={{
+        background: `color-mix(in oklab, ${colour} ${strength * 100}%, var(--surface))`,
+        ...(c.v > 0 && c.v === max
+          ? { boxShadow: `0 0 0 2px color-mix(in oklab, ${colour} 35%, transparent)` }
+          : {}),
+      }}
     >
-      <div className="num text-[22px] leading-none font-semibold text-ink">{c.v}</div>
+      <div className="num font-display text-[26px] leading-none font-semibold text-ink">
+        {c.v}
+      </div>
       <div className="mt-1.5 text-[11px] leading-tight text-ink-soft">{c.note}</div>
     </div>
   );
@@ -204,28 +239,31 @@ export function CountBars({
 }) {
   const max = outOf ?? Math.max(...rows.map((r) => r.value), 1);
   const bar = {
-    accent: "bg-accent",
-    danger: "bg-danger",
-    warning: "bg-warning",
-    success: "bg-success",
+    accent: "bg-gradient-to-r from-accent/70 to-accent",
+    danger: "bg-gradient-to-r from-danger/70 to-danger",
+    warning: "bg-gradient-to-r from-warning/70 to-warning",
+    success: "bg-gradient-to-r from-success/70 to-success",
   }[tone];
   return (
-    <div className={cn("flex flex-col justify-center gap-2.5 px-4 pb-5 sm:px-5", CHART_BODY)}>
+    <div className={"flex flex-col justify-center gap-2.5 px-4 pb-5 sm:px-5"}>
       {rows.map((r) => (
-        <div key={r.key} className="flex items-center gap-3">
+        <div
+          key={r.key}
+          className="-mx-2 flex items-center gap-3 rounded-field px-2 py-1 transition-colors hover:bg-surface-2"
+        >
           <span
-            className="w-[116px] shrink-0 truncate text-[12.5px] font-medium text-ink-soft"
+            className="w-[116px] shrink-0 truncate text-[12.5px] font-medium text-ink"
             title={r.label}
           >
             {r.label}
           </span>
           <span className="h-2.5 flex-1 overflow-hidden rounded-pill bg-inset">
             <span
-              className={cn("block h-full rounded-pill transition-all", bar)}
+              className={cn("block h-full rounded-pill transition-all duration-500", bar)}
               style={{ width: `${Math.max(2, (r.value / max) * 100)}%` }}
             />
           </span>
-          <span className="num w-11 shrink-0 text-right text-[12.5px] font-semibold text-ink">
+          <span className="num w-11 shrink-0 text-right text-[13px] font-semibold text-ink">
             {outOf ? r.value.toFixed(1) : formatCount(r.value)}
             {suffix ?? ""}
           </span>
