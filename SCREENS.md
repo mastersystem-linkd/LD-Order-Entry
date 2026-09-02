@@ -1,7 +1,7 @@
 # SCREENS.md — build-to-print specification
 
-> **Purpose.** This file describes the six core screens precisely enough to
-> rebuild them without seeing the original: every region, every field, every
+> **Purpose.** This file describes every screen in the app precisely enough to
+> rebuild it without seeing the original: every region, every field, every
 > size, every behaviour. It is written for an engineer (or an AI) working from
 > nothing but this document.
 >
@@ -10,9 +10,12 @@
 > is the pixel-level and field-level record.** Where any of them disagrees with
 > the code, the code is right and the document should be corrected.
 >
-> **Screens covered:** Dashboard · New order · Orders · Order status ·
-> Operations · Settings. (The CRM's five screens are specified in
-> `CLAUDE.md §12` and `PROJECTFLOW.md §27`.)
+> **Screens covered (§1–§6):** Dashboard · New order · Orders · Order status ·
+> Operations · Settings.
+> **The CRM module (§7):** Follow-ups · Issues · Call log · Customers ·
+> CRM analytics — the *rules* behind that module are `CLAUDE.md §12` and the
+> narrative is `PROJECTFLOW.md §27`; §7 here is its field-level record.
+> **§8** collects the mistakes that were actually made building all of it.
 
 ---
 
@@ -373,7 +376,7 @@ visual order):
 | 3 | Party * | `Autocomplete` | `useLookup("PARTY")` | placeholder *"Party name"* |
 | 4 | Sales person | `Autocomplete` | `SALES_PERSON` | placeholder *"Search…"* |
 | 5 | Agent | `Autocomplete` | `AGENT` | *"Search…"* |
-| 6 | Haste | `Autocomplete` | `HASTE` | *"Search…"* — a **company name**, not an urgency (§7) |
+| 6 | Haste | `Autocomplete` | `HASTE` | *"Search…"* — a **company name**, not an urgency (`CLAUDE.md` §7) |
 | 7 | Transport | `Autocomplete` | `TRANSPORT` | *"Search…"* |
 | 8 | Challan no | `Input` | — | placeholder `—` |
 | 9 | Lot no | `Input` | — | placeholder `—` |
@@ -399,7 +402,7 @@ it would shift every field below it as it appears and disappears.
 
 ### 2.4 The order-no duplicate check
 
-`order_no` is user-entered and UNIQUE (§3.1). The check runs **on blur**, never
+`order_no` is user-entered and UNIQUE (`CLAUDE.md` §3.1). The check runs **on blur**, never
 per keystroke:
 
 ```
@@ -461,7 +464,7 @@ sm:grid-cols-[minmax(180px,1.6fr)_120px]`:
 **Fabric suggestions are block-scoped.** `fabricOptionsFor(bi)` removes any
 fabric already chosen in a *different* block (compared lowercased and trimmed),
 so the same fabric cannot be suggested twice. Free text is still accepted —
-§3.4 forbids blocking an unknown value; this only prunes the dropdown.
+`CLAUDE.md` §3.4 forbids blocking an unknown value; this only prunes the dropdown.
 
 ### 2.6 The design rows
 
@@ -498,7 +501,7 @@ qty is validated but not marked.
 
 **Design suggestions are fabric-scoped.** `DesignAutocomplete` debounces the
 block's fabric by **350 ms** and calls `useDesigns(fabric)`; the suggestions
-come from `design_database` (§5) — every design ever used with that fabric.
+come from `design_database` (`CLAUDE.md` §5) — every design ever used with that fabric.
 Without the debounce, typing "INDIANA CHECKS" fires fourteen queries.
 
 **Block footer** — `mt-3 flex flex-wrap items-center justify-between gap-3
@@ -573,7 +576,7 @@ Totals are computed on every render, not memoised — `blockTotals` maps each
 block to `{ qty, total, rows: [{qty, lineTotal}] }` with
 `rate = Number(b.rate) || 0`, and `grandQty` / `grandTotal` / `designCount`
 reduce over it. **Nothing here is ever sent**: `line_total` is a generated
-column and the grand total is derived (§3.2). These figures exist only to be
+column and the grand total is derived (`CLAUDE.md` §3.2). These figures exist only to be
 looked at.
 
 ### 2.10 Validation
@@ -603,7 +606,7 @@ that are entirely blank are dropped** (a row survives only if `design_no` or
 disappear rather than failing validation.
 
 > **Party names pass through verbatim** apart from that `.trim()` — never
-> case-fold, expand or tidy them (§7, SCOT identity).
+> case-fold, expand or tidy them (`CLAUDE.md` §7, SCOT identity).
 
 ### 2.11 Preview dialog
 
@@ -640,7 +643,7 @@ On error: close the dialog, set the inline banner, and toast — closed
 deliberately, so the message is not hidden behind it.
 
 The server, not this form, creates the **seven `line_stage_progress` rows per
-line** with SLA-driven `planned_at` (§6), and on edit preserves progress for
+line** with SLA-driven `planned_at` (`CLAUDE.md` §6), and on edit preserves progress for
 lines still matching on fabric + design + qty. **[edit]** never touches
 soft-deleted lines.
 
@@ -680,7 +683,7 @@ stores `originalOrderNo` for the duplicate check.
 come from the JWT, never from a fetch.
 **Components:** `orders-screen.tsx` (the switch) → `orders-dashboard.tsx`
 (~1,050 lines, the table) or `order-status/order-tracker.tsx` (the tracking
-view, specified in §4.4 — it is the same component on both screens).
+view, specified in §4B — it is the same component on both screens).
 
 ### 3.1 Two views behind one switch
 
@@ -857,7 +860,7 @@ spreading `...props` so callers can set `title` for a tooltip on truncated text.
 
 **Cancelled rows.** `cancelled = operations_status === "CANCELLED"` →
 `struck = "text-ink-muted line-through"` applied to every data cell **except**
-Status and Actions. The row stays; it is never hidden (§3.7).
+Status and Actions. The row stays; it is never hidden (`CLAUDE.md` §3.7).
 
 **Row:** `group border-b border-line last:border-0 hover:bg-surface-2`. The
 sticky first cell repeats the hover through `group-hover:bg-surface-2` —
@@ -1648,7 +1651,7 @@ second line**. Disabled-and-not-done cells (except out-of-stock) get
 **Which cells are editable** is computed independently of `cellState` in
 `LineRow`, with one addition: `stockInStock || stage.is_done` — **a done cell
 is always un-tickable**, even if the gate has since closed. Un-ticking is never
-blocked (§6).
+blocked (`CLAUDE.md` §6).
 
 ### 5.5 Header check-all per column
 
@@ -2011,7 +2014,1007 @@ no local draft.
 
 ---
 
-## 7. Things that will bite you
+## 7. CRM — the five screens
+
+The rest of this app tracks an order **until it leaves us**. This module tracks
+what happened **after it reached the customer**: a coordinator works a daily
+queue of delivered orders, calls the party, records what they actually
+experienced, raises issues, and rates the order.
+
+| Screen | Route | Component | Writes? |
+|---|---|---|---|
+| Follow-ups | `/crm` | `followup-queue.tsx` (392) + `followup-panel.tsx` (1,558) | yes |
+| Issues | `/crm/issues` | `issues-board.tsx` (723) | yes (resolve only) |
+| Call log | `/crm/calls` | `calls-log.tsx` (492) | **no** |
+| Customers | `/crm/customers` | `customers-view.tsx` (431) | **no** |
+| CRM analytics | `/crm/analytics` | `analytics-view.tsx` (367) + `crm-charts-lite.tsx` (282) + `crm-charts.tsx` (96) | **no** |
+
+The rules behind this module are `CLAUDE.md §12`; the narrative is
+`PROJECTFLOW.md §27`. **This section is the field-level record, like the six
+before it.** Where they disagree, the code is right.
+
+### 7.0 What every CRM screen shares
+
+**Access.** Reads need `crm.view`, writes `crm.edit`, enforced by
+`canAccessPath` in the edge middleware. Each *page* passes only what it needs:
+
+```ts
+const canEdit = role === "ADMIN" || hasCap(caps, "crm.edit");
+```
+
+Follow-ups and Issues take `canEdit`; Call log, Customers and CRM analytics
+take **nothing** — they are read-only, and giving them a prop they cannot use
+would suggest otherwise. Only `/crm/issues` needs a `<Suspense>` boundary (it
+reads `useSearchParams` for the call-log deep link).
+
+**Shape.** All five are the same skeleton, in this order:
+
+```
+KPI tiles  →  filter bar  →  a Card with a title strip and a table  →  Pager
+```
+
+with two deliberate exceptions: the **issues board** puts its filter bar
+*above* the tiles (its status tabs are the primary control), and **analytics**
+replaces the table with a six-panel grid.
+
+**Every KPI tile is a filter**, using `StatCard`'s `onClick` / `active` props:
+clicking narrows the list to what the tile counts, clicking the active one
+clears it. A tile that only reads is a tile you cannot act on; a tile you
+cannot clear is a trap.
+
+**Search is live at 250 ms** (`useDebouncedValue`) on all four list screens —
+never submit-based. Every screen has an effect resetting `page` to 1 when a
+filter changes, and every query uses `placeholderData: (prev) => prev` so the
+table does not blink to empty on a refetch.
+
+**`Pager` only renders when `totalPages > 1`**, inside
+`border-t border-line px-4 py-2.5`.
+
+**Shared vocabulary** — `components/crm/crm-pill.tsx`:
+
+```ts
+const TONE = {
+  due:      "bg-inset text-ink-soft",
+  progress: "bg-accent/10 text-accent-deep",
+  done:     "bg-success/10 text-success",
+  late:     "bg-danger/10 text-danger",
+  warn:     "bg-warning/10 text-warning",
+};
+```
+
+`<Pill tone dot>` is `inline-flex items-center gap-1.5 rounded-pill px-2.5
+py-[3px] text-[12px] font-semibold whitespace-nowrap`, with an optional
+`size-1.5 rounded-full bg-current` dot.
+
+> **`Pill` is a sibling of `StatusBadge`, not an extension of it.** That
+> component's union is the *order* lifecycle (COMPLETED / PARTIALLY /
+> PENDING / CANCELLED); widening it to carry a second, unrelated vocabulary
+> would make one component answer two questions. The tints use the app's `/10`
+> alpha idiom rather than new `-soft` tokens — there is exactly one `-soft`
+> colour token and adding three more would leave two competing ways to say the
+> same thing.
+
+**`StatusPill`** maps `DUE → due`, `IN_PROGRESS → progress`, `COMPLETED →
+done`, `UNREACHABLE → warn`, `NOT_REQUIRED → due`, with one override: an
+overdue DUE or IN_PROGRESS renders **"Call overdue"**, not "Overdue". Every row
+in this queue is a *delivered* order, so a bare "Overdue" reads as if the order
+is late — which is the adjacent **Our SLA** column, a different clock entirely.
+What is overdue here is the phone call, measured from delivery +
+`crm_settings.followup_due_days`.
+
+**`PriorityBar`** — a `block h-[26px] w-1 rounded-sm` bar, `bg-danger` /
+`bg-warning` / `bg-line-strong`. The mockup encoded priority in colour alone;
+§9 requires close hues to carry a label, so the bar has a `title`, an
+`aria-label` and `role="img"`.
+
+**`selectCls`**, repeated in each CRM screen because there is no shared Select
+primitive:
+```
+h-9 rounded-field border border-line bg-surface px-2.5 text-[12.5px] text-ink
+outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-ring)]
+```
+
+**Managed vocabularies are fetched, not hard-coded.** Complaint categories
+(`CRM_ISSUE`), departments (`CRM_DEPT`) and delay reasons
+(`CRM_DELAY_REASON`) all come from `/api/lookups?category=…` and are edited in
+Settings → CRM (§6.4).
+
+> ⚠️ **That endpoint returns `string[]`, not row objects**, unless you pass
+> `?all=1`. Typing it as `{value}[]` produces an array of `undefined` and takes
+> the whole panel down on mount. Every call site filters
+> `.filter((v): v is string => !!v)` for the same reason.
+
+---
+
+### 7.1 Follow-ups — `/crm`
+
+The daily work queue. **Ranked by priority, not by date**: a coordinator
+clearing 40 calls should reach the ₹18 L late order before the ₹40 K clean one.
+
+#### 7.1.1 Region A — KPI tiles
+
+`grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5` — five tiles,
+each wrapped in a `<button aria-pressed>` around a `StatCard`.
+
+| Tile | Tone | Icon | `kpi` param |
+|---|---|---|---|
+| Due | indigo | clock | `dueToday` |
+| Call overdue | red | alert-triangle | `overdue` |
+| In progress | amber | phone-call | `inProgress` |
+| Completed (30d) | green | check-circle | `completed30d` |
+| Unreachable | slate | phone-off | `unreachable` |
+
+The active tile gets `border-accent ring-2 ring-accent/40` and its `sub` line
+becomes *"Filtering — click to clear"*; the others get
+`hover:border-line-strong`. Clicking the active one sets `kpi` back to `null`.
+
+**The card key is sent to the server as-is** (`params.set("kpi", kpi)`), and
+the server applies **the very same predicate it used to compute that card's
+number**. So the count and the rows always agree, and `total`, `totalPages`
+and the pager stay correct. Filtering client-side would have made the tile lie
+the moment the set spanned more than one page.
+
+#### 7.1.2 Region B — Filter bar
+
+`flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface
+p-2.5 shadow-sm`, holding four controls:
+
+| Control | Values |
+|---|---|
+| **Range** `<select>` | Today · 7 days · 30 days · This month · **All** (default) |
+| **Sort** `<select>` | Worst first (`priority`, default) · Oldest first · Highest value |
+| **Search** | `h-9 pl-8` with an icon at `left-2.5`; *"Search order no or party…"* |
+| **Refresh** | `size-9` bordered square; the icon `animate-spin`s while fetching |
+
+The search box is `order-last w-full` below `sm` and
+`sm:order-none sm:min-w-[220px] sm:flex-1` above — full width on its own row on
+a phone, inline on a desktop.
+
+`rangeToDates()` turns the range into `{from, to}` ISO dates: `today` is
+today–today, `month` is the 1st of this month to today, `7`/`30` subtract
+`n × 86_400_000` ms, and `all` returns `null` (no date params at all).
+
+> **The filters sit BELOW the KPIs.** The tiles are the first read — what is
+> due, what is overdue — and a row of controls above them delayed that. Five
+> range chips and a three-way sort became **two dropdowns**, which is one row
+> on a phone rather than three.
+
+#### 7.1.3 Region C — Priority queue
+
+A `Card` whose title strip is **one line**: `Priority queue`, a `num
+rounded-pill bg-inset px-2 py-0.5 text-[11.5px]` count badge reading
+`{total}` plus `· N new` when the on-read reconcile just created rows, and —
+`hidden sm:inline` — the hint *"click a row to work it"* whose `title`
+explains the ranking. A title over a two-line paragraph above a card holding a
+single row spent a quarter of the screen explaining itself.
+
+Table columns:
+
+| Column | Cell |
+|---|---|
+| *(unnamed, `w-[14px] px-2`)* | `<PriorityBar>` |
+| Order no | `num font-semibold`, with an inline `size-3.5 text-danger` warning triangle when escalated |
+| Party (`w-full`) | party at `font-semibold`, then `N qualities · N designs · transport` at `text-[12px] text-ink-soft` |
+| Delivered | `formatDate(deliveredAt)` |
+| Waiting | right, `N d` |
+| Order value | right, `font-semibold`, `₹…` or `—` |
+| Our SLA | `—` / `On time` (done pill) / `Late` (late pill) |
+| Attempts | right, `attemptCount` |
+| Follow-up | `<StatusPill>` + `<Stars>` when rated + an `N issues` warn pill |
+
+Rows are `cursor-pointer border-b border-line`, `bg-accent-soft` when selected
+and `hover:bg-surface-2` otherwise. Clicking opens the panel.
+
+> **Our SLA is OUR verdict, and it is not the customer's** (`CLAUDE.md` §12.3). The
+> customer's answer is captured on the call, in stage 2, and the two disagree
+> constantly — **that disagreement is the finding**, and the analytics screen
+> has a whole panel for it (§7.5).
+
+**Three distinct empty states, never conflated:**
+
+- **Loading** — *"Loading…"*, centred.
+- **Error** — a bold `text-danger` heading *"Could not load the follow-up
+  queue"*, the message at `max-w-[60ch]`, and a **Try again** button. A failed
+  request must never render as "no results": they look identical to the
+  operator and one of them is a bug.
+- **Empty** — *"No follow-ups match these filters."*
+
+#### 7.1.4 Priority, exactly
+
+`followupPriority()` in `lib/crm.ts` — the only place this ranking exists:
+
+```ts
+score  = orderValue > 0 ? log10(orderValue + 1) * 10 : 0
+       + (systemOnTime === false   ? 18 : 0)
+       + (hadOutOfStock            ? 10 : 0)
+       + (hadCancellation          ?  6 : 0)
+       + (priorHighSeverity        ? 22 : 0)
+       + min(daysOverdue, 14) * 3
+```
+
+`priorityBand`: `≥ 70` high · `≥ 45` medium · else low.
+
+Two consequences worth knowing. **Value is logarithmic**, so a ₹1 Cr order
+outranks a ₹1 L one without swamping every other factor. And **an order with no
+`rate` has a NULL `line_total`, so it ranks as value 0** — it sorts low on
+value alone, not out of the queue.
+
+`loadFollowups` pulls the matching set (capped at `MAX_ROWS = 2000`), scores it
+with `followupPriority()` and sorts **in memory**. A SQL CTE would be faster
+and would put a second copy of the ranking rule outside `lib/crm.ts` — the
+exact drift §8 exists to prevent.
+
+**The queue creates itself on read.** `GET /api/crm/followups` reconciles
+before it returns: delivered orders with no follow-up row are inserted with
+`.onConflictDoNothing()` on the `order_id` unique key, capped at 500 a pass,
+skipped entirely when `auto_create_followups` is off. There is no scheduler in
+this app and none was added. That reconcile is what the `· N new` badge counts.
+
+### 7.2 The follow-up panel
+
+`components/crm/followup-panel.tsx` — 1,558 lines, the largest component in the
+app and the one the whole module exists to serve. It is **a brief plus five
+stages**, not one form.
+
+#### 7.2.1 The frame
+
+`<DraggablePanel tinted>` (`components/ui/draggable-panel.tsx`):
+
+```
+fixed z-30 flex max-h-[calc(100vh-9rem)] w-[min(96vw,1080px)] flex-col
+overflow-hidden rounded-card border border-line-strong bg-surface
+shadow-[0_24px_64px_-16px_rgba(16,20,40,0.35),0_2px_8px_rgba(16,20,40,0.10)]
+ring-1 ring-black/[0.03]
+```
+
+Positioned `{ left: "50%", top: "6rem", transform: "translateX(-50%)" }` until
+dragged, then explicit `{left, top}`. **Centred and 1080 px wide** — it was
+pinned top-right at 560 px, which on a wide screen put a tall form in the
+corner with the two-column sections wrapping and the ratings below the fold.
+Drag by the header, **double-click the header to snap back**.
+
+`tinted` gives the header a soft vertical wash
+(`bg-gradient-to-b from-accent-soft to-[color-mix(in_oklab,var(--accent-soft)_55%,var(--surface))]`)
+rather than a flat fill, so it reads as the top of a sheet instead of a
+coloured strip.
+
+| Slot | Contents |
+|---|---|
+| `title` | `<orderNo> · <partyName>` |
+| `subtitle` | `Attempt N · N days since delivery` |
+| `headerAside` | the order value in `num text-accent-deep` (`hidden sm:block`) and a status `Pill` |
+| `footer` | a left-hand status line and the right-hand action buttons |
+
+**The two facts in the chrome are deliberate**: where this follow-up stands,
+and what the order is worth — the second is why a coordinator decides how hard
+to chase it.
+
+**The footer's left line is a state machine**, in priority order:
+1. escalated → `⚠ Flagged for principal review` in danger;
+2. dirty → an amber dot + `Unsaved changes`;
+3. completed → a check + `Completed by <who>`;
+4. otherwise → *"Attempts and issues save immediately; the rest needs Save"*.
+
+> `dirty` is computed by JSON-comparing the draft against a **`pristine`
+> snapshot taken when the data arrived**. Saying "nothing is saved until you
+> press Save" on an untouched panel trains people to ignore the line that
+> matters.
+
+**Buttons.** **Save** always. Then either **Complete** — disabled without an
+overall rating (the DB has a CHECK constraint to match) and while UNREACHABLE,
+each state with its own `title` explaining why — or, once completed,
+**Reopen**, because offering "Complete" on a completed follow-up is an action
+with nothing to do.
+
+#### 7.2.2 Body layout
+
+```
+grid items-start lg:grid-cols-[336px_1fr] lg:divide-x lg:divide-line
+```
+
+**Left is what the coordinator READS** before and during the call (on
+`bg-surface-2/40`); **right is what they FILL IN**. Below `lg` it stacks, which
+is what a phone gets.
+
+**`Section`** (left column) — `border-b border-line px-5 py-4 last:border-b-0`,
+headed by a `size-[18px] rounded-md bg-accent/10 text-accent` number chip and a
+`text-[11.5px] font-semibold tracking-[0.1em] uppercase` title.
+
+A blocked section gets `pointer-events-none opacity-45 select-none` — **it
+stays readable**. Greying it to nothing would hide what was already recorded;
+it simply stops accepting input.
+
+**Section 1 — Context.** `grid grid-cols-2 gap-x-5 gap-y-3.5` of `Fact`
+(a `text-[11px] font-semibold tracking-[0.07em] uppercase text-ink-soft` label
+over a `text-[13.5px] font-semibold text-ink` value, deliberately **plain ink**
+so it does not compete with the status below):
+
+Order no · Order value · OD date · Delivered on (with `· LR received` or
+`· dispatch + transit`) · Sales person · Transport (*"not recorded"* when
+null) · and full-width **Qualities · designs** reading
+`N qualities · N designs — N m`.
+
+**Section 2 — What we already know.** Three `Know` callouts at most, each
+`flex items-start gap-2.5 rounded-field border-l-[3px] px-3 py-2.5
+text-[12.5px] leading-relaxed`, toned `bad` (danger), `ok` (success) or
+`plain` (`border-l-line-strong bg-surface-2`).
+
+The SLA verdict is one of three:
+
+- **nothing ticked** → *"**Nothing has been ticked yet** on this order, so we
+  cannot say whether it was on time."*
+- **nothing late** → *"**Every step was finished on time.** Our plan allows **N
+  days** from the order date to dispatch, and we stayed inside it."*
+- **something late** → a heading *"This order was late."* over a four-row list,
+  each row a `w-[86px]` label beside its value:
+
+  | | |
+  |---|---|
+  | We planned | **<stage>** within **N days** of the order date |
+  | It took | about **N days** |
+  | So we were | **N days** later than planned |
+  | Steps late | **N** of **7** — *the three worst, then "and more"* |
+
+  and, below a rule: *"This is against **our own plan**. The customer may still
+  feel it arrived on time — ask them, do not assume."*
+
+> **This block is written for a coordinator on a phone call, not a developer.**
+> It used to read *"Order Entry ran 60.3 days late against a 8-day target (7
+> stages missed: Order Entry +60.3d…)"*. Every fact in that was true and none of
+> it was usable. What a caller needs is: what we promised, what happened, how
+> far apart they are, and whether to trust it. Lateness is rounded to whole
+> days with a floor of 1 (`max(1, round(m / 1440))`).
+
+Two more `plain` callouts append when they apply: *"**We ran out of stock** on
+one of the designs, which is part of why this took longer."* and *"**Some
+designs on this order were cancelled.** They may bring it up — have the reason
+ready."*
+
+#### 7.2.3 The five stages
+
+**`Stage`** — one step, collapsed to a summary row until opened.
+
+```
+button: relative flex w-full items-center gap-3 py-3 pr-4 pl-4 text-left
+        open ? bg-accent-soft/50 : hover:bg-surface-2
+        disabled → cursor-not-allowed opacity-45
+badge:  z-10 grid size-[26px] place-items-center rounded-full text-[11.5px]
+        font-bold ring-4 ring-surface
+        done → bg-success text-white (a check icon)
+        open → bg-accent text-white
+        else → bg-inset text-ink-soft (the number)
+rail:   absolute top-[38px] bottom-0 left-[30px] w-px
+        done ? bg-success/35 : bg-line     — omitted on the last stage
+body:   relative pt-1 pr-4 pb-5 pl-[54px]  — indented to the badge
+```
+
+> **The rail is why these are stages and not a list.** Five rows with numbers
+> on them are a list; five rows joined by a line are a process, and a
+> coordinator should see at a glance that this is one job with an order to it.
+> Content sits *under* the rail, indented to the badge, so an open stage is
+> visibly **part of** the step rather than a panel that replaced it.
+
+Exactly one stage is open at a time (`stage: number | null`); clicking an open
+one closes it. **Every stage starts closed.** Auto-opening the first unfinished
+one dropped the coordinator inside a form before she had seen what the call
+involved — the point of stages is the overview, and she should choose where to
+start.
+
+| # | Title | `done` when | Closed summary |
+|---|---|---|---|
+| 1 | **Follow-up call attempt** | any attempt logged | `Nothing logged yet` / `N logged · <outcome>` |
+| 2 | **Issues or complaints** | on-time answered **or** an issue exists | `N issues raised · they said it arrived on time` |
+| 3 | **Feedback** | notes non-empty | the notes themselves, else *"Optional — anything else they said"* |
+| 4 | **Ratings** | every active criterion scored | `Not rated — N criteria` / `Part rated — 2 of 4 scored` / `3.8 out of 5 · all 4 scored` |
+| 5 | **New requirement** | intent ≠ none, or completed | `None` / `Maybe buying again` / `Buying again` / `Asked for a sample` |
+
+> **These are the words the business uses.** They shipped as *Did you reach
+> them? · How was the delivery? · Anything else they said? · How do they rate
+> us? · Will they order again?* — question forms a developer wrote — and were
+> renamed by the operator to these. Stage 2 is named for complaints, so its
+> summary leads with them and the on-time answer follows, since late delivery
+> is itself the most common complaint.
+
+#### 7.2.4 Stage 1 — Follow-up call attempt
+
+A `rounded-card border border-line bg-surface-2 p-2` toolbar: a `Segmented`
+channel picker (**Call · WhatsApp · Visit**), an outcome `<select>`, and a
+**Log** button.
+
+**Outcomes follow the channel** — `CHANNEL_OUTCOMES` in `lib/crm.ts` is the
+single source, and the zod schema enforces the same pairing so the UI is not
+the only thing keeping the vocabulary honest. A visit is never *busy* and a
+WhatsApp is never *met at our office*; offering all of them everywhere is how a
+form tells people it was not built for their job. An effect resets the outcome
+whenever a switch would leave one the new channel cannot have — a stale "Busy"
+surviving a switch to Visit would be submitted and rejected by the API, which
+is a worse way to learn the rule than never seeing it.
+
+**A visit also asks who went.** When `channel === "visit"` and the outcome is
+not `not_available`, a **Visited by** `Autocomplete` appears, suggesting the
+`SALES_PERSON` list (that is who actually goes) but accepting free text. It is
+required — `attemptBlocked` disables **Log** with the message *"Record who made
+the visit"* — because the coordinator keying it in is routinely **not** the
+person who went, and "who visited?" is the first question asked about it later.
+
+Below, the last three attempts as `text-[12px] text-ink-soft` lines:
+`Attempt N · <datetime> — <outcome> · by <who> · logged by <who>`. With none:
+*"No attempt logged yet. Log the unanswered ones too — coverage is unmeasurable
+without them."*
+
+**Can't reach** sits at the bottom of this stage, above a `border-t`, with the
+prompt *"Tried enough times?"* or *"Tried and got nowhere? This logs the
+attempt too."*
+
+> **Giving up belongs HERE, under the attempts that justify it** — not in the
+> footer beside Save and Complete, where it read as a third way to finish a
+> call that was never had. It is the *conclusion drawn from the log*, so it
+> sits below it.
+
+The one state where it is wrong is when somebody already answered:
+`connected = attempts.some(a => isReachedOutcome(a.outcome))` disables it with
+*"Someone answered on this order — it cannot be unreachable."* Requiring a
+logged attempt first was tried and removed — it left the button permanently
+disabled on a fresh follow-up, and **a control that is never available is not a
+control, it is a puzzle**. So `giveUp()` writes the failed attempt itself
+(`no_answer`, or `not_available` for a visit, noted *"Marked unreachable
+without a separate attempt being logged"*) and *then* sets UNREACHABLE. A
+coordinator saying "I cannot reach them" **is** telling us they tried, and
+without the attempt row the silence would be unmeasurable — which is the whole
+reason attempts are logged.
+
+**`isReachedOutcome()`, never `outcome === "connected"`.** Meeting someone in
+person is the strongest contact there is, and treating it as anything less
+would count a successful visit toward marking the customer unreachable.
+
+**While UNREACHABLE**, a warning banner (`border-b bg-warning/8 px-5 py-4`)
+sits above the stages — *"Marked unreachable. No conversation happened, so
+there is nothing to answer, rate or promise. Anything already recorded is kept.
+Reopen if they call back."* — with a **Reopen follow-up** button, and stages
+2–5 are `disabled`. Disabled, **not hidden**: what was already recorded stays
+readable.
+
+#### 7.2.5 Stage 2 — Issues or complaints
+
+Two `rounded-field bg-surface-2 px-3 py-2.5` rows first:
+
+- **Did it reach on time?** — a `Segmented` Yes/No, toned `negative` once No is
+  chosen. Writes `customer_says_on_time`; three-valued (`null` = not asked).
+- **Reason for the delay** — appears only on No; a `<select>` over
+  `CRM_DELAY_REASON` with *"Not stated"* first.
+
+Then **`IssueList`**. Existing issues render as
+`rounded-field border border-danger/40 bg-danger/5 p-2.5` cards: a severity
+`Pill`, the `categoryLabel(category)`, `Issue #N` right-aligned, and beneath it
+the quality · design or *"Whole order"*.
+
+Adding is a dashed `+ Add issue` button opening an inline form of `Field`s
+(`text-[11.5px] font-semibold tracking-[0.05em] uppercase` labels):
+
+| Field | Control |
+|---|---|
+| Complaint | `<select>` over `CRM_ISSUE`, then **`Other — type it in…`** |
+| Which design | `<select>`, *"Whole order (no design)"* + every non-cancelled line as `quality · design` |
+| Name the problem | appears only under Other; `autoFocus`, hint *"Saved to the list for everyone"* |
+| Severity | High / Medium / Low — **fixed in code** |
+| Whose to fix | `<select>` over `CRM_DEPT` |
+| Meters | optional, `inputMode="decimal"` |
+| What happened | optional, full width, *"Two thans water-stained at the edges…"* |
+
+> **A dropdown with an escape hatch, not a free-text box.** Free text was tried
+> and was wrong: the field looked like a plain input, so the categories already
+> on file were invisible and every coordinator would have coined their own
+> wording for the same complaint. **Picking is the common case; typing is the
+> exception, and it must look like one.** `"__other__"` is a UI affordance and
+> is **never stored** — what lands in the database is the words the coordinator
+> typed, and the issues API adds them to the master list so the next call is
+> offered them (`CLAUDE.md` §3.4's rule, applied to complaints).
+
+**Issues POST immediately** (`POST /api/crm/issues`) — they are events, not
+draft state.
+
+#### 7.2.6 Stage 3 — Feedback
+
+A `rows={4}` resizable textarea, placeholdered *"In their own words — what they
+praised, what annoyed them, anything the questions above did not cover."*, with
+the note *"Saved with the follow-up and shown on the customer's history."*
+
+Writes `crm_followups.notes` — a column the schema and the API always had and
+which no screen had ever offered a field for. **Optional by design**: the fixed
+questions cannot anticipate what a customer actually says, and without
+somewhere to put the rest it goes unrecorded — but it must never stand between
+a coordinator and finishing the call.
+
+#### 7.2.7 Stage 4 — Ratings
+
+*"Press 1–5 with a row focused."* Then one row per criterion from
+`crm_rating_criteria`: the label, its hint at `text-[11px]`, an italic
+*retired* marker for an inactive criterion, then the numeric score
+(`w-3 text-right`, `text-transparent` when unscored so the column never
+shifts) and a `<StarPicker size={17}>`.
+
+A retired criterion only appears when *this call already scored it*, so the old
+score stays readable. Setting a score to `null` deletes the key rather than
+storing a zero.
+
+Below, a `rounded-card border bg-inset px-3.5 py-3` overall block: *OVERALL ·
+SUGGESTED, EDITABLE*, a `StarPicker size={19}`, the exact mean at `num
+text-[22px] font-semibold`, and a `Segmented` **Coordinator judged /
+Customer stated**.
+
+**The overall follows the sub-scores until overridden.** An effect keyed on
+`JSON.stringify(ratings)` — *the scores themselves, not four named fields,
+because the criteria are configurable and there is no fixed dependency list to
+write* — sets `overall = deriveOverallRating(subs)`. It fires only when a
+sub-rating changes; a dependency on the whole draft would fight a manual
+override the moment it was set.
+
+`ratingsDone` requires **every active criterion** scored — which is why the
+stage no longer shows complete on a partial score.
+
+When the overall is ≤ 2 **or** any issue is HIGH, a `bad` callout warns *"…this
+will be **flagged for principal review**."*
+
+#### 7.2.8 Stage 5 — New requirement
+
+*"Are they buying again?"* — a `Segmented` **None · Maybe · Yes · Sample**.
+Choosing anything but None reveals a *"What did they ask for?"* input and the
+note *"Goes to the sales reorder list, tagged to <sales person>."*
+
+> **This is the commercial half of the call.** A post-delivery conversation
+> reaches a customer at their warmest all quarter, so it is not an afterthought
+> — it is the line that pays for the call.
+
+#### 7.2.9 What saves when
+
+| Written immediately | Held in the draft until **Save** |
+|---|---|
+| **Attempts** (`POST …/attempts`) | on-time answer + delay reason |
+| **Issues** (`POST /api/crm/issues`) | every rating, the overall, the source |
+| | reorder intent + note |
+| | feedback notes, contact person, contact phone |
+
+Attempts and issues are **events** — they happened, and a browser crash must
+not lose them. Everything else is a form over a slow conversation and is
+`PATCH`ed in one go to `/api/crm/followups/:id`, optionally carrying a new
+`status`.
+
+**Reorder intent, severity and attempt outcomes stay fixed in code** while
+categories, departments and delay reasons are data. `HIGH` drives escalation in
+three places, `isReachedOutcome()` drives the state machine and the
+`contacted_at` stamp, and the analytics count specific reorder values —
+making those configurable would let a rename silently switch off escalation.
+
+### 7.3 Issues — `/crm/issues`
+
+The complaint board. **Every issue points at a LINE**, so this list is also the
+raw material for defect rate by fabric, design, transport and month — which a
+text field answers none of.
+
+#### 7.3.1 Deep links
+
+The call log links here as `/crm/issues?q=<order no>&status=ALL`. Four params
+are read — `q`, `status`, `dept`, `severity` — **once, as initial state**.
+After that the controls own them, so changing a filter does not fight the URL.
+`status=ALL` matters: a *resolved* complaint still has to be reachable from the
+call that raised it.
+
+#### 7.3.2 Region A — Filter bar (above the tiles, uniquely)
+
+Four **status tabs** as pills (`rounded-pill px-3.5 py-1.5 text-[12.5px]`,
+active `bg-accent text-white`): **Open** (`OPEN_ANY`, the default) · In
+progress · Resolved · All. Then:
+
+| Control | Options |
+|---|---|
+| Category | *All categories* + `CRM_ISSUE`, run through `categoryLabel()` |
+| Severity | *All severities* + High / Medium / Low |
+| Department | *Anyone's to fix* + `CRM_DEPT`, via `DEPT_LABEL` |
+| Raised from – to | two `type="date"`, cross-bound, with a **Clear** |
+| Search | *"Order, party, quality or design…"* |
+| Refresh | `size-9` square, icon spins while fetching |
+
+> **The date window is on when the complaint was RAISED**, not on the order
+> date. An old order can produce a new complaint, and filtering on order date
+> would hide it.
+
+**`DEPT_LABEL`** humanises the stored values — `OPS → Operations`,
+`DISPATCH → Dispatch`, `DESIGN → Design`, `ACCOUNTS → Accounts`,
+`TRANSPORT → Transport`, `SALES → Sales`. The raw enum is shouted and
+ambiguous in a cell on its own.
+
+#### 7.3.3 Region B — KPI tiles
+
+`grid grid-cols-3 gap-2 sm:grid-cols-2 xl:grid-cols-4`, each `py-2.5 sm:py-3`:
+
+| Tile | Tone | Click sets |
+|---|---|---|
+| **Open issues** | red | `status=OPEN_ANY`, `severity=""` |
+| **Value at risk** | amber | same as Open (`sub`: *"counted once per order"*) |
+| **Median resolution** (`N d`) | slate | toggles `status=RESOLVED` |
+| **High severity** | red | `status=OPEN_ANY` + `severity=HIGH`, toggling off |
+
+Each `sub` line switches between the imperative and the present tense —
+*"show open only"* vs *"showing open"* — so the tile says whether it is
+currently in force.
+
+> **Value at risk counts each ORDER once.** Three complaints on one order do
+> not put three times its value at risk.
+
+#### 7.3.4 Region C — The board
+
+`grid gap-3 lg:grid-cols-[196px_1fr]`.
+
+**The group-by rail** (left, `h-fit`): a full-width `Segmented` toggle — **By
+who fixes it** / **By category** — over a list of `key → count` buttons.
+Clicking one sets `dept` or `category`; clicking the active one clears it.
+Active rows are `bg-accent-soft font-semibold text-accent-deep`.
+
+> **The rail doubles as a filter, and its two modes answer different
+> questions**: *by department* is **who has to act**, *by category* is **what
+> keeps happening**. Empty: *"Nothing to break down yet."*
+
+**The table.** Title strip: `Complaints`, a count badge, and *"worst first ·
+click a row to resolve"*.
+
+| Column | Cell |
+|---|---|
+| Order no | `num text-[13px] font-semibold` |
+| Party name | `max-w-[200px] truncate` |
+| **Complaint** (`w-full`, `max-w-0`) | `categoryLabel(category)` at `text-[13px] font-medium text-ink`, and **the description beneath** at `text-[12.5px] text-ink-soft` with a `title`; italic *"no detail recorded"* when absent |
+| Fabric | the quality, or a normal-weight *"Whole order"* |
+| Design no | `num`, `—` |
+| Meters affected | right |
+| Order amount | right, `money()` — `₹1.20 Cr` / `₹4.50 L` / `₹45,000` |
+| How serious | severity `Pill` (HIGH → late, MEDIUM → warn, LOW → due) |
+| Department | `rounded-md bg-inset px-2 py-[3px] text-[11.5px] font-semibold`, or *"unassigned"* |
+| Days open | right, **`text-danger` at ≥ 14 d, `text-warning` at ≥ 7 d**, muted otherwise — and only while open |
+| Status | status `Pill` (dotless) with the resolution beneath |
+
+Three column decisions carry their own reasoning:
+
+- **The complaint column shows the description.** The board previously showed
+  the category and hid the description entirely — so a list of complaints never
+  said what anyone actually complained about.
+- **"Order amount", because a shortage on a ₹40 K order and one on a ₹18 L
+  order are not the same problem.**
+- **"Department", not "Owner".** *"Owner: TRANSPORT"* read as the transport
+  company. It is the department that has to **fix** it.
+
+Ordering is **worst first — severity, then age**. A board sorted by date buries
+the complaint that is actually costing money. **Age stops at resolution**, so a
+complaint closed in two days does not read as ninety days old six months later.
+
+**The empty state names the cause**, because an empty board here is a real
+state, not a bug: *"No complaints recorded. Issues are raised during a call,
+from the follow-up panel on CRM → Follow-ups. Open a follow-up, work through
+'The call', and press **+ Add issue**."*
+
+#### 7.3.5 Resolving
+
+Clicking a row expands a `bg-surface-2` panel below it:
+
+- **What happened** — the description, or *"No description was recorded."*,
+  then `Raised <date> · closed <date> by <who> · order value ₹…`.
+- **Already closed** → a read-only line: `Resolved as **<resolution>** — <note>`.
+- **Still open** → a status `<select>`, a resolution `<select>` **shown only
+  when the next status is RESOLVED**, a *"How was it settled?"* note field, and
+  **Save**.
+
+`PATCH /api/crm/issues/:id` sends `resolution` **only** when closing — the zod
+schema requires one for RESOLVED and would reject a bare status change carrying
+a stale value. `RESOLUTION_LABEL` humanises the six: Credit note · Replacement
+· Reprint · Discount · Explained · No action.
+
+Issues have their own lifecycle (`OPEN → IN_PROGRESS → RESOLVED | REJECTED`)
+and **outlive** their follow-up.
+
+---
+
+### 7.4 Call log — `/crm/calls`
+
+Read-only, newest first. It exists because **three things were write-only**:
+`notes` (the customer's own words), `reorder_note` (what they need next) and
+the per-criterion scores were written by the call panel and readable **nowhere
+else**. A coordinator could record *"they want 2,000 m satin crepe in
+September"* and nobody, sales included, could find it again without opening
+that one order. Complaints had a board; the rest of the call had nothing.
+
+> **Anything the panel can record must be readable somewhere — check that
+> before adding a field.**
+
+#### 7.4.1 KPI tiles
+
+`grid grid-cols-3 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4`:
+
+| Tile | Tone | Sets `has=` |
+|---|---|---|
+| Calls worked | indigo | `""` |
+| With feedback | amber | `feedback` |
+| Reorder signals | green | `reorder` |
+| **Escalated** | red | *(none — read-only)* |
+
+Escalated is the one tile on any CRM screen that is **not** a filter; there is
+no `has=escalated` on the API and inventing a client-side one would make its
+count disagree with the pager.
+
+#### 7.4.2 Filter bar
+
+A **Show** `<select>` — *Every worked call* / *Only with feedback* / *Only with
+a reorder signal* / *Only rated* — a from–to date pair with a **Clear**, and
+the search box: *"Search order, party, or anything they said…"*.
+
+> **Search reaches inside the feedback text and the reorder note.** *"Who
+> mentioned packing?"* is the question this screen exists to answer.
+
+#### 7.4.3 The table
+
+Title strip: `Call log`, a count badge, and *"newest first · click a row for
+the whole call"*.
+
+| Column | Cell |
+|---|---|
+| Order no | `num font-semibold` |
+| Party name | `max-w-[200px] truncate` |
+| **Calling date** | `formatDateTime(contactedAt)` over `completedBy` at `text-[11.5px]`; *"not reached"* when null |
+| Rating | `<Stars>` + the number, or `—` |
+| **Feedback** (`w-full`, `max-w-0`) | `line-clamp-2 text-[12.5px] font-medium text-ink` with a `title`; italic *"nothing recorded"* otherwise |
+| Any new requirement | an intent `Pill` + the reorder note truncated beneath |
+| **Issues** | right — the count as a **`<Link>`** to `/crm/issues?q=<orderNo>&status=ALL`, `bg-danger/10 text-danger` when any are open, else `bg-inset text-ink`; `stopPropagation` so it does not also expand the row |
+| Outcome | a status `Pill` + a small `escalated` line in danger |
+
+> **A count you cannot open is a dead end.** The issue count links to the board
+> already searched for that order, with `status=ALL` so a resolved complaint is
+> still reachable from the call that raised it.
+
+`INTENT_LABEL`: `none → —`, `maybe → Maybe`, `yes → Buying again`,
+`sample_requested → Asked for a sample`.
+
+#### 7.4.4 The expanded row
+
+`grid gap-5 md:grid-cols-3` under a `Label`
+(`text-[11px] font-semibold tracking-[0.07em] uppercase text-ink`):
+
+- **Scores** (1 col) — every sub-rating as `label ⟷ stars + number`, then
+  *"The customer stated these."* / *"The coordinator judged these."* Sub-scores
+  are keyed by the criterion's `key` and labelled from the criteria table, so a
+  score survives its criterion being retired.
+- **In their own words** (2 cols) — the feedback in a
+  `rounded-field border-l-[3px] border-l-accent bg-surface px-3 py-3
+  text-[13px] leading-relaxed` quote block, else *"Nothing was written down for
+  this call."*
+- **What they need next** — the same block in `border-l-success`, only when a
+  reorder note exists.
+
+A footer strip below a rule: `Order value · Attempts N · <channels> · On time,
+they said <yes / no · reason / not asked> · Sales <who>`.
+
+**It never lists a follow-up nobody has touched** — a log is a record of work
+done, and an untouched DUE row is not work.
+
+---
+
+### 7.5 Customers — `/crm/customers`
+
+A **read-only roll-up**: orders and value from the order book, ratings and
+complaints from the CRM. **Never a second customer master** (`CLAUDE.md` §10).
+
+Two honesty rules run through the whole screen:
+
+1. **A customer nobody has called shows `—`, never a zero rating.** Four
+   columns here are empty until the queue is worked, and that emptiness is the
+   true state of the data — it must not be dressed up as a score.
+2. **Rows group on `crr_customer_id` where we have one.** Where we do not, the
+   party name is the group and the row is **tagged**, so nobody mistakes a
+   spelling for a customer record.
+
+#### 7.5.1 KPI tiles
+
+| Tile | Value | Click |
+|---|---|---|
+| Customers | count | clears every filter |
+| **Matched to CRR** | `linked / total`, sub `N still grouped by name` | `linked=yes` |
+| Rated | count, sub *"customers with a completed call"* | `rated=any` |
+| At risk | count, sub *"low rating or an open complaint"* | `signal=at_risk` |
+
+`only(set, value, current)` clears all three filters first and then applies the
+new one unless it was already active — so a tile is never a trap you cannot get
+out of, and two tiles can never be half-applied at once.
+
+#### 7.5.2 The day-one banner
+
+When `kpis.rated === 0`, a `rounded-card border bg-surface px-4 py-3
+text-[12.5px]` note above the filters:
+
+> **No follow-up has been completed yet**, so rating, trend, complaints and
+> last-contacted are empty for everyone. Orders and value below are real. The
+> rest fills in as the **Follow-ups** queue is worked.
+
+**An empty CRM is the expected state on day one** — say so, rather than letting
+four dashes per row read as a bug.
+
+#### 7.5.3 Filter bar
+
+Search (*"Party name or CRR customer id…"*), a **ratings** `<select>` (All /
+Rated any / Rated 3 or below / Rated 4–5), a **sort** `<select>` — Highest
+value (default) · Most orders · Newest order first · Oldest order first ·
+Lowest rated first · Most complaints · Name (A–Z) — and an order-date window.
+
+> **A customer with no order inside the window drops out**, rather than showing
+> a row of dashes. *"Who bought in August"* is not answered by listing everyone
+> with blanks.
+
+#### 7.5.4 The table
+
+Title strip: `Customer history`, a count badge, and *"read-only · grouped by
+CRR customer"* whose `title` reads *"A view over orders, follow-ups and
+complaints — never a second customer master. Party names are shown exactly as
+typed."*
+
+| Column | Cell |
+|---|---|
+| **Customer** (`w-full`) | the name at `font-semibold`, then either `CRR <id> · +N spellings` (the aliases in a `title`) or *"not linked to CRR"* with an explanatory `title` |
+| Orders 12m | right, `—` when zero |
+| Value 12m | right, `font-semibold`, `money()` |
+| Avg rating | `<Stars value={round(avg)}>` + `avg.toFixed(1)` + `(ratedCount)`, or `—` |
+| Trend | `<Trend>` |
+| Open issues | right, `font-semibold text-danger` or `—` |
+| Last contacted | `formatDate`, else **"never"** |
+| Last order | `formatDate`, else `—` |
+| Signal | a `Pill`, or `—` |
+
+**`<Trend>`** — `null` renders `—`, **not "steady"**, because null means *"not
+enough rated calls to compare"* and calling that steady claims a stability we
+have no evidence for. `|v| < 0.25` is *steady* with a minus icon;
+otherwise a coloured arrow and `±N.N`.
+
+**`customerSignal()`** (`lib/crm.ts`) — evaluated in order, first match wins:
+
+```
+openIssues > 0 && avgRating ≤ 3   → at_risk   "At risk"        (late)
+openIssues > 0                    → unhappy   "Open complaint" (warn)
+avgRating ≤ 2                     → at_risk   "At risk"        (late)
+reorderIntent === sample_requested→ sample    "Sample asked"   (progress)
+reorderIntent yes | maybe         → reorder   "Reorder"        (done)
+otherwise                         → none      "—"
+```
+
+Note that `avgRating` is checked with an explicit `!== null` guard at every
+step — a null rating must never fall into the `≤ 3` branch and invent a risk.
+
+---
+
+### 7.6 CRM analytics — `/crm/analytics`
+
+What the follow-up work adds up to. **Read-only.**
+
+> **The rule this screen is built on: an unworked queue must LOOK unworked.**
+> Every panel here would otherwise render a perfectly convincing zero — 0%
+> complaints, a flat rating line, an empty Pareto — and a reader would take
+> that as *"nothing is wrong"* when it means *"nobody has called anyone"*. So
+> each panel states what it still needs, and coverage sits first because it is
+> the number that qualifies every other number on the page.
+
+#### 7.6.1 Region A — Four tiles
+
+`grid grid-cols-3 gap-2 sm:grid-cols-2 xl:grid-cols-4`. **None of them
+filter** — this screen has no list to narrow.
+
+| Tile | Value | Sub |
+|---|---|---|
+| Waiting to be called | `due + inProgress` | `N delivered in range` |
+| Average rating | `avgOverall.toFixed(1)` or `—` | `N rated` |
+| Complaint rate | `ratePer100` | *per 100 delivered orders* |
+| Reorder signals | `yes + maybe + sample` | `N buying again · N asked for a sample` |
+
+The first tile's tone is **amber when anything is waiting, slate when nothing
+is** — the only conditional tone on the page.
+
+#### 7.6.2 Region B — Range bar and the honesty banner
+
+`Delivered between <date> to <date>` with a **Clear**, and right-aligned
+`N follow-ups in range`.
+
+When `sampleSize === 0`, one banner — `rounded-card border-l-[3px]
+border-l-warning bg-warning/8 px-4 py-3` — says it once, plainly, at the top
+rather than repeating it in six empty panels:
+
+> **No follow-up has been completed yet.** The queue holds **N** orders waiting
+> for a call. Until they are worked, every panel below is empty because nothing
+> has happened — not because nothing is wrong.
+
+#### 7.6.3 Region C — Six panels
+
+`grid items-stretch gap-3 lg:grid-cols-2`. **`items-stretch` is load-bearing**:
+without it the panels take their natural heights and the grid reads as ragged.
+
+**`Panel`** — `flex h-full flex-col overflow-hidden p-0 hover:shadow-md`, with
+a header strip at `border-b border-line/70 bg-surface-2/40 px-4 py-3 sm:px-5`
+carrying a `size-7 rounded-lg bg-accent/10 text-accent` icon tile, the title at
+`text-[15px]`, a `note` in `text-[12px] text-ink-soft`, and an optional
+right-aligned `aside` control. The icons make a wall of panels scannable — you
+find one by its mark.
+
+**`Awaiting`** replaces the chart when there is nothing to plot: a
+`size-9 rounded-full bg-inset` hourglass over a `max-w-[300px] text-balance`
+sentence saying **what it needs**, never a zero.
+
+| # | Panel | Note | Chart | Empty message |
+|---|---|---|---|---|
+| 1 | **Coverage** | *the honesty metric* | `CoverageMeter` | "No delivered orders in this range, so there is nothing to have called." |
+| 2 | **Where the queue stands** | *every follow-up in range* | `QueueBar` | "…no queue to describe." |
+| 3 | **Our deadline vs the customer** | *the disagreement is the finding* | `OnTimeQuadrant` | "Needs completed calls where the customer answered the on-time question. This is the panel that tells you whether the deadlines in Settings are the promise you actually make." |
+| 4 | **Where the score is lost** | *average out of 5, worst first* | `CountBars` (`tone="warning"`, `outOf={5}`) | "Needs rated calls. The criteria come from Settings → CRM, so this follows whatever you decided to measure." |
+| 5 | **Rating trend** | *monthly average of the overall score* | `RatingTrend` (Recharts) | one month → "a trend needs two to compare"; none → "Needs rated calls across two or more months." |
+| 6 | **What is going wrong** | `N complaints · median Nd to close` | `CountBars` + a **What / Who fixes / Transport** `Segmented` | "No complaints recorded in this range. With coverage this low that means nobody asked, not that nobody complained." |
+
+> **There were nine panels.** Three of them — complaints by category, by
+> department, by transport — were the same list grouped three ways, each
+> drawing a single bar; they are **one panel with a toggle** now, the way the
+> issues board already does it. Reorder intent lost its panel too: three
+> numbers are a KPI tile, not a chart.
+
+#### 7.6.4 The chart primitives
+
+`crm-charts-lite.tsx` — **plain CSS and SVG, no charting library.**
+
+> It lives apart from `crm-charts.tsx` deliberately: the analytics view imports
+> these **statically**, and a static import of anything sharing a module with
+> Recharts pulls the whole library into the initial chunk (**10.5 kB → 145
+> kB**). Only `RatingTrend` is behind `next/dynamic` with `ssr: false`.
+
+**`CoverageMeter`** — a big `%` figure beside `contacted / followups`, over an
+`h-3.5 rounded-pill bg-inset` track with the fill, and a **target marker at
+85%**: a `w-[2px] h-5 bg-ink` tick with its label beneath.
+
+> A big figure and a track, **not a dial**: at 1.4% a dial shows nothing a
+> reader can interpret, while a track with the target marked shows exactly how
+> far off it is.
+
+**`QueueBar`** — a single `h-6 rounded-pill` stacked bar over a two-column
+legend of `dot · label · count`. Colours come from `CHART_COLOURS`, and they
+are **tokens, not hexes**:
+
+```ts
+due: var(--ink-muted) · progress: var(--accent) · done: var(--success)
+unreachable: var(--warning) · notRequired: var(--line-strong)
+```
+
+**`OnTimeQuadrant`** — the 2×2 that `system_on_time` vs `customer_says_on_time`
+exists for:
+
+| | Customer happy | Customer not |
+|---|---|---|
+| **We hit our deadline** | *all good* | *transit is invisible to us* |
+| **We missed it** | *our deadline is too tight* | *genuinely late* |
+
+Each cell prints its count at `font-display text-[26px]` above the conclusion
+to draw from it, **so the panel needs no key**. Cell tint scales with the count
+(`color-mix` at `0.1 + v/max × 0.24`), and the largest cell gets a 2 px
+coloured ring. This is the one panel a bar cannot replace.
+
+**`CountBars`** — ranked horizontal bars: a `w-[116px] truncate` label, an
+`h-2.5 flex-1 rounded-pill bg-inset` track, and the number at `w-11 text-right
+text-[13px] font-semibold`.
+
+> Deliberately the default for anything that is *"how many of each"* — it is
+> the one chart shape nobody has to be taught. A **radial gauge** and a
+> **four-point radar** were both tried here and both failed the bar that a
+> chart must be readable by someone who has never seen it: the gauge rendered a
+> 1.4% arc as an unexplained blob, and the radar turned four scores into a
+> diamond nobody could read a number off. A **Pareto with a cumulative axis**
+> went the same way. Where a shape adds nothing over a labelled bar, it is a
+> labelled bar.
+
+**`RatingTrend`** (`crm-charts.tsx`) — the only Recharts component in the
+module: a `height={176}` `AreaChart`, `domain={[1, 5]}` (a rating axis starting
+at 0 wastes a fifth of the plot on scores that cannot occur), horizontal-only
+`CartesianGrid` in `var(--line)`, a `var(--accent)` stroke at `2.4` with
+`r={3.5}` dots.
+
+---
+
+## 8. Things that will bite you
 
 Collected from what actually went wrong building these screens.
 
